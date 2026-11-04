@@ -16,7 +16,7 @@ import { slugify } from '../tenants/slug.js';
 import type { CourseListQuery, CreateCourseDto, CreateLessonDto, CurriculumOrderDto, SectionDto, UpdateCourseDto, UpdateLessonDto } from './dto/course.dto.js';
 
 /** Lesson types whose content can be authored now. Others arrive with their modules (quiz/assignment: Phase 5, live: Phase 9). */
-export const AUTHORABLE_TYPES = new Set(['TEXT', 'LINK', 'PDF', 'DOCUMENT', 'IMAGE', 'AUDIO', 'DOWNLOAD', 'VIDEO']);
+export const AUTHORABLE_TYPES = new Set(['TEXT', 'LINK', 'PDF', 'DOCUMENT', 'IMAGE', 'AUDIO', 'DOWNLOAD', 'VIDEO', 'QUIZ', 'ASSIGNMENT']);
 const FILE_TYPES: Record<string, string[]> = { PDF: ['LESSON_FILE'], DOCUMENT: ['LESSON_FILE'], IMAGE: ['LESSON_FILE', 'IMAGE'], AUDIO: ['LESSON_FILE'], DOWNLOAD: ['LESSON_FILE'] };
 const FILE_MIME: Record<string, (m: string) => boolean> = {
   PDF: (m) => m === 'application/pdf',
@@ -150,6 +150,12 @@ export class CoursesService {
   async publishProblems(id: string): Promise<FieldError[]> {
     const c = await this.get(id);
     const lessons = await this.db.courseLesson.findMany({ where: { courseId: id, isPublished: true } });
+    const [quizzes, assignments] = await Promise.all([
+      this.db.quiz.findMany({ where: { courseId: id, questions: { some: {} } }, select: { lessonId: true } }),
+      this.db.assignment.findMany({ where: { courseId: id }, select: { lessonId: true, instructions: true } }),
+    ]);
+    const quizIds = new Set(quizzes.map((q) => q.lessonId));
+    const assignmentIds = new Set(assignments.filter((a) => a.instructions).map((a) => a.lessonId));
     const problems: FieldError[] = [];
     if (!c.isFree && (c.priceAmount === null || Number(c.priceAmount) <= 0)) problems.push({ field: 'priceAmount', message: 'Set a price or mark the course as free' });
     if (!lessons.length) problems.push({ field: 'curriculum', message: 'Add at least one published lesson' });
@@ -158,9 +164,11 @@ export class CoursesService {
         (l.type === 'TEXT' && !l.content) ||
         (l.type === 'LINK' && !l.externalUrl) ||
         (FILE_TYPES[l.type] && !l.fileAssetId) ||
-        l.type === 'VIDEO' || l.type === 'QUIZ' || l.type === 'ASSIGNMENT' || l.type === 'LIVE';
+        l.type === 'VIDEO' || l.type === 'LIVE' ||
+        (l.type === 'QUIZ' && !quizIds.has(l.id)) ||
+        (l.type === 'ASSIGNMENT' && !assignmentIds.has(l.id));
       if (missing) {
-        const what = l.type === 'VIDEO' ? 'attach a processed video (video hosting must be configured)' : l.type === 'TEXT' ? 'add content' : l.type === 'LINK' ? 'add a URL' : FILE_TYPES[l.type] ? 'upload a file' : 'finish configuring it';
+        const what = l.type === 'VIDEO' ? 'attach a processed video (video hosting must be configured)' : l.type === 'QUIZ' ? 'add at least one question' : l.type === 'ASSIGNMENT' ? 'write the instructions' : l.type === 'TEXT' ? 'add content' : l.type === 'LINK' ? 'add a URL' : FILE_TYPES[l.type] ? 'upload a file' : 'finish configuring it';
         problems.push({ field: `lesson:${l.id}`, message: `“${l.title}”: ${what}, or unpublish the lesson` });
       }
     }
@@ -289,9 +297,12 @@ export class CoursesService {
       if (parent.parentLessonId) throw AppException.validation([{ field: 'parentLessonId', message: 'Sub-lessons cannot be nested further' }]);
     }
     const max = await this.db.courseLesson.aggregate({ where: { sectionId: dto.sectionId, parentLessonId: dto.parentLessonId ?? null }, _max: { position: true } });
-    return this.db.courseLesson.create({
+    const lesson = await this.db.courseLesson.create({
       data: { courseId, sectionId: dto.sectionId, parentLessonId: dto.parentLessonId ?? null, title: dto.title, type: dto.type, position: (max._max.position ?? -1) + 1, isPublished: dto.type !== 'VIDEO' } as never,
     });
+    if (dto.type === 'QUIZ') await this.db.quiz.create({ data: { courseId, lessonId: lesson.id } as never });
+    if (dto.type === 'ASSIGNMENT') await this.db.assignment.create({ data: { courseId, lessonId: lesson.id } as never });
+    return lesson;
   }
 
   private async lesson(courseId: string, lessonId: string) {

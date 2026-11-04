@@ -36,6 +36,15 @@ const WORKSPACE_ROUTES_COVERED = [
   'PUT /api/v1/creator/courses/:id/curriculum/order', 'POST /api/v1/creator/courses/:id/sections', 'PATCH /api/v1/creator/courses/:id/sections/:sectionId',
   'DELETE /api/v1/creator/courses/:id/sections/:sectionId', 'POST /api/v1/creator/courses/:id/lessons', 'PATCH /api/v1/creator/courses/:id/lessons/:lessonId',
   'DELETE /api/v1/creator/courses/:id/lessons/:lessonId',
+  // Phase 5 routes: isolation covered in student-platform.e2e-spec.ts
+  'GET /api/v1/creator/students', 'GET /api/v1/creator/students/:id', 'GET /api/v1/creator/courses/:id/enrollments', 'POST /api/v1/creator/courses/:id/enrollments',
+  'DELETE /api/v1/creator/enrollments/:enrollmentId', 'GET /api/v1/creator/discussions', 'POST /api/v1/creator/discussions/:id/replies', 'POST /api/v1/creator/discussions/:id/moderate',
+  'GET /api/v1/creator/courses/:id/lessons/:lessonId/quiz', 'PUT /api/v1/creator/courses/:id/lessons/:lessonId/quiz', 'POST /api/v1/creator/courses/:id/lessons/:lessonId/quiz/questions',
+  'PUT /api/v1/creator/courses/:id/lessons/:lessonId/quiz/questions/order', 'PUT /api/v1/creator/courses/:id/lessons/:lessonId/quiz/questions/:qid',
+  'DELETE /api/v1/creator/courses/:id/lessons/:lessonId/quiz/questions/:qid', 'GET /api/v1/creator/quizzes/:quizId/attempts', 'POST /api/v1/creator/quiz-attempts/:attemptId/grade',
+  'GET /api/v1/creator/courses/:id/lessons/:lessonId/assignment', 'PUT /api/v1/creator/courses/:id/lessons/:lessonId/assignment', 'GET /api/v1/creator/assignments/:assignmentId/submissions',
+  'POST /api/v1/creator/submissions/:submissionId/grade', 'GET /api/v1/creator/certificates/template', 'PUT /api/v1/creator/certificates/template', 'GET /api/v1/creator/certificates',
+  'POST /api/v1/creator/certificates/:id/revoke', 'POST /api/v1/creator/certificates/:id/reinstate',
   'GET /api/v1/creator/staff', 'POST /api/v1/creator/staff/invitations', 'DELETE /api/v1/creator/staff/invitations/:id', 'PATCH /api/v1/creator/staff/:memberId', 'DELETE /api/v1/creator/staff/:memberId',
 ];
 

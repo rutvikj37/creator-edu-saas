@@ -773,6 +773,7 @@ model Course {
   sections           CourseSection[]
   lessons            CourseLesson[]
   instructors        CourseInstructor[]
+  enrollments        Enrollment[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, slug])
@@ -871,4 +872,331 @@ model StaffInvitation {
 
   @@unique([tenantId, id])
   @@index([tenantId, email])
+}
+
+// ───────────────────────────── Learning ─────────────────────────────
+
+enum EnrollmentSource {
+  FREE
+  PURCHASE
+  MANUAL
+  MEMBERSHIP
+  BUNDLE
+  BATCH
+  IMPORT
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+  COMPLETED
+}
+
+model Enrollment {
+  id              String           @id @default(cuid()) @db.Char(25)
+  tenantId        String           @db.Char(25)
+  userId          String           @db.Char(25)
+  courseId        String           @db.Char(25)
+  source          EnrollmentSource
+  status          EnrollmentStatus @default(ACTIVE)
+  startedAt       DateTime         @default(now()) @db.DateTime(3)
+  expiresAt       DateTime?        @db.DateTime(3)
+  completedAt     DateTime?        @db.DateTime(3)
+  progressPercent Int              @default(0)
+  lastLessonId    String?          @db.Char(25)
+  lastAccessedAt  DateTime?        @db.DateTime(3)
+  grantedById     String?          @db.Char(25)
+  createdAt       DateTime         @default(now()) @db.DateTime(3)
+  updatedAt       DateTime         @updatedAt @db.DateTime(3)
+  course          Course           @relation(fields: [tenantId, courseId], references: [tenantId, id], onDelete: Cascade)
+  progress        LessonProgress[]
+  certificate     Certificate?
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, userId, courseId])
+  @@index([tenantId, courseId, status])
+  @@index([tenantId, userId])
+}
+
+model LessonProgress {
+  id              String     @id @default(cuid()) @db.Char(25)
+  tenantId        String     @db.Char(25)
+  enrollmentId    String     @db.Char(25)
+  lessonId        String     @db.Char(25)
+  positionSeconds Int        @default(0)
+  completedAt     DateTime?  @db.DateTime(3)
+  updatedAt       DateTime   @updatedAt @db.DateTime(3)
+  createdAt       DateTime   @default(now()) @db.DateTime(3)
+  enrollment      Enrollment @relation(fields: [tenantId, enrollmentId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, enrollmentId, lessonId])
+}
+
+model LessonNote {
+  id              String   @id @default(cuid()) @db.Char(25)
+  tenantId        String   @db.Char(25)
+  userId          String   @db.Char(25)
+  courseId        String   @db.Char(25)
+  lessonId        String   @db.Char(25)
+  body            String   @db.Text
+  positionSeconds Int?
+  createdAt       DateTime @default(now()) @db.DateTime(3)
+  updatedAt       DateTime @updatedAt @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, userId, courseId])
+}
+
+model CourseBookmark {
+  id        String   @id @default(cuid()) @db.Char(25)
+  tenantId  String   @db.Char(25)
+  userId    String   @db.Char(25)
+  courseId  String   @db.Char(25)
+  lessonId  String   @db.Char(25)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, userId, lessonId])
+}
+
+/// Lesson Q&A threads: root posts have parentId null; instructor answers are flagged.
+model LessonComment {
+  id           String          @id @default(cuid()) @db.Char(25)
+  tenantId     String          @db.Char(25)
+  courseId     String          @db.Char(25)
+  lessonId     String          @db.Char(25)
+  authorId     String          @db.Char(25)
+  authorRealm  Realm
+  parentId     String?         @db.Char(25)
+  body         String          @db.Text
+  isInstructor Boolean         @default(false)
+  isResolved   Boolean         @default(false)
+  hiddenAt     DateTime?       @db.DateTime(3)
+  createdAt    DateTime        @default(now()) @db.DateTime(3)
+  updatedAt    DateTime        @updatedAt @db.DateTime(3)
+  parent       LessonComment?  @relation("CommentReplies", fields: [tenantId, parentId], references: [tenantId, id], onDelete: NoAction, onUpdate: NoAction)
+  replies      LessonComment[] @relation("CommentReplies")
+
+  @@unique([tenantId, id])
+  @@index([tenantId, lessonId, createdAt])
+  @@index([tenantId, courseId, createdAt])
+}
+
+// ───────────────────────────── Assessment ─────────────────────────────
+
+enum QuestionType {
+  MCQ_SINGLE
+  MCQ_MULTI
+  TRUE_FALSE
+  FILL_BLANK
+  SHORT
+  LONG
+  MATCHING
+  FILE_UPLOAD
+}
+
+model Quiz {
+  id                String         @id @default(cuid()) @db.Char(25)
+  tenantId          String         @db.Char(25)
+  courseId          String         @db.Char(25)
+  lessonId          String         @db.Char(25)
+  instructions      String?        @db.Text
+  timeLimitSeconds  Int?
+  passPercent       Int            @default(60)
+  negativeMarkRatio Decimal        @default(0) @db.Decimal(4, 2)
+  maxAttempts       Int?
+  shuffleQuestions  Boolean        @default(false)
+  shuffleOptions    Boolean        @default(false)
+  randomPickCount   Int?
+  showResults       Boolean        @default(true)
+  createdAt         DateTime       @default(now()) @db.DateTime(3)
+  updatedAt         DateTime       @updatedAt @db.DateTime(3)
+  questions         QuizQuestion[]
+  attempts          QuizAttempt[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, lessonId])
+}
+
+model QuizQuestion {
+  id          String       @id @default(cuid()) @db.Char(25)
+  tenantId    String       @db.Char(25)
+  quizId      String       @db.Char(25)
+  type        QuestionType
+  prompt      String       @db.Text
+  explanation String?      @db.Text
+  points      Decimal      @default(1) @db.Decimal(6, 2)
+  position    Int
+  /// FILL_BLANK: { answers: string[], caseSensitive }; MATCHING uses options with matchKey.
+  meta        Json?
+  createdAt   DateTime     @default(now()) @db.DateTime(3)
+  updatedAt   DateTime     @updatedAt @db.DateTime(3)
+  quiz        Quiz         @relation(fields: [tenantId, quizId], references: [tenantId, id], onDelete: Cascade)
+  options     QuizOption[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, quizId, position])
+}
+
+model QuizOption {
+  id         String       @id @default(cuid()) @db.Char(25)
+  tenantId   String       @db.Char(25)
+  questionId String       @db.Char(25)
+  label      String       @db.VarChar(1000)
+  isCorrect  Boolean      @default(false)
+  /// MATCHING: left items have matchKey = right item's label
+  matchKey   String?      @db.VarChar(1000)
+  position   Int
+  question   QuizQuestion @relation(fields: [tenantId, questionId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  GRADED
+}
+
+model QuizAttempt {
+  id            String        @id @default(cuid()) @db.Char(25)
+  tenantId      String        @db.Char(25)
+  quizId        String        @db.Char(25)
+  userId        String        @db.Char(25)
+  enrollmentId  String        @db.Char(25)
+  attemptNo     Int
+  status        AttemptStatus @default(IN_PROGRESS)
+  questionOrder Json
+  startedAt     DateTime      @default(now()) @db.DateTime(3)
+  expiresAt     DateTime?     @db.DateTime(3)
+  submittedAt   DateTime?     @db.DateTime(3)
+  score         Decimal?      @db.Decimal(8, 2)
+  maxScore      Decimal?      @db.Decimal(8, 2)
+  percent       Decimal?      @db.Decimal(5, 2)
+  passed        Boolean?
+  quiz          Quiz          @relation(fields: [tenantId, quizId], references: [tenantId, id], onDelete: Cascade)
+  answers       QuizAnswer[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, quizId, userId, attemptNo])
+  @@index([tenantId, status])
+}
+
+model QuizAnswer {
+  id            String      @id @default(cuid()) @db.Char(25)
+  tenantId      String      @db.Char(25)
+  attemptId     String      @db.Char(25)
+  questionId    String      @db.Char(25)
+  response      Json?
+  fileAssetId   String?     @db.Char(25)
+  isCorrect     Boolean?
+  pointsAwarded Decimal?    @db.Decimal(6, 2)
+  feedback      String?     @db.Text
+  gradedById    String?     @db.Char(25)
+  attempt       QuizAttempt @relation(fields: [tenantId, attemptId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, attemptId, questionId])
+}
+
+model Assignment {
+  id           String                 @id @default(cuid()) @db.Char(25)
+  tenantId     String                 @db.Char(25)
+  courseId     String                 @db.Char(25)
+  lessonId     String                 @db.Char(25)
+  instructions Json?
+  dueAt        DateTime?              @db.DateTime(3)
+  maxPoints    Int                    @default(100)
+  allowLate    Boolean                @default(true)
+  allowFiles   Boolean                @default(true)
+  createdAt    DateTime               @default(now()) @db.DateTime(3)
+  updatedAt    DateTime               @updatedAt @db.DateTime(3)
+  submissions  AssignmentSubmission[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, lessonId])
+}
+
+enum SubmissionStatus {
+  SUBMITTED
+  RETURNED
+  GRADED
+}
+
+model AssignmentSubmission {
+  id           String           @id @default(cuid()) @db.Char(25)
+  tenantId     String           @db.Char(25)
+  assignmentId String           @db.Char(25)
+  userId       String           @db.Char(25)
+  text         String?          @db.Text
+  fileAssetIds Json?
+  status       SubmissionStatus @default(SUBMITTED)
+  isLate       Boolean          @default(false)
+  points       Int?
+  feedback     String?          @db.Text
+  gradedById   String?          @db.Char(25)
+  submittedAt  DateTime         @default(now()) @db.DateTime(3)
+  gradedAt     DateTime?        @db.DateTime(3)
+  assignment   Assignment       @relation(fields: [tenantId, assignmentId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, assignmentId, userId])
+  @@index([tenantId, status])
+}
+
+// ───────────────────────────── Certificates ─────────────────────────────
+
+model CertificateTemplate {
+  id            String   @id @default(cuid()) @db.Char(25)
+  tenantId      String   @unique @db.Char(25)
+  title         String   @default("Certificate of Completion") @db.VarChar(120)
+  bodyText      String   @default("has successfully completed") @db.VarChar(300)
+  signatoryName String?  @db.VarChar(120)
+  signatoryRole String?  @db.VarChar(120)
+  accentColor   String   @default("#4f46e5") @db.VarChar(7)
+  showQr        Boolean  @default(true)
+  updatedAt     DateTime @updatedAt @db.DateTime(3)
+  createdAt     DateTime @default(now()) @db.DateTime(3)
+
+  @@unique([tenantId, id])
+}
+
+enum CertificateStatus {
+  ISSUED
+  REVOKED
+}
+
+model Certificate {
+  id            String                    @id @default(cuid()) @db.Char(25)
+  tenantId      String                    @db.Char(25)
+  number        String                    @unique @db.VarChar(32)
+  enrollmentId  String                    @db.Char(25)
+  userId        String                    @db.Char(25)
+  courseId      String                    @db.Char(25)
+  recipientName String                    @db.VarChar(120)
+  courseTitle   String                    @db.VarChar(200)
+  academyName   String                    @db.VarChar(120)
+  issuedAt      DateTime                  @default(now()) @db.DateTime(3)
+  status        CertificateStatus         @default(ISSUED)
+  revokedAt     DateTime?                 @db.DateTime(3)
+  revokedReason String?                   @db.VarChar(255)
+  enrollment    Enrollment                @relation(fields: [tenantId, enrollmentId], references: [tenantId, id], onDelete: Restrict)
+  verifications CertificateVerification[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, enrollmentId])
+  @@index([tenantId, userId])
+}
+
+model CertificateVerification {
+  id            String      @id @default(cuid()) @db.Char(25)
+  certificateId String      @db.Char(25)
+  ipHash        String?     @db.Char(64)
+  userAgent     String?     @db.VarChar(512)
+  createdAt     DateTime    @default(now()) @db.DateTime(3)
+  certificate   Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+
+  @@index([certificateId, createdAt])
 }

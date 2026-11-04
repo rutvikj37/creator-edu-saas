@@ -86,6 +86,12 @@ export class FilesService {
     return this.storage.downloadUrl(file, file.fileName, apiOrigin, ttl);
   }
 
+  async assertOwnedBy(id: string, userId: string) {
+    const f = await this.db.fileAsset.findFirst({ where: { id, ownerUserId: userId } });
+    if (!f) throw AppException.notFound('File not found');
+    return f;
+  }
+
   /** Validates that a file id belongs to this tenant, is READY and has one of the purposes. */
   async assertUsable(id: string, purposes: string[]) {
     const file = await this.db.fileAsset.findUnique({ where: { id } });

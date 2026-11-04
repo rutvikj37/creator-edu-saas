@@ -110,7 +110,7 @@ describe('Creator platform (e2e)', () => {
       const sub = (await authed(app, c.session).post(`/api/v1/creator/courses/${id}/lessons`).send({ sectionId: s1, parentLessonId: text.id, title: 'Course tour', type: 'LINK' }).expect(201)).body.data;
       const video = (await authed(app, c.session).post(`/api/v1/creator/courses/${id}/lessons`).send({ sectionId: s2, title: 'Auto layout', type: 'VIDEO' }).expect(201)).body.data;
       expect(video.isPublished).toBe(false);
-      await authed(app, c.session).post(`/api/v1/creator/courses/${id}/lessons`).send({ sectionId: s1, title: 'Quiz', type: 'QUIZ' }).expect(422);
+      await authed(app, c.session).post(`/api/v1/creator/courses/${id}/lessons`).send({ sectionId: s1, title: 'Live', type: 'LIVE' }).expect(422);
       await authed(app, c.session).post(`/api/v1/creator/courses/${id}/lessons`).send({ sectionId: s1, parentLessonId: sub.id, title: 'Too deep', type: 'TEXT' }).expect(422);
 
       // Rich text is allow-list validated
