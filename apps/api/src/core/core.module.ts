@@ -9,9 +9,10 @@ import { CryptoModule } from './crypto/crypto.module.js';
 import { MailModule } from './mail/mail.module.js';
 import { SmsModule } from './sms/sms.module.js';
 import { TenancyModule } from './tenancy/tenancy.module.js';
+import { StorageModule } from './storage/storage.module.js';
 
 /** Infrastructure shared by the API and the worker processes. */
 @Module({
-  imports: [AppConfigModule, AppLoggerModule, PrismaModule, RedisModule, QueueModule, AuditModule, CryptoModule, MailModule, SmsModule, TenancyModule],
+  imports: [AppConfigModule, AppLoggerModule, PrismaModule, RedisModule, QueueModule, AuditModule, CryptoModule, MailModule, SmsModule, TenancyModule, StorageModule],
 })
 export class CoreModule {}

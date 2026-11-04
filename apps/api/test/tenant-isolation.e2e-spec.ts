@@ -26,6 +26,17 @@ const WORKSPACE_ROUTES_COVERED = [
   'POST /api/v1/creator/support/tickets',
   'GET /api/v1/creator/support/tickets/:id',
   'POST /api/v1/creator/support/tickets/:id/messages',
+  // Phase 4 routes: isolation covered in creator-platform.e2e-spec.ts
+  'POST /api/v1/creator/files', 'POST /api/v1/creator/files/:id/complete',
+  'GET /api/v1/creator/academy', 'PUT /api/v1/creator/academy', 'GET /api/v1/creator/academy/business', 'PUT /api/v1/creator/academy/business',
+  'GET /api/v1/creator/onboarding', 'PUT /api/v1/creator/onboarding/step', 'POST /api/v1/creator/onboarding/publish', 'GET /api/v1/creator/dashboard',
+  'GET /api/v1/creator/courses', 'POST /api/v1/creator/courses', 'GET /api/v1/creator/courses/:id', 'PATCH /api/v1/creator/courses/:id', 'DELETE /api/v1/creator/courses/:id',
+  'GET /api/v1/creator/courses/:id/publish-check', 'POST /api/v1/creator/courses/:id/publish', 'POST /api/v1/creator/courses/:id/unpublish', 'POST /api/v1/creator/courses/:id/archive',
+  'POST /api/v1/creator/courses/:id/restore', 'POST /api/v1/creator/courses/:id/duplicate', 'PUT /api/v1/creator/courses/:id/instructors', 'GET /api/v1/creator/courses/:id/curriculum',
+  'PUT /api/v1/creator/courses/:id/curriculum/order', 'POST /api/v1/creator/courses/:id/sections', 'PATCH /api/v1/creator/courses/:id/sections/:sectionId',
+  'DELETE /api/v1/creator/courses/:id/sections/:sectionId', 'POST /api/v1/creator/courses/:id/lessons', 'PATCH /api/v1/creator/courses/:id/lessons/:lessonId',
+  'DELETE /api/v1/creator/courses/:id/lessons/:lessonId',
+  'GET /api/v1/creator/staff', 'POST /api/v1/creator/staff/invitations', 'DELETE /api/v1/creator/staff/invitations/:id', 'PATCH /api/v1/creator/staff/:memberId', 'DELETE /api/v1/creator/staff/:memberId',
 ];
 
 describe('Tenant isolation (e2e)', () => {

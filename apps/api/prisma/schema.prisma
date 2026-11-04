@@ -306,8 +306,8 @@ model Tenant {
   updatedAt             DateTime     @updatedAt @db.DateTime(3)
   deletedAt             DateTime?    @db.DateTime(3)
 
-  owner          User                  @relation("TenantOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
-  users          User[]                @relation("TenantUsers")
+  owner          User                   @relation("TenantOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  users          User[]                 @relation("TenantUsers")
   members        TenantMember[]
   settings       TenantSetting[]
   domains        TenantDomain[]
@@ -315,6 +315,11 @@ model Tenant {
   subscriptions  Subscription[]
   limitOverrides TenantLimitOverride[]
   usage          UsageRecord[]
+  academy        Academy?
+  business       TenantBusinessProfile?
+  files          FileAsset[]
+  courses        Course[]
+  invitations    StaffInvitation[]
 
   @@index([status, createdAt])
 }
@@ -599,4 +604,271 @@ model SupportMessage {
   ticket         SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@index([ticketId, createdAt])
+}
+
+// ───────────────────────────── Academy profile ─────────────────────────────
+
+model Academy {
+  id            String    @id @default(cuid()) @db.Char(25)
+  tenantId      String    @unique @db.Char(25)
+  tagline       String?   @db.VarChar(160)
+  description   String?   @db.Text
+  categorySlug  String?   @db.VarChar(120)
+  logoFileId    String?   @db.Char(25)
+  faviconFileId String?   @db.Char(25)
+  supportEmail  String?   @db.VarChar(191)
+  socialLinks   Json?
+  primaryColor  String    @default("#4f46e5") @db.VarChar(7)
+  accentColor   String    @default("#0d9488") @db.VarChar(7)
+  fontHeading   String    @default("Inter") @db.VarChar(64)
+  fontBody      String    @default("Inter") @db.VarChar(64)
+  publishedAt   DateTime? @db.DateTime(3)
+  createdAt     DateTime  @default(now()) @db.DateTime(3)
+  updatedAt     DateTime  @updatedAt @db.DateTime(3)
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+}
+
+model TenantBusinessProfile {
+  id            String   @id @default(cuid()) @db.Char(25)
+  tenantId      String   @unique @db.Char(25)
+  legalName     String?  @db.VarChar(200)
+  addressLine1  String?  @db.VarChar(200)
+  addressLine2  String?  @db.VarChar(200)
+  city          String?  @db.VarChar(100)
+  state         String?  @db.VarChar(100)
+  postalCode    String?  @db.VarChar(20)
+  country       String?  @db.Char(2)
+  gstRegistered Boolean  @default(false)
+  gstin         String?  @db.VarChar(15)
+  pan           String?  @db.VarChar(10)
+  invoicePrefix String   @default("INV") @db.VarChar(12)
+  createdAt     DateTime @default(now()) @db.DateTime(3)
+  updatedAt     DateTime @updatedAt @db.DateTime(3)
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+}
+
+// ───────────────────────────── Files ─────────────────────────────
+
+enum FilePurpose {
+  LOGO
+  FAVICON
+  IMAGE
+  COURSE_THUMBNAIL
+  COURSE_BANNER
+  LESSON_FILE
+  VIDEO_SOURCE
+  SUBMISSION
+  CERTIFICATE
+  INVOICE
+  OTHER
+}
+
+enum FileStatus {
+  UPLOADING
+  READY
+  REJECTED
+  DELETED
+}
+
+/// Uploaded objects. Bytes live in object storage (S3 in production); the key is namespaced by tenant.
+model FileAsset {
+  id          String         @id @default(cuid()) @db.Char(25)
+  tenantId    String         @db.Char(25)
+  ownerUserId String         @db.Char(25)
+  purpose     FilePurpose
+  driver      String         @db.VarChar(16)
+  bucket      String         @db.VarChar(100)
+  key         String         @db.VarChar(512)
+  fileName    String         @db.VarChar(255)
+  mimeType    String         @db.VarChar(127)
+  sizeBytes   BigInt
+  isPublic    Boolean        @default(false)
+  status      FileStatus     @default(UPLOADING)
+  createdAt   DateTime       @default(now()) @db.DateTime(3)
+  updatedAt   DateTime       @updatedAt @db.DateTime(3)
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lessons     CourseLesson[]
+
+  @@unique([tenantId, id])
+  @@unique([driver, bucket, key])
+  @@index([tenantId, purpose, createdAt])
+}
+
+// ───────────────────────────── Courses ─────────────────────────────
+
+enum CourseStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  UNPUBLISHED
+  ARCHIVED
+}
+
+enum CourseVisibility {
+  PUBLIC
+  UNLISTED
+  PRIVATE
+}
+
+enum CourseLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  ALL_LEVELS
+}
+
+enum AccessType {
+  LIFETIME
+  FIXED_DAYS
+  FIXED_DATE
+}
+
+enum DripType {
+  NONE
+  DAYS_AFTER_ENROLL
+  DATE
+}
+
+model Course {
+  id                 String             @id @default(cuid()) @db.Char(25)
+  tenantId           String             @db.Char(25)
+  title              String             @db.VarChar(200)
+  slug               String             @db.VarChar(220)
+  shortDescription   String?            @db.VarChar(500)
+  description        Json?
+  thumbnailFileId    String?            @db.Char(25)
+  bannerFileId       String?            @db.Char(25)
+  categorySlug       String?            @db.VarChar(120)
+  tags               Json?
+  language           String             @default("en") @db.VarChar(10)
+  level              CourseLevel        @default(ALL_LEVELS)
+  objectives         Json?
+  prerequisites      Json?
+  durationMinutes    Int?
+  priceAmount        Decimal?           @db.Decimal(19, 4)
+  compareAtAmount    Decimal?           @db.Decimal(19, 4)
+  currency           String             @default("INR") @db.Char(3)
+  isFree             Boolean            @default(false)
+  status             CourseStatus       @default(DRAFT)
+  visibility         CourseVisibility   @default(PUBLIC)
+  publishAt          DateTime?          @db.DateTime(3)
+  publishedAt        DateTime?          @db.DateTime(3)
+  accessType         AccessType         @default(LIFETIME)
+  accessDays         Int?
+  accessUntil        DateTime?          @db.DateTime(3)
+  dripType           DripType           @default(NONE)
+  completionPercent  Int                @default(100)
+  certificateEnabled Boolean            @default(false)
+  seoTitle           String?            @db.VarChar(70)
+  seoDescription     String?            @db.VarChar(170)
+  createdById        String             @db.Char(25)
+  createdAt          DateTime           @default(now()) @db.DateTime(3)
+  updatedAt          DateTime           @updatedAt @db.DateTime(3)
+  deletedAt          DateTime?          @db.DateTime(3)
+  tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sections           CourseSection[]
+  lessons            CourseLesson[]
+  instructors        CourseInstructor[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, slug])
+  @@index([tenantId, status, createdAt])
+}
+
+model CourseInstructor {
+  id        String   @id @default(cuid()) @db.Char(25)
+  tenantId  String   @db.Char(25)
+  courseId  String   @db.Char(25)
+  userId    String   @db.Char(25)
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  course    Course   @relation(fields: [tenantId, courseId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, courseId, userId])
+  @@unique([tenantId, id])
+}
+
+model CourseSection {
+  id             String         @id @default(cuid()) @db.Char(25)
+  tenantId       String         @db.Char(25)
+  courseId       String         @db.Char(25)
+  title          String         @db.VarChar(200)
+  position       Int
+  dripOffsetDays Int?
+  unlockAt       DateTime?      @db.DateTime(3)
+  createdAt      DateTime       @default(now()) @db.DateTime(3)
+  updatedAt      DateTime       @updatedAt @db.DateTime(3)
+  course         Course         @relation(fields: [tenantId, courseId], references: [tenantId, id], onDelete: Cascade)
+  lessons        CourseLesson[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, courseId, position])
+}
+
+enum LessonType {
+  VIDEO
+  AUDIO
+  PDF
+  DOCUMENT
+  TEXT
+  IMAGE
+  LINK
+  QUIZ
+  ASSIGNMENT
+  LIVE
+  DOWNLOAD
+}
+
+model CourseLesson {
+  id              String         @id @default(cuid()) @db.Char(25)
+  tenantId        String         @db.Char(25)
+  courseId        String         @db.Char(25)
+  sectionId       String         @db.Char(25)
+  parentLessonId  String?        @db.Char(25)
+  title           String         @db.VarChar(200)
+  type            LessonType
+  position        Int
+  content         Json?
+  fileAssetId     String?        @db.Char(25)
+  externalUrl     String?        @db.VarChar(1000)
+  durationSeconds Int?
+  isFreePreview   Boolean        @default(false)
+  isPublished     Boolean        @default(true)
+  isRequired      Boolean        @default(true)
+  dripOffsetDays  Int?
+  unlockAt        DateTime?      @db.DateTime(3)
+  createdAt       DateTime       @default(now()) @db.DateTime(3)
+  updatedAt       DateTime       @updatedAt @db.DateTime(3)
+  course          Course         @relation(fields: [tenantId, courseId], references: [tenantId, id], onDelete: Cascade)
+  section         CourseSection  @relation(fields: [tenantId, sectionId], references: [tenantId, id], onDelete: Cascade)
+  parent          CourseLesson?  @relation("SubLessons", fields: [tenantId, parentLessonId], references: [tenantId, id], onDelete: NoAction, onUpdate: NoAction)
+  children        CourseLesson[] @relation("SubLessons")
+  file            FileAsset?     @relation(fields: [tenantId, fileAssetId], references: [tenantId, id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, sectionId, position])
+  @@index([tenantId, courseId])
+}
+
+// ───────────────────────────── Staff invitations ─────────────────────────────
+
+model StaffInvitation {
+  id          String    @id @default(cuid()) @db.Char(25)
+  tenantId    String    @db.Char(25)
+  email       String    @db.VarChar(191)
+  roleId      String    @db.Char(25)
+  tokenHash   String    @unique @db.Char(64)
+  invitedById String    @db.Char(25)
+  expiresAt   DateTime  @db.DateTime(3)
+  acceptedAt  DateTime? @db.DateTime(3)
+  revokedAt   DateTime? @db.DateTime(3)
+  createdAt   DateTime  @default(now()) @db.DateTime(3)
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, email])
 }

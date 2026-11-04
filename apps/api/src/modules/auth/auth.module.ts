@@ -21,6 +21,6 @@ import { PermissionsGuard } from './guards/permissions.guard.js';
     AuthService, EmailVerificationService, GoogleOAuthService, OtpService, PasswordResetService, PasswordService,
     SessionService, TokenService, TwoFactorService, JwtAuthGuard, TenantGuard, PermissionsGuard,
   ],
-  exports: [SessionService, TokenService, PasswordService, JwtAuthGuard, TenantGuard, PermissionsGuard],
+  exports: [SessionService, TokenService, PasswordService, AuthService, JwtAuthGuard, TenantGuard, PermissionsGuard],
 })
 export class AuthModule {}

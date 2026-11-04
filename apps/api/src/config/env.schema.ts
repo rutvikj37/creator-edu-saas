@@ -49,6 +49,15 @@ export const envSchema = z.object({
   // Google sign-in (optional)
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
+  // Object storage. 'local' stores files on disk (development/tests only); production uses 's3'.
+  STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
+  LOCAL_STORAGE_DIR: z.string().default('./storage'),
+  AWS_REGION: z.string().default('ap-south-1'),
+  AWS_ACCESS_KEY_ID: z.string().optional(),
+  AWS_SECRET_ACCESS_KEY: z.string().optional(),
+  S3_ENDPOINT: z.string().optional().or(z.literal('')),
+  S3_PRIVATE_BUCKET: z.string().default('ce-private-dev'),
+  S3_PUBLIC_BUCKET: z.string().default('ce-public-dev'),
   // Initial super admin (used once by the seed)
   SUPER_ADMIN_EMAIL: z.email().optional().or(z.literal('')),
   SUPER_ADMIN_INITIAL_PASSWORD: z.string().optional(),
@@ -64,6 +73,9 @@ export function validateEnv(raw: Record<string, unknown>): Env {
   }
   if (parsed.data.NODE_ENV === 'production' && parsed.data.JWT_ACCESS_SECRET.startsWith('dev-only')) {
     throw new Error('Refusing to start in production with a development JWT secret');
+  }
+  if (parsed.data.NODE_ENV === 'production' && parsed.data.STORAGE_DRIVER === 'local') {
+    throw new Error('STORAGE_DRIVER=local is for development only; configure S3 in production');
   }
   return parsed.data;
 }

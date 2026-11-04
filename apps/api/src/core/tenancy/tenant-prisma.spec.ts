@@ -25,7 +25,7 @@ describe('TENANT_MODELS registry', () => {
   it('lists every model that has a required tenantId column', () => {
     const schema = readFileSync(fileURLToPath(new URL('../../../prisma/schema.prisma', import.meta.url)), 'utf8');
     const owned = [...schema.matchAll(/model (\w+) \{([\s\S]*?)\n\}/g)]
-      .filter(([, , body]) => /^\s+tenantId\s+String\s+@db/m.test(body))
+      .filter(([, , body]) => /^\s+tenantId\s+String\s+@/m.test(body))
       .map(([, name]) => name);
     expect(owned.sort()).toEqual([...TENANT_MODELS].sort());
   });

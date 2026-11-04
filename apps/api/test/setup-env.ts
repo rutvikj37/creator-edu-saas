@@ -16,3 +16,5 @@ process.env.SUPER_ADMIN_EMAIL = 'root@platform.test';
 process.env.SUPER_ADMIN_INITIAL_PASSWORD = 'Sup3r-Admin-Passw0rd!';
 delete process.env.GOOGLE_CLIENT_ID;
 delete process.env.SMS_PROVIDER;
+process.env.STORAGE_DRIVER = 'local';
+process.env.LOCAL_STORAGE_DIR = '/tmp/ce-e2e-storage';

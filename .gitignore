@@ -12,3 +12,4 @@ apps/api/src/generated/
 playwright-report/
 test-results/
 *.tsbuildinfo
+apps/api/storage/

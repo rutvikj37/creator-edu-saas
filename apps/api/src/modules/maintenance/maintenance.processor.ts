@@ -20,6 +20,14 @@ export class MaintenanceProcessor extends WorkerHost {
         this.logger.log(`Purged ${count} expired idempotency keys`);
         return { purged: count };
       }
+      case MAINTENANCE_JOBS.PUBLISH_SCHEDULED_COURSES: {
+        const { count } = await this.prisma.course.updateMany({
+          where: { status: 'SCHEDULED', publishAt: { lte: new Date() }, deletedAt: null },
+          data: { status: 'PUBLISHED', publishedAt: new Date(), publishAt: null },
+        });
+        if (count) this.logger.log(`Published ${count} scheduled course(s)`);
+        return { published: count };
+      }
       default:
         throw new Error(`Unknown maintenance job: ${job.name}`);
     }

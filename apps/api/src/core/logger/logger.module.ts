@@ -34,7 +34,7 @@ export const REDACT_PATHS = [
       inject: [AppConfig],
       useFactory: (config: AppConfig) => ({
         pinoHttp: {
-          level: config.isTest ? 'silent' : config.get('LOG_LEVEL'),
+          level: config.isTest ? (process.env.TEST_LOG_LEVEL ?? 'silent') : config.get('LOG_LEVEL'),
           redact: { paths: REDACT_PATHS, censor: '[REDACTED]' },
           genReqId: (req: IncomingMessage) => {
             const incoming = req.headers['x-request-id'];

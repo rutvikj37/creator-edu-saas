@@ -7,7 +7,9 @@ import type { TenantContext } from './tenant-context.service.js';
  * automatically constrained to the current tenant. New tenant-owned models MUST be added here
  * (a unit test asserts every model with a required `tenantId` column is listed).
  */
-export const TENANT_MODELS = new Set<string>(['TenantMember', 'TenantSetting', 'TenantDomain', 'Subscription', 'TenantLimitOverride', 'UsageRecord']);
+export const TENANT_MODELS = new Set<string>(['TenantMember', 'TenantSetting', 'TenantDomain', 'Subscription', 'TenantLimitOverride', 'UsageRecord',
+  'Academy', 'TenantBusinessProfile', 'FileAsset', 'Course', 'CourseInstructor', 'CourseSection', 'CourseLesson', 'StaffInvitation',
+]);
 
 export class TenantContextMissingError extends Error {
   constructor(model: string, operation: string) {

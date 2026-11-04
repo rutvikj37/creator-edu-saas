@@ -15,6 +15,10 @@ import { AuthModule } from './modules/auth/auth.module.js';
 import { TenantsModule } from './modules/tenants/tenants.module.js';
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module.js';
 import { PlatformModule } from './modules/platform/platform.module.js';
+import { FilesModule } from './modules/files/files.module.js';
+import { AcademyModule } from './modules/academy/academy.module.js';
+import { CoursesModule } from './modules/courses/courses.module.js';
+import { StaffModule } from './modules/staff/staff.module.js';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard.js';
 import { TenantGuard } from './modules/auth/guards/tenant.guard.js';
 import { PermissionsGuard } from './modules/auth/guards/permissions.guard.js';
@@ -35,6 +39,10 @@ import { PermissionsGuard } from './modules/auth/guards/permissions.guard.js';
     AuthModule,
     TenantsModule,
     PlatformModule,
+    FilesModule,
+    AcademyModule,
+    CoursesModule,
+    StaffModule,
     HealthModule,
     SystemModule,
   ],

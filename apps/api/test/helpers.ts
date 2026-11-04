@@ -141,3 +141,14 @@ export async function adminWithRoles(app: NestExpressApplication, roles: string[
   const enabled = await authed(app, session).post('/api/v1/auth/2fa/enable').send({ code: nextTotp(setup.body.data.secret, 0) }).expect(200);
   return { session: parseSession(enabled, PLATFORM), userId: user.id, email };
 }
+
+/** Uploads bytes through the real two-step flow (begin → PUT to signed URL → complete). */
+export async function uploadFile(app: NestExpressApplication, s: Session, purpose: string, fileName: string, mimeType: string, bytes: Buffer) {
+  const begin = await authed(app, s).post('/api/v1/creator/files').send({ purpose, fileName, mimeType, sizeBytes: bytes.length }).expect(201);
+  const url = new URL(begin.body.data.upload.url);
+  await request(app.getHttpServer()).put(url.pathname).set('Host', s.host).set('Content-Type', mimeType).send(bytes).expect(200);
+  return authed(app, s).post(`/api/v1/creator/files/${begin.body.data.fileId}/complete`);
+}
+
+export const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(120, 1)]);
+export const PDF = Buffer.from('%PDF-1.7\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n');
