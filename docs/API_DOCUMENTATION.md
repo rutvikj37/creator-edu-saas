@@ -19,6 +19,15 @@ Status: **Phase 0 design**. Live docs will be served by Swagger at `/api/docs` (
 | 1 | `GET /api/v1/health/live` | public | Liveness probe |
 | 1 | `GET /api/v1/health` | public | Readiness: MySQL, Redis, queue (503 when any is down) |
 | 1 | `GET /api/v1/system/info` | public | Platform name, non-secret branding, root domain, locales |
+| 2 | `POST /auth/register/creator` · `/auth/register/student` | public | Sign-up (platform host / academy host) |
+| 2 | `POST /auth/login` · `/auth/login/2fa` · `/auth/refresh` · `/auth/logout` · `/auth/logout-all` | public/auth | Session lifecycle (refresh needs `X-CSRF-Token`) |
+| 2 | `GET /auth/me` · `POST /auth/switch-tenant` · `GET/DELETE /auth/sessions` | auth | Profile, workspace switch, devices |
+| 2 | `POST /auth/email/verify` · `/email/verify-code` · `/email/resend` · `/otp/send` · `/otp/verify` | public/auth | Verification |
+| 2 | `POST /auth/password/forgot` · `/password/reset` · `/password/change` | public/auth | Passwords |
+| 2 | `POST /auth/2fa/setup` · `/2fa/enable` · `/2fa/disable` | auth | Two-factor |
+| 2 | `GET /auth/providers` · `/auth/google/start` · `/auth/google/callback` · `POST /auth/google/handoff` | public | Google sign-in |
+| 2 | `GET /creator/workspace` · `/creator/members` · `GET/POST /creator/domains` · `POST /creator/domains/:id/verify` · `PATCH /:id/primary` · `DELETE /:id` | workspace + RBAC | Creator workspace |
+| 2 | `GET /public/site` | academy host | Academy identity |
 
 ## Route groups (surface → prefix → guard)
 

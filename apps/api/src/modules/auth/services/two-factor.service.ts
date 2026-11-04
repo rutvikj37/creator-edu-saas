@@ -18,9 +18,16 @@ export class TwoFactorService {
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
+  /**
+   * Idempotent while a setup is pending: repeated calls (double-mounted UI, retries, second tab)
+   * return the same secret, so the QR code shown always matches the one that will be verified.
+   */
   async beginSetup(user: { id: string; email: string }, issuer: string) {
-    const secret = generateTotpSecret();
-    await this.redis.set(`2fa-pending:${user.id}`, this.crypto.encrypt(secret), 'EX', 600);
+    const key = `2fa-pending:${user.id}`;
+    const fresh = this.crypto.encrypt(generateTotpSecret());
+    await this.redis.set(key, fresh, 'EX', 600, 'NX');
+    const stored = (await this.redis.get(key)) ?? fresh;
+    const secret = this.crypto.decrypt(stored);
     return { secret, otpauthUrl: otpauthUri(secret, user.email, issuer) };
   }
 

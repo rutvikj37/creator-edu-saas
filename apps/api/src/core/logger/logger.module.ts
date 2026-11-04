@@ -41,6 +41,11 @@ export const REDACT_PATHS = [
             return typeof incoming === 'string' && /^[\w-]{8,64}$/.test(incoming) ? incoming : randomUUID();
           },
           customProps: () => ({ service: 'api' }),
+          // Log the essentials only; full headers are noisy and risk leaking data.
+          serializers: {
+            req: (req: { id?: string; method?: string; url?: string }) => ({ id: req.id, method: req.method, url: req.url }),
+            res: (res: { statusCode?: number }) => ({ statusCode: res.statusCode }),
+          },
           autoLogging: { ignore: (req: IncomingMessage) => req.url?.startsWith('/api/v1/health') ?? false },
           transport: (() => {
             const target = !config.isProduction && !config.isTest ? prettyTarget() : undefined;

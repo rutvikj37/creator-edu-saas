@@ -275,3 +275,21 @@ describe('Authentication (e2e)', () => {
     });
   });
 });
+
+describe('Two-factor setup idempotency (e2e)', () => {
+  let app: NestExpressApplication;
+  beforeAll(async () => {
+    app = await createTestApp();
+  });
+  afterAll(async () => app?.close());
+
+  it('returns the same pending secret on repeated setup calls', async () => {
+    const { session } = await registerCreator(app);
+    const [a, b] = await Promise.all([
+      authed(app, session).post('/api/v1/auth/2fa/setup').expect(200),
+      authed(app, session).post('/api/v1/auth/2fa/setup').expect(200),
+    ]);
+    expect(a.body.data.secret).toBe(b.body.data.secret);
+    await authed(app, session).post('/api/v1/auth/2fa/enable').send({ code: nextTotp(a.body.data.secret, 0) }).expect(200);
+  });
+});

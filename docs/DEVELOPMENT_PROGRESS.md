@@ -6,7 +6,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 |---|---|---|---|
 | 0 Discovery & planning | env inspection, architecture, ERD, module map, navigation, roadmap, docs | Docs approved by owner | ✅ approved 2026-11-04 |
 | 1 Foundation | pnpm monorepo, NestJS api+worker, React/Vite/Tailwind web, Prisma+MySQL, Redis, BullMQ, docker-compose, env validation, logging, error envelope, Swagger, design-system primitives + layouts, health check, CI | `docker compose up` + `pnpm dev` works; lint/tests green; Storybook-like UI kit page | ✅ 2026-11-04 |
-| 2 Auth & multi-tenancy | registration, login, OTP, email verify, reset, refresh rotation, sessions, 2FA, Google OAuth adapter, RBAC, tenants, TenantContext/Guard/Prisma extension, subdomain + custom-domain resolution foundation | **Tenant isolation suite green** | ⬜ |
+| 2 Auth & multi-tenancy | registration, login, OTP, email verify, reset, refresh rotation, sessions, 2FA, Google OAuth adapter, RBAC, tenants, TenantContext/Guard/Prisma extension, subdomain + custom-domain resolution foundation | **Tenant isolation suite green** | ✅ 2026-11-04 |
 | 3 Administration | super admin dashboard (real aggregates), tenants, plans/features/prices, platform settings, admins/roles, audit logs, platform/finance/support panels (base), support tickets | e2e admin flows pass | ⬜ |
 | 4 Creator platform | onboarding wizard, creator dashboard, academy profile/branding, course builder + drag-and-drop curriculum, uploads (S3 multipart), staff & instructors | creator can build a full draft course | ⬜ |
 | 5 Student platform | student auth on academy host, catalog, free enrollment, player, progress, notes, bookmarks, discussions, quizzes, assignments, certificates (PDF + QR verify) | student completes free course and gets certificate | ⬜ |
@@ -35,6 +35,19 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 - Local S3 emulation removed from compose (MinIO community images no longer published); storage set up in Phase 4/6.
 - Auth guard is not active yet — all Phase 1 routes are intentionally public (`@Public`). Phase 2 enables default-deny.
 
+## Phase 2 — Authentication & multi-tenancy (✅ complete)
+
+**Delivered (API)**: identity/tenancy schema · creator + student registration · login with lockout and login history · TOTP 2FA (mandatory for platform admins; restricted session until enrolled; replay-protected codes) · refresh rotation with reuse detection, httpOnly cookies, CSRF double-submit, immediate revocation via Redis · email verification (link + code) · OTP service (email; SMS via Twilio/MSG91 adapters → `INTEGRATION_NOT_CONFIGURED` when unset) · password reset/change (signs out other devices) · Google OIDC + PKCE with cross-host hand-off · RBAC (33 permissions, 12 system roles, cached resolution) · host → tenant resolution (subdomain + verified custom domains, Redis cache) · CLS tenant context · tenant-scoped Prisma extension (throws without context) · Jwt/Tenant/Permissions guards (default deny) · custom domains with DNS TXT verification · seed incl. initial super admin.
+
+**Delivered (Web)**: same-origin API proxy · AuthContext (in-memory access token, single-flight refresh, 401 retry) · route guards · login (+2FA step, safe `next`), creator signup, student register, forgot/reset, verify email, Google callback, forced admin 2FA enrolment · account security (password, 2FA with QR, sessions) · creator workspace overview and domains · student home · platform and academy landing pages · workspace switcher.
+
+**Verification**: API unit 25 ✅ · API e2e 40 ✅ (auth 29, tenant isolation 11 incl. route-coverage check) · web 32 ✅ · browser flow: signup → SMTP-delivered verification code → domain add/verify → 2FA enrol → session restore on reload ✅.
+
+**Fixed during verification**: OTP cooldown/invalidation keyed per account (same email in two academies) · idempotent 2FA setup (QR always matches stored secret) · unique modal title ids (a11y) · leaner request logs.
+
+**Deferred**: composite tenant FKs land with the first tenant-owned child tables (Phase 4) · custom-domain count limit enforced by plan entitlements (Phase 3).
+
 ## Change log of this file
 - 2026-11-04 — Phase 0 documents drafted and approved.
 - 2026-11-04 — Phase 1 foundation completed.
+- 2026-11-04 — Phase 2 authentication & multi-tenancy completed.

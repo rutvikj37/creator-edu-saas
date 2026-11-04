@@ -1,7 +1,7 @@
 import {
   Activity, Award, Banknote, BarChart3, BookOpen, Boxes, Brush, Building2, CalendarDays, ClipboardCheck, Component,
   CreditCard, Crown, FileText, FolderTree, Globe, GraduationCap, Handshake, HeartPulse, Inbox, LayoutDashboard, LifeBuoy,
-  Link2, Mail, Megaphone, MessagesSquare, Package, Palette, Percent, Plug, Radio, Receipt, ScrollText, Settings, ShieldCheck,
+  KeyRound, Link2, Mail, Megaphone, MessagesSquare, Package, Palette, Percent, Plug, Radio, Receipt, ScrollText, Settings, ShieldCheck,
   ShoppingCart, Sparkles, Tag, Ticket, UserCog, Users, Video, Wallet,
 } from 'lucide-react';
 
@@ -14,7 +14,7 @@ const item = (label, to, icon, phase, extra = {}) => ({ label, to, icon, phase, 
 
 export const NAV = {
   superAdmin: [
-    { label: null, items: [item('Dashboard', '/super-admin', LayoutDashboard, 3, { end: true })] },
+    { label: null, items: [item('Dashboard', '/super-admin', LayoutDashboard, 3, { end: true, available: true })] },
     { label: 'Tenants', items: [item('All tenants', '/super-admin/tenants', Building2, 3), item('Domains', '/super-admin/domains', Globe, 3)] },
     { label: 'Subscriptions', items: [item('Plans', '/super-admin/plans', Crown, 3), item('Subscriptions', '/super-admin/subscriptions', CreditCard, 3)] },
     {
@@ -31,14 +31,15 @@ export const NAV = {
         item('Settings', '/super-admin/settings', Settings, 3),
         item('Integrations', '/super-admin/integrations', Plug, 3),
         item('Audit logs', '/super-admin/audit-logs', ScrollText, 3),
-        item('System status', '/status', HeartPulse, 1, { available: true }),
-        item('Design system', '/design-system', Component, 1, { available: true }),
+        item('System status', '/super-admin/status', HeartPulse, 1, { available: true }),
+        item('Design system', '/super-admin/design-system', Component, 1, { available: true }),
+        item('Account security', '/super-admin/account/security', KeyRound, 2, { available: true }),
       ],
     },
   ],
 
   creator: [
-    { label: null, items: [item('Dashboard', '/creator', LayoutDashboard, 4, { end: true }), item('My academy', '/creator/academy', Palette, 4)] },
+    { label: null, items: [item('Dashboard', '/creator', LayoutDashboard, 2, { end: true, available: true }), item('My academy', '/creator/academy', Palette, 4)] },
     {
       label: 'Content',
       items: [
@@ -54,7 +55,7 @@ export const NAV = {
       items: [item('Orders', '/creator/orders', ShoppingCart, 7), item('Transactions', '/creator/transactions', Receipt, 7), item('Coupons', '/creator/coupons', Tag, 7)],
     },
     { label: 'Live', items: [item('Live classes', '/creator/live', Radio, 9), item('Webinars', '/creator/webinars', CalendarDays, 9)] },
-    { label: 'Website', items: [item('Website builder', '/creator/website', Brush, 8), item('Domains', '/creator/domains', Globe, 8)] },
+    { label: 'Website', items: [item('Website builder', '/creator/website', Brush, 8), item('Domains', '/creator/domains', Globe, 2, { available: true })] },
     {
       label: 'Growth',
       items: [
@@ -73,6 +74,7 @@ export const NAV = {
         item('Settings', '/creator/settings', Settings, 4),
         item('Billing', '/creator/billing', CreditCard, 7),
         item('Support', '/creator/support', LifeBuoy, 3),
+        item('Account security', '/creator/account/security', KeyRound, 2, { available: true }),
       ],
     },
   ],
@@ -81,13 +83,14 @@ export const NAV = {
     {
       label: null,
       items: [
-        item('Home', '/learn', LayoutDashboard, 5, { end: true }),
+        item('Home', '/learn', LayoutDashboard, 2, { end: true, available: true }),
         item('My learning', '/learn/courses', BookOpen, 5),
         item('Live classes', '/learn/live', Video, 9),
         item('Certificates', '/learn/certificates', Award, 5),
         item('Communities', '/learn/communities', MessagesSquare, 10),
         item('Orders', '/learn/orders', Receipt, 7),
         item('Support', '/learn/support', LifeBuoy, 5),
+        item('Account security', '/learn/account/security', KeyRound, 2, { available: true }),
       ],
     },
   ],

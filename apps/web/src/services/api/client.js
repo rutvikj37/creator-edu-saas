@@ -43,6 +43,12 @@ http.interceptors.request.use((config) => {
   return config;
 });
 
+let refreshHandler = null;
+/** Registers a function that obtains a fresh access token (single-flight) or throws. */
+export function setRefreshHandler(fn) {
+  refreshHandler = fn;
+}
+
 http.interceptors.response.use(
   (response) => {
     const body = response.data;
@@ -51,5 +57,27 @@ http.interceptors.response.use(
     }
     return { data: body, meta: undefined, status: response.status };
   },
-  (error) => Promise.reject(toApiError(error)),
+  async (error) => {
+    const apiError = toApiError(error);
+    const config = error.config;
+    // Expired access token: refresh once, then replay the original request.
+    if (
+      apiError.status === 401 &&
+      refreshHandler &&
+      config &&
+      !config.skipAuthRefresh &&
+      !config._retried &&
+      config.headers?.Authorization
+    ) {
+      config._retried = true;
+      try {
+        const token = await refreshHandler();
+        config.headers.Authorization = `Bearer ${token}`;
+        return http.request(config);
+      } catch {
+        return Promise.reject(apiError);
+      }
+    }
+    return Promise.reject(apiError);
+  },
 );

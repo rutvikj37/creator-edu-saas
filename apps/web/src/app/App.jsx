@@ -1,8 +1,8 @@
 import { createBrowserRouter, RouterProvider } from 'react-router';
 import { Providers } from './Providers.jsx';
-import { routes } from '../routes/routes.jsx';
+import { buildRoutes } from '../routes/routes.jsx';
 
-const router = createBrowserRouter(routes);
+const router = createBrowserRouter(buildRoutes());
 
 export function App() {
   return (

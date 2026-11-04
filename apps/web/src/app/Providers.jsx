@@ -5,6 +5,7 @@ import { Toaster } from 'sonner';
 import i18n from '../i18n/index.js';
 import { ThemeProvider, useTheme } from '../context/ThemeContext.jsx';
 import { createQueryClient } from './queryClient.js';
+import { AuthProvider } from '../context/AuthContext.jsx';
 
 function ThemedToaster() {
   const { theme } = useTheme();
@@ -17,7 +18,7 @@ export function Providers({ children }) {
     <I18nextProvider i18n={i18n}>
       <QueryClientProvider client={client}>
         <ThemeProvider>
-          {children}
+          <AuthProvider>{children}</AuthProvider>
           <ThemedToaster />
         </ThemeProvider>
       </QueryClientProvider>

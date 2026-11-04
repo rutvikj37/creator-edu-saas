@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '../../utils/cn.js';
 import { Button } from './Button.jsx';
@@ -10,6 +10,7 @@ import { Input } from './Input.jsx';
  */
 export function Modal({ open, onClose, title, description, children, footer, size = 'md', className }) {
   const ref = useRef(null);
+  const titleId = useId();
 
   useEffect(() => {
     const dialog = ref.current;
@@ -23,7 +24,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
   return (
     <dialog
       ref={ref}
-      aria-labelledby="modal-title"
+      aria-labelledby={titleId}
       onCancel={(e) => {
         e.preventDefault();
         onClose?.();
@@ -37,7 +38,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
         <div className="flex max-h-[85vh] flex-col">
           <div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
             <div>
-              <h2 id="modal-title" className="text-base font-semibold">
+              <h2 id={titleId} className="text-base font-semibold">
                 {title}
               </h2>
               {description && <p className="mt-0.5 text-sm text-muted">{description}</p>}

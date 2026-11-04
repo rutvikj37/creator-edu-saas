@@ -2,6 +2,10 @@
 
 Format: Keep a Changelog. Versions follow SemVer once Phase 1 ships.
 
+## [0.2.0] — 2026-11-04 — Phase 2: Authentication & multi-tenancy
+### Added
+- Registration, login, 2FA, refresh rotation, sessions, email/OTP verification, password flows, Google sign-in adapter, RBAC, tenant resolution and isolation, custom domains; auth UI and account security.
+
 ## [0.1.0] — 2026-11-04 — Phase 1: Foundation
 ### Added
 - NestJS API foundation: config validation, Prisma/MySQL, Redis, BullMQ worker, health checks, error envelope, rate limiting, Swagger, audit service.
