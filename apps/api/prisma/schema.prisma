@@ -1,0 +1,67 @@
+// Creator Education SaaS — Prisma schema (MySQL 8).
+// Conventions: docs/DATABASE_ERD.md. CUID primary keys, UTC DATETIME(3) timestamps,
+// DECIMAL(19,4) money with explicit currency, tenantId on every tenant-owned table.
+// Phase 1 contains platform infrastructure tables; identity and tenancy arrive in Phase 2.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+/// Platform-wide key/value configuration managed by Super Admin.
+/// Secret values are stored encrypted (AES-256-GCM) and never returned by the API.
+model PlatformSetting {
+  id        String   @id @default(cuid()) @db.Char(25)
+  group     String   @db.VarChar(64)
+  key       String   @unique @db.VarChar(128)
+  value     Json
+  isSecret  Boolean  @default(false)
+  updatedBy String?  @db.Char(25)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  updatedAt DateTime @updatedAt @db.DateTime(3)
+
+  @@index([group])
+}
+
+/// Append-only audit trail for security and business events.
+/// No foreign keys on purpose: audit rows must survive deletion/anonymisation of actors and targets.
+model AuditLog {
+  id          String   @id @default(cuid()) @db.Char(25)
+  tenantId    String?  @db.Char(25)
+  actorUserId String?  @db.Char(25)
+  actorRealm  String?  @db.VarChar(16)
+  action      String   @db.VarChar(128)
+  targetType  String?  @db.VarChar(64)
+  targetId    String?  @db.VarChar(64)
+  before      Json?
+  after       Json?
+  ip          String?  @db.VarChar(45)
+  userAgent   String?  @db.VarChar(512)
+  requestId   String?  @db.VarChar(64)
+  createdAt   DateTime @default(now()) @db.DateTime(3)
+
+  @@index([tenantId, createdAt])
+  @@index([action, createdAt])
+  @@index([actorUserId, createdAt])
+}
+
+/// Stores responses for requests sent with an Idempotency-Key header so retries are safe.
+model IdempotencyKey {
+  id           String   @id @default(cuid()) @db.Char(25)
+  scope        String   @db.VarChar(128)
+  key          String   @db.VarChar(128)
+  requestHash  String   @db.Char(64)
+  statusCode   Int?
+  responseBody Json?
+  expiresAt    DateTime @db.DateTime(3)
+  createdAt    DateTime @default(now()) @db.DateTime(3)
+
+  @@unique([scope, key])
+  @@index([expiresAt])
+}

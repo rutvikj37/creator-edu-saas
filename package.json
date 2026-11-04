@@ -1,0 +1,24 @@
+{
+  "name": "creator-edu-saas",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter @ce/api --filter @ce/web dev",
+    "dev:api": "pnpm --filter @ce/api dev",
+    "dev:worker": "pnpm --filter @ce/api dev:worker",
+    "dev:web": "pnpm --filter @ce/web dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "test:e2e": "pnpm --filter @ce/api test:e2e",
+    "db:migrate": "pnpm --filter @ce/api db:migrate",
+    "db:deploy": "pnpm --filter @ce/api db:deploy",
+    "db:seed": "pnpm --filter @ce/api db:seed",
+    "db:generate": "pnpm --filter @ce/api db:generate",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2"
+  }
+}

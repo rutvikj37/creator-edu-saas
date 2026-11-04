@@ -1,0 +1,21 @@
+/** Every BullMQ queue in the system. See docs/SYSTEM_ARCHITECTURE.md §6. */
+export const QUEUES = {
+  MAINTENANCE: 'maintenance',
+  NOTIFICATIONS: 'notifications',
+  VIDEO: 'video',
+  WEBHOOKS_IN: 'webhooks-in',
+  COMMERCE: 'commerce',
+  BILLING: 'billing',
+  CERTIFICATES: 'certificates',
+  MARKETING: 'marketing',
+  LIVE: 'live',
+  ANALYTICS: 'analytics',
+  AI: 'ai',
+  DOMAINS: 'domains',
+} as const;
+
+export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
+
+export const MAINTENANCE_JOBS = {
+  PURGE_EXPIRED_IDEMPOTENCY_KEYS: 'purge-expired-idempotency-keys',
+} as const;
