@@ -12,6 +12,14 @@ Status: **Phase 0 design**. Live docs will be served by Swagger at `/api/docs` (
 - Rate limits returned in `RateLimit-*` headers.
 - Error codes: `UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, VALIDATION_FAILED, CONFLICT, RATE_LIMITED, PLAN_LIMIT_REACHED, FEATURE_NOT_IN_PLAN, INTEGRATION_NOT_CONFIGURED, TENANT_SUSPENDED, PAYMENT_PROVIDER_ERROR, INTERNAL`.
 
+## Implemented endpoints
+
+| Phase | Method & path | Auth | Description |
+|---|---|---|---|
+| 1 | `GET /api/v1/health/live` | public | Liveness probe |
+| 1 | `GET /api/v1/health` | public | Readiness: MySQL, Redis, queue (503 when any is down) |
+| 1 | `GET /api/v1/system/info` | public | Platform name, non-secret branding, root domain, locales |
+
 ## Route groups (surface → prefix → guard)
 
 | Surface | Prefix | Who |

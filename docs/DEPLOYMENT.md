@@ -3,7 +3,7 @@
 Status: **Phase 0 plan** — fleshed out in Phase 1 (local) and Phase 11 (production).
 
 ## Local development (Phase 1)
-- `docker compose up -d` → `mysql:8.4`, `redis:7`, `mailpit` (SMTP catcher), `minio` (S3-compatible, dev only — production uses AWS S3).
+- `docker compose up -d` → `mysql:8.4`, `redis:7.4`, `mailpit` (SMTP catcher). File storage uses an AWS S3 dev bucket (configured in Phase 4/6).
 - `pnpm install && pnpm db:migrate && pnpm db:seed && pnpm dev` (api :4000, worker, web :5173).
 - Wildcard local hosts: `*.lvh.me` resolves to 127.0.0.1, so `academy1.lvh.me:5173` exercises tenant resolution without editing `/etc/hosts`.
 - Cloud/CI session without Docker: MySQL 8.0 via apt + local Redis.

@@ -1,4 +1,4 @@
-import { defineConfig, env } from 'prisma/config';
+import { defineConfig } from 'prisma/config';
 import { existsSync } from 'node:fs';
 
 // Load the monorepo-root .env for CLI commands (migrate, generate, studio).
@@ -11,7 +11,8 @@ export default defineConfig({
     seed: 'tsx prisma/seed.ts',
   },
   datasource: {
-    url: env('DATABASE_URL'),
+    // Not required for `prisma generate` (Docker/CI builds); commands that connect fail clearly without it.
+    url: process.env.DATABASE_URL ?? '',
     shadowDatabaseUrl: process.env.SHADOW_DATABASE_URL,
   },
 });

@@ -1,0 +1,18 @@
+{
+  "shell": {
+    "search": "શોધો…",
+    "searchPlaceholder": "પેજ અને ક્રિયાઓ શોધો",
+    "noResults": "કોઈ પરિણામ નથી",
+    "notifications": "સૂચનાઓ",
+    "noNotifications": "કોઈ નવી સૂચના નથી",
+    "noNotificationsHint": "નવી પ્રવૃત્તિ અહીં દેખાશે.",
+    "collapse": "સાઇડબાર નાનું કરો",
+    "expand": "સાઇડબાર મોટું કરો",
+    "openMenu": "મેનુ ખોલો",
+    "theme": "થીમ બદલો",
+    "language": "ભાષા",
+    "soon": "જલ્દી",
+    "profile": "પ્રોફાઇલ",
+    "signOut": "સાઇન આઉટ"
+  }
+}

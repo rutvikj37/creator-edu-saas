@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root_password
+          MYSQL_DATABASE: creator_edu_test
+          MYSQL_USER: ce_app
+          MYSQL_PASSWORD: ce_app_password
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot_password" --health-interval=5s --health-timeout=3s --health-retries=20
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+        options: --health-cmd="redis-cli ping" --health-interval=5s --health-timeout=3s --health-retries=20
+    env:
+      TEST_DATABASE_URL: mysql://ce_app:ce_app_password@127.0.0.1:3306/creator_edu_test
+      TEST_REDIS_URL: redis://127.0.0.1:6379/1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm test
+      - name: Migrate test database
+        run: pnpm --filter @ce/api exec prisma migrate deploy
+        env: { DATABASE_URL: "${{ env.TEST_DATABASE_URL }}" }
+      - run: pnpm test:e2e
+      - run: pnpm build

@@ -1,0 +1,18 @@
+{
+  "shell": {
+    "search": "खोजें…",
+    "searchPlaceholder": "पेज और कार्य खोजें",
+    "noResults": "कोई परिणाम नहीं",
+    "notifications": "सूचनाएँ",
+    "noNotifications": "कोई नई सूचना नहीं",
+    "noNotificationsHint": "नई गतिविधि यहाँ दिखाई देगी।",
+    "collapse": "साइडबार छोटा करें",
+    "expand": "साइडबार बड़ा करें",
+    "openMenu": "मेनू खोलें",
+    "theme": "थीम बदलें",
+    "language": "भाषा",
+    "soon": "जल्द",
+    "profile": "प्रोफ़ाइल",
+    "signOut": "साइन आउट"
+  }
+}

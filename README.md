@@ -5,7 +5,7 @@ Multi-tenant platform for creators to launch branded academies: courses, video, 
 **Stack:** React (JS, Vite, Tailwind, React Router, TanStack Query, React Hook Form, Zod, Recharts, Lucide, TipTap) · NestJS (TypeScript) · Prisma · MySQL 8.4 · Redis + BullMQ · AWS S3/CloudFront · Docker/Nginx/PM2.
 
 ## Status
-Phase 0 (architecture & planning) — see [docs/DEVELOPMENT_PROGRESS.md](docs/DEVELOPMENT_PROGRESS.md). No application code yet.
+Phase 1 (foundation) complete — see [docs/DEVELOPMENT_PROGRESS.md](docs/DEVELOPMENT_PROGRESS.md).
 
 ## Documentation
 | Doc | Purpose |
@@ -20,4 +20,37 @@ Phase 0 (architecture & planning) — see [docs/DEVELOPMENT_PROGRESS.md](docs/DE
 | [Deployment](docs/DEPLOYMENT.md) · [Testing](docs/TESTING.md) | Ops & QA |
 
 ## Getting started
-Available from Phase 1 (`docker compose up -d`, `pnpm install`, `pnpm dev`).
+
+Requirements: Node.js 22+, pnpm 10 (`corepack enable`), Docker Desktop (or local MySQL 8 + Redis 7).
+
+```bash
+cp .env.example .env          # then set JWT_ACCESS_SECRET, ENCRYPTION_KEY, CSRF_SECRET
+docker compose up -d          # MySQL 8.4, Redis 7, Mailpit
+pnpm install
+pnpm db:migrate               # apply Prisma migrations
+pnpm db:seed                  # default platform settings
+pnpm dev                      # API :4000 + web :5173
+pnpm dev:worker               # background jobs (separate terminal)
+```
+
+Open http://app.lvh.me:5173 (`*.lvh.me` resolves to 127.0.0.1, so tenant subdomains work locally).
+API docs: http://localhost:4000/api/docs · Health: http://localhost:4000/api/v1/health · Mail: http://localhost:8025
+
+Generate secrets: `openssl rand -base64 48` (JWT/CSRF) and `openssl rand -base64 32` (ENCRYPTION_KEY).
+
+| Command | Purpose |
+|---|---|
+| `pnpm lint` | Type-check API, lint web |
+| `pnpm test` | Unit/component tests (all packages) |
+| `pnpm test:e2e` | API integration tests against `creator_edu_test` (MySQL + Redis required) |
+| `pnpm build` | Production builds |
+| `docker compose --profile app up --build` | Run API, worker and web in containers |
+
+## Repository layout
+```
+apps/api        NestJS API + BullMQ worker (TypeScript, Prisma, MySQL)
+apps/web        React SPA (Vite, Tailwind, TanStack Query)
+packages/shared Constants shared by API and web (roles, feature keys, error codes)
+infra/          Dockerfiles, nginx
+docs/           Architecture & specifications
+```

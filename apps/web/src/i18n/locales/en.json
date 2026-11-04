@@ -1,0 +1,18 @@
+{
+  "shell": {
+    "search": "Search…",
+    "searchPlaceholder": "Search pages and actions",
+    "noResults": "No matches",
+    "notifications": "Notifications",
+    "noNotifications": "You're all caught up",
+    "noNotificationsHint": "New activity will appear here.",
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar",
+    "openMenu": "Open menu",
+    "theme": "Toggle theme",
+    "language": "Language",
+    "soon": "Soon",
+    "profile": "Profile",
+    "signOut": "Sign out"
+  }
+}
