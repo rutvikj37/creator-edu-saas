@@ -8,3 +8,7 @@ export declare const FEATURE_KEYS: readonly string[];
 export declare const ORDER_STATUS: Readonly<Record<string, string>>;
 export declare const TENANT_STATUS: Readonly<Record<string, string>>;
 export declare const SUPPORTED_LOCALES: readonly string[];
+export declare const PERMISSIONS: Readonly<Record<string, string>>;
+export declare const ROLE_PERMISSIONS: Readonly<Record<string, readonly string[]>>;
+export declare const MFA_REQUIRED_ROLES: readonly string[];
+export declare function permissionScope(key: string): 'PLATFORM' | 'TENANT';

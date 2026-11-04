@@ -9,7 +9,7 @@
     ".": { "types": "./src/index.d.ts", "default": "./src/index.js" }
   },
   "scripts": {
-    "test": "node --test src/",
+    "test": "node --test \"src/**/*.test.js\"",
     "lint": "node --check src/index.js",
     "build": "echo 'shared: no build step'"
   }

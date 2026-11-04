@@ -4,9 +4,9 @@
 // Phase 1 contains platform infrastructure tables; identity and tenancy arrive in Phase 2.
 
 generator client {
-  provider     = "prisma-client"
-  output       = "../src/generated/prisma"
-  moduleFormat = "esm"
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
   importFileExtension = "js"
 }
 
@@ -64,4 +64,316 @@ model IdempotencyKey {
 
   @@unique([scope, key])
   @@index([expiresAt])
+}
+
+// ───────────────────────────── Identity ─────────────────────────────
+
+enum Realm {
+  PLATFORM
+  TENANT
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum RoleScope {
+  PLATFORM
+  TENANT
+}
+
+/// A login identity. Platform users (admins, creators, staff) have realm=PLATFORM and
+/// realmKey='platform'. Students/affiliates belong to exactly one academy: realm=TENANT,
+/// tenantId set and realmKey=tenantId — so the same email can exist independently per academy.
+model User {
+  id                 String     @id @default(cuid()) @db.Char(25)
+  realm              Realm
+  realmKey           String     @db.VarChar(25)
+  tenantId           String?    @db.Char(25)
+  email              String     @db.VarChar(191)
+  emailVerifiedAt    DateTime?  @db.DateTime(3)
+  phone              String?    @db.VarChar(20)
+  phoneVerifiedAt    DateTime?  @db.DateTime(3)
+  passwordHash       String?    @db.VarChar(255)
+  fullName           String     @db.VarChar(120)
+  country            String?    @db.Char(2)
+  locale             String     @default("en") @db.VarChar(10)
+  timezone           String?    @db.VarChar(64)
+  status             UserStatus @default(ACTIVE)
+  twoFactorSecretEnc String?    @db.VarChar(255)
+  twoFactorEnabledAt DateTime?  @db.DateTime(3)
+  failedLoginCount   Int        @default(0)
+  lockedUntil        DateTime?  @db.DateTime(3)
+  lastLoginAt        DateTime?  @db.DateTime(3)
+  passwordChangedAt  DateTime?  @db.DateTime(3)
+  createdAt          DateTime   @default(now()) @db.DateTime(3)
+  updatedAt          DateTime   @updatedAt @db.DateTime(3)
+  deletedAt          DateTime?  @db.DateTime(3)
+
+  tenant             Tenant?             @relation("TenantUsers", fields: [tenantId], references: [id], onDelete: Restrict)
+  ownedTenants       Tenant[]            @relation("TenantOwner")
+  memberships        TenantMember[]
+  roles              UserRole[]
+  sessions           UserSession[]
+  oauthAccounts      OAuthAccount[]
+  passwordResets     PasswordReset[]
+  emailVerifications EmailVerification[]
+  loginHistory       LoginHistory[]
+
+  @@unique([realmKey, email])
+  @@unique([realmKey, phone])
+  @@index([tenantId, status])
+  @@index([realm, createdAt])
+}
+
+model OAuthAccount {
+  id                String   @id @default(cuid()) @db.Char(25)
+  userId            String   @db.Char(25)
+  provider          String   @db.VarChar(32)
+  providerAccountId String   @db.VarChar(191)
+  realmKey          String   @db.VarChar(25)
+  createdAt         DateTime @default(now()) @db.DateTime(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId, realmKey])
+  @@index([userId])
+}
+
+model Permission {
+  id          String           @id @default(cuid()) @db.Char(25)
+  key         String           @unique @db.VarChar(64)
+  scope       RoleScope
+  description String?          @db.VarChar(255)
+  roles       RolePermission[]
+}
+
+/// System roles have tenantId = null and isSystem = true. Tenants may create custom roles later.
+model Role {
+  id          String           @id @default(cuid()) @db.Char(25)
+  tenantId    String?          @db.Char(25)
+  key         String           @db.VarChar(64)
+  name        String           @db.VarChar(100)
+  scope       RoleScope
+  isSystem    Boolean          @default(false)
+  createdAt   DateTime         @default(now()) @db.DateTime(3)
+  updatedAt   DateTime         @updatedAt @db.DateTime(3)
+  tenant      Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  permissions RolePermission[]
+  userRoles   UserRole[]
+  members     TenantMember[]
+
+  /// MySQL treats NULLs as distinct, so system-role uniqueness is enforced via `uniqueKey` ('system:KEY' or 'tenantId:KEY').
+  uniqueKey String @unique @db.VarChar(100)
+
+  @@index([tenantId])
+}
+
+model RolePermission {
+  roleId       String     @db.Char(25)
+  permissionId String     @db.Char(25)
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+/// Platform-scope role assignments (super admin, platform/finance/support admins).
+model UserRole {
+  id        String   @id @default(cuid()) @db.Char(25)
+  userId    String   @db.Char(25)
+  roleId    String   @db.Char(25)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+}
+
+/// Refresh-token session. Only a SHA-256 hash of the token is stored. Rotation creates a
+/// new row in the same family; presenting an already-rotated token revokes the family.
+model UserSession {
+  id               String    @id @default(cuid()) @db.Char(25)
+  userId           String    @db.Char(25)
+  familyId         String    @db.Char(25)
+  refreshTokenHash String    @unique @db.Char(64)
+  activeTenantId   String?   @db.Char(25)
+  userAgent        String?   @db.VarChar(512)
+  ip               String?   @db.VarChar(45)
+  lastUsedAt       DateTime  @default(now()) @db.DateTime(3)
+  expiresAt        DateTime  @db.DateTime(3)
+  rotatedAt        DateTime? @db.DateTime(3)
+  revokedAt        DateTime? @db.DateTime(3)
+  revokeReason     String?   @db.VarChar(64)
+  createdAt        DateTime  @default(now()) @db.DateTime(3)
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([familyId])
+}
+
+model LoginHistory {
+  id            String   @id @default(cuid()) @db.Char(25)
+  userId        String?  @db.Char(25)
+  realmKey      String   @db.VarChar(25)
+  emailTried    String   @db.VarChar(191)
+  success       Boolean
+  failureReason String?  @db.VarChar(64)
+  method        String   @default("password") @db.VarChar(32)
+  ip            String?  @db.VarChar(45)
+  userAgent     String?  @db.VarChar(512)
+  createdAt     DateTime @default(now()) @db.DateTime(3)
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([ip, createdAt])
+}
+
+model PasswordReset {
+  id        String    @id @default(cuid()) @db.Char(25)
+  userId    String    @db.Char(25)
+  tokenHash String    @unique @db.Char(64)
+  expiresAt DateTime  @db.DateTime(3)
+  usedAt    DateTime? @db.DateTime(3)
+  createdAt DateTime  @default(now()) @db.DateTime(3)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model EmailVerification {
+  id        String    @id @default(cuid()) @db.Char(25)
+  userId    String    @db.Char(25)
+  email     String    @db.VarChar(191)
+  tokenHash String    @unique @db.Char(64)
+  expiresAt DateTime  @db.DateTime(3)
+  usedAt    DateTime? @db.DateTime(3)
+  createdAt DateTime  @default(now()) @db.DateTime(3)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+enum OtpPurpose {
+  EMAIL_VERIFY
+  PHONE_VERIFY
+  LOGIN
+}
+
+/// One-time codes (6 digits, hashed). Bound to a user when known.
+model OtpCode {
+  id         String     @id @default(cuid()) @db.Char(25)
+  userId     String?    @db.Char(25)
+  channel    String     @db.VarChar(16)
+  target     String     @db.VarChar(191)
+  purpose    OtpPurpose
+  codeHash   String     @db.Char(64)
+  attempts   Int        @default(0)
+  expiresAt  DateTime   @db.DateTime(3)
+  consumedAt DateTime?  @db.DateTime(3)
+  createdAt  DateTime   @default(now()) @db.DateTime(3)
+
+  @@index([target, purpose, createdAt])
+}
+
+// ───────────────────────────── Tenancy ─────────────────────────────
+
+enum TenantStatus {
+  ONBOARDING
+  ACTIVE
+  SUSPENDED
+  PENDING_DELETION
+  DELETED
+}
+
+model Tenant {
+  id                    String       @id @default(cuid()) @db.Char(25)
+  slug                  String       @unique @db.VarChar(63)
+  name                  String       @db.VarChar(120)
+  ownerUserId           String       @db.Char(25)
+  status                TenantStatus @default(ONBOARDING)
+  country               String?      @db.Char(2)
+  defaultCurrency       String       @default("INR") @db.Char(3)
+  timezone              String       @default("Asia/Kolkata") @db.VarChar(64)
+  locale                String       @default("en") @db.VarChar(10)
+  onboardingStep        Int          @default(1)
+  onboardingCompletedAt DateTime?    @db.DateTime(3)
+  suspendedReason       String?      @db.VarChar(255)
+  createdAt             DateTime     @default(now()) @db.DateTime(3)
+  updatedAt             DateTime     @updatedAt @db.DateTime(3)
+  deletedAt             DateTime?    @db.DateTime(3)
+
+  owner    User            @relation("TenantOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  users    User[]          @relation("TenantUsers")
+  members  TenantMember[]
+  settings TenantSetting[]
+  domains  TenantDomain[]
+  roles    Role[]
+
+  @@index([status, createdAt])
+}
+
+/// A platform user's membership of a tenant workspace (owner and staff).
+model TenantMember {
+  id        String   @id @default(cuid()) @db.Char(25)
+  tenantId  String   @db.Char(25)
+  userId    String   @db.Char(25)
+  roleId    String   @db.Char(25)
+  status    String   @default("ACTIVE") @db.VarChar(16)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  updatedAt DateTime @updatedAt @db.DateTime(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, userId])
+  @@unique([tenantId, id])
+  @@index([userId])
+}
+
+model TenantSetting {
+  id        String   @id @default(cuid()) @db.Char(25)
+  tenantId  String   @db.Char(25)
+  key       String   @db.VarChar(128)
+  value     Json
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  updatedAt DateTime @updatedAt @db.DateTime(3)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, key])
+  @@unique([tenantId, id])
+}
+
+enum DomainType {
+  SUBDOMAIN
+  CUSTOM
+}
+
+enum DomainStatus {
+  PENDING
+  VERIFIED
+  FAILED
+}
+
+/// Hostnames that resolve to a tenant. Custom domains must prove control via a DNS TXT record.
+model TenantDomain {
+  id                String       @id @default(cuid()) @db.Char(25)
+  tenantId          String       @db.Char(25)
+  hostname          String       @unique @db.VarChar(253)
+  type              DomainType
+  isPrimary         Boolean      @default(false)
+  status            DomainStatus @default(PENDING)
+  verificationToken String       @db.VarChar(64)
+  verifiedAt        DateTime?    @db.DateTime(3)
+  lastCheckedAt     DateTime?    @db.DateTime(3)
+  lastCheckError    String?      @db.VarChar(255)
+  createdAt         DateTime     @default(now()) @db.DateTime(3)
+  updatedAt         DateTime     @updatedAt @db.DateTime(3)
+  tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, status])
 }
