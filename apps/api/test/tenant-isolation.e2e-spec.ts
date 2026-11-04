@@ -6,6 +6,7 @@ import { TenantContextMissingError } from '../src/core/tenancy/tenant-prisma.js'
 import { TenantContext } from '../src/core/tenancy/tenant-context.service.js';
 import { HostResolverService } from '../src/core/tenancy/host-resolver.service.js';
 import { PasswordService } from '../src/modules/auth/services/password.service.js';
+import { EntitlementsService } from '../src/modules/subscriptions/entitlements.service.js';
 import { api, authed, createTestApp, login, parseSession, PLATFORM, registerCreator, resetDatabase, tenantHost, uniqueEmail, type Session } from './helpers.js';
 
 /**
@@ -20,6 +21,11 @@ const WORKSPACE_ROUTES_COVERED = [
   'POST /api/v1/creator/domains/:id/verify',
   'PATCH /api/v1/creator/domains/:id/primary',
   'DELETE /api/v1/creator/domains/:id',
+  'GET /api/v1/creator/billing',
+  'GET /api/v1/creator/support/tickets',
+  'POST /api/v1/creator/support/tickets',
+  'GET /api/v1/creator/support/tickets/:id',
+  'POST /api/v1/creator/support/tickets/:id/messages',
 ];
 
 describe('Tenant isolation (e2e)', () => {
@@ -35,6 +41,11 @@ describe('Tenant isolation (e2e)', () => {
     await resetDatabase(app);
     A = await registerCreator(app, { businessName: 'Alpha Academy' });
     B = await registerCreator(app, { businessName: 'Beta Academy' });
+    // The seeded default plan allows no custom domains; grant some via overrides for this suite.
+    for (const t of [A.tenant.id, B.tenant.id]) {
+      await prisma.tenantLimitOverride.create({ data: { tenantId: t, featureKey: 'domains.custom', enabled: true, limitValue: 5n } });
+      await app.get(EntitlementsService).invalidate(t);
+    }
     const res = await authed(app, A.session).post('/api/v1/creator/domains').send({ hostname: 'learn.alpha-example.com' }).expect(201);
     domainA = res.body.data;
   });
@@ -68,6 +79,16 @@ describe('Tenant isolation (e2e)', () => {
     await authed(app, B.session).get(`/api/v1/creator/domains?tenantId=${A.tenant.id}`).expect(200).then((r) => {
       expect(r.body.data.every((d: { hostname: string }) => d.hostname.startsWith('beta'))).toBe(true);
     });
+  });
+
+  it("support tickets and billing are isolated per workspace", async () => {
+    const t = await authed(app, A.session).post('/api/v1/creator/support/tickets').send({ subject: 'Payout question', category: 'billing', priority: 'MEDIUM', body: 'When are payouts sent each month?' }).expect(201);
+    await authed(app, B.session).get(`/api/v1/creator/support/tickets/${t.body.data.id}`).expect(404);
+    await authed(app, B.session).post(`/api/v1/creator/support/tickets/${t.body.data.id}/messages`).send({ body: 'hijack' }).expect(404);
+    const list = await authed(app, B.session).get('/api/v1/creator/support/tickets').expect(200);
+    expect(list.body.data).toEqual([]);
+    const billing = await authed(app, B.session).get('/api/v1/creator/billing').expect(200);
+    expect(billing.body.data.usage['domains.custom']).toBe(0);
   });
 
   it('cannot switch into a workspace without membership', async () => {

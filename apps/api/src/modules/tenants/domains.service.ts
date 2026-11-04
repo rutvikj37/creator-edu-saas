@@ -9,6 +9,8 @@ import type { TenantPrismaClient } from '../../core/tenancy/tenant-prisma.js';
 import { TenantContext } from '../../core/tenancy/tenant-context.service.js';
 import { PrismaService } from '../../core/prisma/prisma.service.js';
 import { DnsVerifier, VERIFY_PREFIX } from './dns-verifier.js';
+import { EntitlementsService } from '../subscriptions/entitlements.service.js';
+import { FEATURES } from '@ce/shared';
 
 /**
  * Custom domain management for the current tenant. All reads/writes go through the
@@ -24,6 +26,7 @@ export class DomainsService {
     private readonly hosts: HostResolverService,
     private readonly audit: AuditService,
     private readonly config: AppConfig,
+    private readonly entitlements: EntitlementsService,
   ) {}
 
   private present<T extends { hostname: string; verificationToken: string; type: string }>(d: T) {
@@ -54,6 +57,8 @@ export class DomainsService {
     // Global uniqueness check must look across tenants (without revealing which tenant owns it).
     const taken = await this.prisma.tenantDomain.findUnique({ where: { hostname }, select: { id: true } });
     if (taken) throw AppException.conflict('This domain is already connected to an academy.');
+    const customCount = await this.db.tenantDomain.count({ where: { type: 'CUSTOM' } });
+    await this.entitlements.assertWithinLimit(this.ctx.requireTenantId(), FEATURES.CUSTOM_DOMAINS.key, customCount);
     const domain = await this.db.tenantDomain.create({
       data: { hostname, type: 'CUSTOM', status: 'PENDING', verificationToken: randomBytes(16).toString('hex') } as never,
     });

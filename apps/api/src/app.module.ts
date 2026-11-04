@@ -13,6 +13,8 @@ import { SystemModule } from './modules/system/system.module.js';
 import { AuthzModule } from './modules/authz/authz.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { TenantsModule } from './modules/tenants/tenants.module.js';
+import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module.js';
+import { PlatformModule } from './modules/platform/platform.module.js';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard.js';
 import { TenantGuard } from './modules/auth/guards/tenant.guard.js';
 import { PermissionsGuard } from './modules/auth/guards/permissions.guard.js';
@@ -29,8 +31,10 @@ import { PermissionsGuard } from './modules/auth/guards/permissions.guard.js';
       }),
     }),
     AuthzModule,
+    SubscriptionsModule,
     AuthModule,
     TenantsModule,
+    PlatformModule,
     HealthModule,
     SystemModule,
   ],

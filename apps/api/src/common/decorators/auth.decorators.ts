@@ -28,3 +28,11 @@ export const ClientMetaParam = createParamDecorator((_: unknown, ctx: ExecutionC
   const req = ctx.switchToHttp().getRequest<AppRequest>();
   return { ip: req.ip, userAgent: req.get('user-agent') ?? undefined };
 });
+
+export const ALLOW_WHEN_SUSPENDED_KEY = 'allowWhenSuspended';
+/** Workspace route stays writable while the tenant is suspended (billing, support). */
+export const AllowWhenSuspended = () => SetMetadata(ALLOW_WHEN_SUSPENDED_KEY, true);
+
+export const FEATURE_KEY = 'requiredFeature';
+/** Requires the tenant's plan to include a feature flag. */
+export const RequireFeature = (featureKey: string) => SetMetadata(FEATURE_KEY, featureKey);

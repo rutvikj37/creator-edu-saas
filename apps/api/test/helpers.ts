@@ -66,6 +66,7 @@ export function authed(app: NestExpressApplication, s: Pick<Session, 'accessToke
     get: (url: string) => wrap(request(server).get(url)),
     post: (url: string) => wrap(request(server).post(url)),
     patch: (url: string) => wrap(request(server).patch(url)),
+    put: (url: string) => wrap(request(server).put(url)),
     delete: (url: string) => wrap(request(server).delete(url)),
   };
 }
@@ -116,3 +117,27 @@ export function codeFromEmail(text: string): string {
 /** A TOTP for the next time step (avoids replay protection rejecting the code just used). */
 export const nextTotp = (secret: string, stepOffset = 1) => totp(secret, Date.now() + stepOffset * 30_000);
 export const currentTotp = (secret: string) => totp(secret);
+
+/** Signs in the seeded super admin and completes mandatory 2FA enrolment. */
+export async function superAdmin(app: NestExpressApplication) {
+  const { session } = await login(app, PLATFORM, 'root@platform.test', 'Sup3r-Admin-Passw0rd!');
+  const setup = await authed(app, session).post('/api/v1/auth/2fa/setup').expect(200);
+  const enabled = await authed(app, session).post('/api/v1/auth/2fa/enable').send({ code: nextTotp(setup.body.data.secret, 0) }).expect(200);
+  return { session: parseSession(enabled, PLATFORM), secret: setup.body.data.secret as string };
+}
+
+/** Creates a platform admin with the given roles and an enrolled 2FA, returning a full session. */
+export async function adminWithRoles(app: NestExpressApplication, roles: string[]) {
+  const prisma = app.get(PrismaService);
+  const { PasswordService } = await import('../src/modules/auth/services/password.service.js');
+  const email = uniqueEmail('admin');
+  const user = await prisma.user.create({ data: { realm: 'PLATFORM', realmKey: 'platform', email, fullName: 'Admin User', passwordHash: await app.get(PasswordService).hash('admin-password-1') } });
+  for (const key of roles) {
+    const role = await prisma.role.findUniqueOrThrow({ where: { uniqueKey: `system:${key}` } });
+    await prisma.userRole.create({ data: { userId: user.id, roleId: role.id } });
+  }
+  const { session } = await login(app, PLATFORM, email, 'admin-password-1');
+  const setup = await authed(app, session).post('/api/v1/auth/2fa/setup').expect(200);
+  const enabled = await authed(app, session).post('/api/v1/auth/2fa/enable').send({ code: nextTotp(setup.body.data.secret, 0) }).expect(200);
+  return { session: parseSession(enabled, PLATFORM), userId: user.id, email };
+}

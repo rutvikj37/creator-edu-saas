@@ -5,11 +5,15 @@ import { AppConfig } from '../../config/app-config.service.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { RESERVED_SLUGS } from '../../core/tenancy/host-resolver.service.js';
 import { slugify } from './slug.js';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service.js';
 
 /** Tenant lifecycle operations that run inside a caller-provided transaction. */
 @Injectable()
 export class TenantsService {
-  constructor(private readonly config: AppConfig) {}
+  constructor(
+    private readonly config: AppConfig,
+    private readonly subscriptions: SubscriptionsService,
+  ) {}
 
   async uniqueSlug(tx: Prisma.TransactionClient, name: string): Promise<string> {
     const base = slugify(name);
@@ -47,6 +51,7 @@ export class TenantsService {
         verifiedAt: new Date(),
       },
     });
+    await this.subscriptions.assignDefault(tx, tenant.id);
     return tenant;
   }
 }

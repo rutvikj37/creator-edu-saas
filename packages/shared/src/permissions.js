@@ -6,6 +6,7 @@ export const PERMISSIONS = Object.freeze({
   // Platform administration
   PLATFORM_TENANTS_READ: 'platform.tenants.read',
   PLATFORM_TENANTS_MANAGE: 'platform.tenants.manage',
+  PLATFORM_TENANTS_DELETE: 'platform.tenants.delete',
   PLATFORM_PLANS_MANAGE: 'platform.plans.manage',
   PLATFORM_SETTINGS_MANAGE: 'platform.settings.manage',
   PLATFORM_ADMINS_MANAGE: 'platform.admins.manage',

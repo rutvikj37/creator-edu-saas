@@ -301,16 +301,20 @@ model Tenant {
   onboardingStep        Int          @default(1)
   onboardingCompletedAt DateTime?    @db.DateTime(3)
   suspendedReason       String?      @db.VarChar(255)
+  deletionScheduledAt   DateTime?    @db.DateTime(3)
   createdAt             DateTime     @default(now()) @db.DateTime(3)
   updatedAt             DateTime     @updatedAt @db.DateTime(3)
   deletedAt             DateTime?    @db.DateTime(3)
 
-  owner    User            @relation("TenantOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
-  users    User[]          @relation("TenantUsers")
-  members  TenantMember[]
-  settings TenantSetting[]
-  domains  TenantDomain[]
-  roles    Role[]
+  owner          User                  @relation("TenantOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  users          User[]                @relation("TenantUsers")
+  members        TenantMember[]
+  settings       TenantSetting[]
+  domains        TenantDomain[]
+  roles          Role[]
+  subscriptions  Subscription[]
+  limitOverrides TenantLimitOverride[]
+  usage          UsageRecord[]
 
   @@index([status, createdAt])
 }
@@ -376,4 +380,223 @@ model TenantDomain {
 
   @@unique([tenantId, id])
   @@index([tenantId, status])
+}
+
+// ───────────────────────────── SaaS plans & subscriptions ─────────────────────────────
+
+enum PlanStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum BillingInterval {
+  MONTH
+  YEAR
+}
+
+model SubscriptionPlan {
+  id            String         @id @default(cuid()) @db.Char(25)
+  code          String         @unique @db.VarChar(64)
+  name          String         @db.VarChar(100)
+  description   String?        @db.VarChar(500)
+  status        PlanStatus     @default(DRAFT)
+  isPublic      Boolean        @default(true)
+  isDefault     Boolean        @default(false)
+  trialDays     Int            @default(0)
+  sortOrder     Int            @default(0)
+  createdAt     DateTime       @default(now()) @db.DateTime(3)
+  updatedAt     DateTime       @updatedAt @db.DateTime(3)
+  features      PlanFeature[]
+  prices        PlanPrice[]
+  subscriptions Subscription[]
+
+  @@index([status, sortOrder])
+}
+
+model PlanPrice {
+  id               String           @id @default(cuid()) @db.Char(25)
+  planId           String           @db.Char(25)
+  interval         BillingInterval
+  currency         String           @db.Char(3)
+  amount           Decimal          @db.Decimal(19, 4)
+  providerPriceIds Json?
+  active           Boolean          @default(true)
+  createdAt        DateTime         @default(now()) @db.DateTime(3)
+  updatedAt        DateTime         @updatedAt @db.DateTime(3)
+  plan             SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  subscriptions    Subscription[]
+
+  @@unique([planId, interval, currency])
+}
+
+/// Feature values per plan. `enabled` for flags, `limitValue` for limits (null = unlimited).
+model PlanFeature {
+  id         String           @id @default(cuid()) @db.Char(25)
+  planId     String           @db.Char(25)
+  featureKey String           @db.VarChar(64)
+  enabled    Boolean          @default(true)
+  limitValue BigInt?
+  plan       SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, featureKey])
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  GRACE
+  CANCELED
+  EXPIRED
+}
+
+model Subscription {
+  id                     String             @id @default(cuid()) @db.Char(25)
+  tenantId               String             @db.Char(25)
+  planId                 String             @db.Char(25)
+  planPriceId            String?            @db.Char(25)
+  status                 SubscriptionStatus
+  /// 'current' for the single non-terminal subscription of a tenant, NULL otherwise (unique per tenant).
+  currentKey             String?            @db.VarChar(16)
+  currentPeriodStart     DateTime           @db.DateTime(3)
+  currentPeriodEnd       DateTime?          @db.DateTime(3)
+  trialEndsAt            DateTime?          @db.DateTime(3)
+  cancelAtPeriodEnd      Boolean            @default(false)
+  canceledAt             DateTime?          @db.DateTime(3)
+  graceEndsAt            DateTime?          @db.DateTime(3)
+  provider               String?            @db.VarChar(32)
+  providerSubscriptionId String?            @db.VarChar(191)
+  /// Feature values copied from the plan when the subscription started/changed.
+  featureSnapshot        Json
+  source                 String             @default("system") @db.VarChar(32)
+  createdAt              DateTime           @default(now()) @db.DateTime(3)
+  updatedAt              DateTime           @updatedAt @db.DateTime(3)
+  tenant                 Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan                   SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict)
+  planPrice              PlanPrice?         @relation(fields: [planPriceId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, currentKey])
+  @@unique([tenantId, id])
+  @@index([status, currentPeriodEnd])
+}
+
+model TenantLimitOverride {
+  id         String   @id @default(cuid()) @db.Char(25)
+  tenantId   String   @db.Char(25)
+  featureKey String   @db.VarChar(64)
+  enabled    Boolean  @default(true)
+  limitValue BigInt?
+  reason     String?  @db.VarChar(255)
+  setById    String?  @db.Char(25)
+  createdAt  DateTime @default(now()) @db.DateTime(3)
+  updatedAt  DateTime @updatedAt @db.DateTime(3)
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, featureKey])
+  @@unique([tenantId, id])
+}
+
+model UsageRecord {
+  id          String   @id @default(cuid()) @db.Char(25)
+  tenantId    String   @db.Char(25)
+  metric      String   @db.VarChar(64)
+  periodStart DateTime @db.DateTime(3)
+  quantity    BigInt   @default(0)
+  updatedAt   DateTime @updatedAt @db.DateTime(3)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, metric, periodStart])
+  @@unique([tenantId, id])
+}
+
+// ───────────────────────────── Platform content & support ─────────────────────────────
+
+/// Platform-wide course categories (tenantId null) or academy-specific categories.
+model CourseCategory {
+  id        String           @id @default(cuid()) @db.Char(25)
+  tenantId  String?          @db.Char(25)
+  scopeKey  String           @db.VarChar(25)
+  name      String           @db.VarChar(100)
+  slug      String           @db.VarChar(120)
+  parentId  String?          @db.Char(25)
+  sortOrder Int              @default(0)
+  createdAt DateTime         @default(now()) @db.DateTime(3)
+  updatedAt DateTime         @updatedAt @db.DateTime(3)
+  parent    CourseCategory?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  CourseCategory[] @relation("CategoryTree")
+
+  @@unique([scopeKey, slug])
+}
+
+enum AnnouncementAudience {
+  CREATORS
+  STUDENTS
+  ALL
+}
+
+model Announcement {
+  id        String               @id @default(cuid()) @db.Char(25)
+  audience  AnnouncementAudience
+  title     String               @db.VarChar(160)
+  body      String               @db.Text
+  tone      String               @default("info") @db.VarChar(16)
+  startsAt  DateTime             @db.DateTime(3)
+  endsAt    DateTime?            @db.DateTime(3)
+  createdBy String?              @db.Char(25)
+  createdAt DateTime             @default(now()) @db.DateTime(3)
+  updatedAt DateTime             @updatedAt @db.DateTime(3)
+
+  @@index([audience, startsAt])
+}
+
+enum TicketStatus {
+  OPEN
+  PENDING
+  ON_HOLD
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+/// Creator → platform support tickets (Phase 3). Student → academy tickets reuse this model with scope ACADEMY later.
+model SupportTicket {
+  id              String           @id @default(cuid()) @db.Char(25)
+  number          Int              @unique @default(autoincrement())
+  tenantId        String?          @db.Char(25)
+  requesterId     String           @db.Char(25)
+  assigneeId      String?          @db.Char(25)
+  category        String           @db.VarChar(32)
+  priority        TicketPriority   @default(MEDIUM)
+  status          TicketStatus     @default(OPEN)
+  subject         String           @db.VarChar(200)
+  firstResponseAt DateTime?        @db.DateTime(3)
+  resolvedAt      DateTime?        @db.DateTime(3)
+  lastActivityAt  DateTime         @default(now()) @db.DateTime(3)
+  createdAt       DateTime         @default(now()) @db.DateTime(3)
+  updatedAt       DateTime         @updatedAt @db.DateTime(3)
+  messages        SupportMessage[]
+
+  @@index([status, priority, lastActivityAt])
+  @@index([tenantId, createdAt])
+  @@index([assigneeId, status])
+}
+
+model SupportMessage {
+  id             String        @id @default(cuid()) @db.Char(25)
+  ticketId       String        @db.Char(25)
+  authorId       String        @db.Char(25)
+  body           String        @db.Text
+  isInternalNote Boolean       @default(false)
+  isStaff        Boolean       @default(false)
+  createdAt      DateTime      @default(now()) @db.DateTime(3)
+  ticket         SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
 }
