@@ -37,6 +37,13 @@ Status: **Phase 0 design**. Live docs will be served by Swagger at `/api/docs` (
 | 3 | `GET /public/categories` · `POST/PUT/DELETE /platform/categories` · `GET/POST/PUT/DELETE /platform/announcements` · `GET /announcements/active` | platform.content.manage | Content |
 | 3 | `GET/POST /creator/support/tickets` · `GET /:id` · `POST /:id/messages` · `GET /platform/support/tickets` · `GET/PATCH /:id` · `POST /:id/messages` · `GET /platform/support/agents` · `/report` | workspace / platform.support.manage | Support |
 | 3 | `GET /creator/billing` | billing.manage | Plan, entitlements, usage |
+| 4 | `POST /creator/files` · `POST /creator/files/:id/complete` · `PUT/GET /files/local/:token` | workspace / signed token | Direct uploads + verification |
+| 4 | `GET/PUT /creator/academy` · `GET/PUT /creator/academy/business` | academy.manage | Profile, branding, business |
+| 4 | `GET /creator/onboarding` · `PUT /creator/onboarding/step` · `POST /creator/onboarding/publish` | workspace | Onboarding |
+| 4 | `GET /creator/dashboard` | workspace | Creator KPIs |
+| 4 | `GET/POST /creator/courses` · `GET/PATCH/DELETE /:id` · `GET /:id/publish-check` · `POST /:id/publish|unpublish|archive|restore|duplicate` · `PUT /:id/instructors` | courses.read / courses.manage | Courses |
+| 4 | `GET /creator/courses/:id/curriculum` · `PUT /:id/curriculum/order` · `POST/PATCH/DELETE /:id/sections[/:sid]` · `POST/PATCH/DELETE /:id/lessons[/:lid]` | courses.manage | Curriculum |
+| 4 | `GET /creator/staff` · `POST/DELETE /creator/staff/invitations[/:id]` · `PATCH/DELETE /creator/staff/:memberId` · `GET /invitations/:token` · `POST /invitations/accept` · `POST /invitations/register` | staff.manage / public | Staff |
 
 ## Route groups (surface → prefix → guard)
 

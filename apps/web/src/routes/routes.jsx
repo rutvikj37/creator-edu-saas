@@ -41,6 +41,13 @@ const SupportInboxPage = lazyNamed(() => import('../pages/support/SupportInboxPa
 const StaffTicketPage = lazyNamed(() => import('../pages/support/StaffTicketPage.jsx'), 'StaffTicketPage');
 const SupportReportPage = lazyNamed(() => import('../pages/support/SupportReportPage.jsx'), 'SupportReportPage');
 const FinanceDashboardPage = lazyNamed(() => import('../pages/finance/FinanceDashboardPage.jsx'), 'FinanceDashboardPage');
+const CreatorDashboardPage = lazyNamed(() => import('../pages/creator/CreatorDashboardPage.jsx'), 'CreatorDashboardPage');
+const OnboardingPage = lazyNamed(() => import('../pages/creator/OnboardingPage.jsx'), 'OnboardingPage');
+const AcademySettingsPage = lazyNamed(() => import('../pages/creator/AcademySettingsPage.jsx'), 'AcademySettingsPage');
+const CoursesPage = lazyNamed(() => import('../pages/creator/CoursesPage.jsx'), 'CoursesPage');
+const CourseEditorPage = lazyNamed(() => import('../pages/creator/CourseEditorPage.jsx'), 'CourseEditorPage');
+const StaffPage = lazyNamed(() => import('../pages/creator/StaffPage.jsx'), 'StaffPage');
+const InvitePage = lazyNamed(() => import('../pages/creator/InvitePage.jsx'), 'InvitePage');
 const BillingPage = lazyNamed(() => import('../pages/creator/BillingPage.jsx'), 'BillingPage');
 const CreatorSupportPage = lazyNamed(() => import('../pages/creator/CreatorSupportPage.jsx'), 'CreatorSupportPage');
 const CreatorTicketPage = lazyNamed(() => import('../pages/creator/CreatorSupportPage.jsx'), 'CreatorTicketPage');
@@ -72,6 +79,7 @@ export function buildRoutes(surface = getSurface()) {
     { path: '/', element: page(PlatformLandingPage) },
     { element: <GuestOnly />, children: [{ path: '/login', element: page(LoginPage) }, { path: '/signup', element: page(SignupPage) }] },
     ...sharedAuthRoutes,
+    { path: '/invite', element: page(InvitePage) },
     { element: <RequireAuth allowMfaSetup />, children: [{ path: '/setup-2fa', element: page(MfaSetupPage) }] },
     {
       element: <RequireAuth admin />,
@@ -118,7 +126,13 @@ export function buildRoutes(surface = getSurface()) {
         {
           element: <CreatorLayout />,
           children: [
-            { path: '/creator', element: page(WorkspaceHomePage) },
+            { path: '/creator', element: page(CreatorDashboardPage) },
+            { path: '/creator/overview', element: page(WorkspaceHomePage) },
+            { path: '/creator/onboarding', element: page(OnboardingPage) },
+            { path: '/creator/academy', element: page(AcademySettingsPage) },
+            { path: '/creator/courses', element: page(CoursesPage) },
+            { path: '/creator/courses/:id', element: page(CourseEditorPage) },
+            { path: '/creator/staff', element: page(StaffPage) },
             { path: '/creator/domains', element: page(DomainsPage) },
             { path: '/creator/billing', element: page(BillingPage) },
             { path: '/creator/support', element: page(CreatorSupportPage) },

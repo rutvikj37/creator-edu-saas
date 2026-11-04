@@ -8,7 +8,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 | 1 Foundation | pnpm monorepo, NestJS api+worker, React/Vite/Tailwind web, Prisma+MySQL, Redis, BullMQ, docker-compose, env validation, logging, error envelope, Swagger, design-system primitives + layouts, health check, CI | `docker compose up` + `pnpm dev` works; lint/tests green; Storybook-like UI kit page | ✅ 2026-11-04 |
 | 2 Auth & multi-tenancy | registration, login, OTP, email verify, reset, refresh rotation, sessions, 2FA, Google OAuth adapter, RBAC, tenants, TenantContext/Guard/Prisma extension, subdomain + custom-domain resolution foundation | **Tenant isolation suite green** | ✅ 2026-11-04 |
 | 3 Administration | super admin dashboard (real aggregates), tenants, plans/features/prices, platform settings, admins/roles, audit logs, platform/finance/support panels (base), support tickets | e2e admin flows pass | ✅ 2026-11-04 |
-| 4 Creator platform | onboarding wizard, creator dashboard, academy profile/branding, course builder + drag-and-drop curriculum, uploads (S3 multipart), staff & instructors | creator can build a full draft course | ⬜ |
+| 4 Creator platform | onboarding wizard, creator dashboard, academy profile/branding, course builder + drag-and-drop curriculum, uploads (S3 multipart), staff & instructors | creator can build a full draft course | ✅ 2026-11-04 |
 | 5 Student platform | student auth on academy host, catalog, free enrollment, player, progress, notes, bookmarks, discussions, quizzes, assignments, certificates (PDF + QR verify) | student completes free course and gets certificate | ⬜ |
 | 6 Video infrastructure | video assets, VdoCipher/Mux/AWS adapters, processing webhooks, playback authorization, watermark, PDF protection | playback works with configured provider test account; unauthorized playback denied | ⬜ |
 | 7 Commerce | products, prices, cart, checkout, coupons, orders, Razorpay/Cashfree/Stripe/PayPal adapters, webhooks, refunds, invoices, ledger, commissions, SaaS billing & dunning | full 13-step e2e journey with provider test mode | ⬜ |
@@ -57,8 +57,21 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 
 **Not yet available (by design, later phases)**: transaction revenue, commissions and settlements (Phase 7) · notification/email template management (Phase 10) · online plan purchase (Phase 7).
 
+## Phase 4 — Creator platform (✅ complete)
+
+**Delivered (API)**: storage service (S3 presigned PUT/GET; `local` driver for development only, refused in production) with per-purpose type/size rules, storage quota from plan, and post-upload verification of size + magic-byte signature (SVG and disguised files rejected) · academy profile/branding (logo, favicon, colours, curated fonts, social links) and business/GST profile · onboarding (10 steps) derived from saved data with publish gate (verified email, description, GST consistency, active plan) · course builder: courses, sections, lessons, one level of sub-lessons, drag-and-drop reorder endpoint validating the full tree, publish checks, scheduling (worker publishes due courses every minute), unpublish/archive/restore/delete, duplicate (deep copy), instructors · allow-listed rich-text JSON (no HTML/script) · composite tenant FKs on course tables (DB rejects cross-tenant parents) · staff invitations (new or existing accounts, email match enforced), role change, removal, owner protection, staff limit · creator dashboard from live data.
+
+**Delivered (Web)**: creator dashboard with setup progress, plan usage and activity · onboarding wizard · academy settings (profile, branding with live preview, business & tax) · courses grid · course editor (details with rich text and media, curriculum builder with keyboard-accessible drag-and-drop and sub-lessons, lesson editor drawer with file upload, pricing & access, SEO preview, publish/schedule dialog with readiness checks) · staff management · invitation acceptance.
+
+**Verification**: API e2e 66 ✅ (creator-platform suite 12) · web 42 ✅ · browser walkthrough: signup → onboarding with logo upload and email code → publish academy → course with text + PDF lessons → publish blocked until priced → published.
+
+**Fixed during verification**: onboarding blockers now refresh after email verification · publish readiness check always re-runs when the dialog opens · course creation with composite keys uses one explicit transaction.
+
+**Lesson types arriving later**: video playback (Phase 6), quizzes/assignments (Phase 5), live classes (Phase 9) — offered as disabled options in the builder; video lessons can be structured but stay unpublished until a processed video is attached.
+
 ## Change log of this file
 - 2026-11-04 — Phase 0 documents drafted and approved.
 - 2026-11-04 — Phase 1 foundation completed.
 - 2026-11-04 — Phase 2 authentication & multi-tenancy completed.
 - 2026-11-04 — Phase 3 administration completed.
+- 2026-11-04 — Phase 4 creator platform completed.

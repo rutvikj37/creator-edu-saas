@@ -40,11 +40,11 @@ export const NAV = {
   ],
 
   creator: [
-    { label: null, items: [item('Dashboard', '/creator', LayoutDashboard, 2, { end: true, available: true }), item('My academy', '/creator/academy', Palette, 4)] },
+    { label: null, items: [item('Dashboard', '/creator', LayoutDashboard, 2, { end: true, available: true }), item('My academy', '/creator/academy', Palette, 4, { available: true, perm: 'academy.manage' })] },
     {
       label: 'Content',
       items: [
-        item('Courses', '/creator/courses', BookOpen, 4),
+        item('Courses', '/creator/courses', BookOpen, 4, { available: true, perm: 'courses.read' }),
         item('Products', '/creator/products', Package, 7),
         item('Question bank', '/creator/question-bank', ClipboardCheck, 5),
         item('Certificates', '/creator/certificates', Award, 5),
@@ -70,9 +70,9 @@ export const NAV = {
     {
       label: 'Workspace',
       items: [
-        item('Staff', '/creator/staff', UserCog, 4),
+        item('Staff', '/creator/staff', UserCog, 4, { available: true, perm: 'staff.manage' }),
         item('Integrations', '/creator/integrations', Plug, 6),
-        item('Settings', '/creator/settings', Settings, 4),
+        item('Settings', '/creator/academy?tab=business', Settings, 4, { available: true, perm: 'academy.manage' }),
         item('Billing', '/creator/billing', CreditCard, 3, { available: true, perm: 'billing.manage' }),
         item('Support', '/creator/support', LifeBuoy, 3, { available: true }),
         item('Account security', '/creator/account/security', KeyRound, 2, { available: true }),

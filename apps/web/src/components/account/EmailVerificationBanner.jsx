@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { MailWarning } from 'lucide-react';
 import { useForm } from 'react-hook-form';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button, Input, toast } from '../ui/index.js';
 import { authApi } from '../../services/api/auth.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -8,6 +9,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 /** Prompts unverified users to confirm their email by code or by re-sending the link. */
 export function EmailVerificationBanner() {
   const auth = useAuth();
+  const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
   const { register, handleSubmit, setError, reset, formState: { errors, isSubmitting } } = useForm({ defaultValues: { code: '' } });
   if (!auth.user || auth.user.emailVerifiedAt) return null;
@@ -31,6 +33,8 @@ export function EmailVerificationBanner() {
       reset();
       toast.success('Email verified');
       await auth.reloadMe();
+      // Anything gated on verification (e.g. onboarding blockers) must refresh.
+      await qc.invalidateQueries();
     } catch (e) {
       setError('code', { message: e.message });
     }

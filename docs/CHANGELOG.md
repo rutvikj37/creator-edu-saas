@@ -2,6 +2,10 @@
 
 Format: Keep a Changelog. Versions follow SemVer once Phase 1 ships.
 
+## [0.4.0] — 2026-11-04 — Phase 4: Creator platform
+### Added
+- File storage, academy profile & onboarding, course builder with drag-and-drop curriculum, rich text, staff invitations, creator dashboard.
+
 ## [0.3.0] — 2026-11-04 — Phase 3: Administration
 ### Added
 - Plans & entitlements, tenant administration, settings, admins, audit logs, dashboard, categories, announcements, support tickets, finance overview, creator billing.
