@@ -27,6 +27,23 @@ const SuperAdminHomePage = lazyNamed(() => import('../pages/system/SuperAdminHom
 const SystemStatusPage = lazyNamed(() => import('../pages/system/SystemStatusPage.jsx'), 'SystemStatusPage');
 const DesignSystemPage = lazyNamed(() => import('../pages/system/design-system/DesignSystemPage.jsx'), 'DesignSystemPage');
 const LayoutPreviewPage = lazyNamed(() => import('../pages/preview/LayoutPreviewPage.jsx'), 'LayoutPreviewPage');
+const AdminDashboardPage = lazyNamed(() => import('../pages/admin/AdminDashboardPage.jsx'), 'AdminDashboardPage');
+const TenantsPage = lazyNamed(() => import('../pages/admin/TenantsPage.jsx'), 'TenantsPage');
+const TenantDetailPage = lazyNamed(() => import('../pages/admin/TenantDetailPage.jsx'), 'TenantDetailPage');
+const PlansPage = lazyNamed(() => import('../pages/admin/PlansPage.jsx'), 'PlansPage');
+const PlanEditorPage = lazyNamed(() => import('../pages/admin/PlanEditorPage.jsx'), 'PlanEditorPage');
+const SettingsPage = lazyNamed(() => import('../pages/admin/SettingsPage.jsx'), 'SettingsPage');
+const AdminsPage = lazyNamed(() => import('../pages/admin/AdminsPage.jsx'), 'AdminsPage');
+const AuditLogsPage = lazyNamed(() => import('../pages/admin/AuditLogsPage.jsx'), 'AuditLogsPage');
+const CategoriesPage = lazyNamed(() => import('../pages/admin/ContentPages.jsx'), 'CategoriesPage');
+const AnnouncementsPage = lazyNamed(() => import('../pages/admin/ContentPages.jsx'), 'AnnouncementsPage');
+const SupportInboxPage = lazyNamed(() => import('../pages/support/SupportInboxPage.jsx'), 'SupportInboxPage');
+const StaffTicketPage = lazyNamed(() => import('../pages/support/StaffTicketPage.jsx'), 'StaffTicketPage');
+const SupportReportPage = lazyNamed(() => import('../pages/support/SupportReportPage.jsx'), 'SupportReportPage');
+const FinanceDashboardPage = lazyNamed(() => import('../pages/finance/FinanceDashboardPage.jsx'), 'FinanceDashboardPage');
+const BillingPage = lazyNamed(() => import('../pages/creator/BillingPage.jsx'), 'BillingPage');
+const CreatorSupportPage = lazyNamed(() => import('../pages/creator/CreatorSupportPage.jsx'), 'CreatorSupportPage');
+const CreatorTicketPage = lazyNamed(() => import('../pages/creator/CreatorSupportPage.jsx'), 'CreatorTicketPage');
 
 const page = (Component, props) => (
   <Suspense fallback={<div className="grid min-h-[40vh] place-items-center"><Spinner /></div>}>
@@ -62,7 +79,18 @@ export function buildRoutes(surface = getSurface()) {
         {
           element: <SuperAdminLayout />,
           children: [
-            { path: '/super-admin', element: page(SuperAdminHomePage) },
+            { path: '/super-admin', element: page(AdminDashboardPage) },
+            { path: '/super-admin/welcome', element: page(SuperAdminHomePage) },
+            { path: '/super-admin/tenants', element: page(TenantsPage) },
+            { path: '/super-admin/tenants/:id', element: page(TenantDetailPage) },
+            { path: '/super-admin/plans', element: page(PlansPage) },
+            { path: '/super-admin/plans/new', element: page(PlanEditorPage) },
+            { path: '/super-admin/plans/:id', element: page(PlanEditorPage) },
+            { path: '/super-admin/settings', element: page(SettingsPage) },
+            { path: '/super-admin/admins', element: page(AdminsPage) },
+            { path: '/super-admin/audit-logs', element: page(AuditLogsPage) },
+            { path: '/super-admin/categories', element: page(CategoriesPage) },
+            { path: '/super-admin/announcements', element: page(AnnouncementsPage) },
             { path: '/super-admin/status', element: page(SystemStatusPage) },
             { path: '/super-admin/design-system', element: page(DesignSystemPage) },
             { path: '/super-admin/account/security', element: page(SecurityPage, { breadcrumbs: [{ label: 'System' }] }) },
@@ -70,6 +98,18 @@ export function buildRoutes(surface = getSurface()) {
           ],
         },
         ...Object.entries(PREVIEW_LAYOUTS).map(([key, Layout]) => ({ path: `/preview/${key}`, element: <Layout />, children: [{ index: true, element: page(LayoutPreviewPage) }] })),
+        {
+          element: <FinanceLayout />,
+          children: [{ path: '/finance', element: page(FinanceDashboardPage) }],
+        },
+        {
+          element: <SupportLayout />,
+          children: [
+            { path: '/support', element: page(SupportInboxPage) },
+            { path: '/support/tickets/:id', element: page(StaffTicketPage) },
+            { path: '/support/reports', element: page(SupportReportPage) },
+          ],
+        },
       ],
     },
     {
@@ -80,6 +120,9 @@ export function buildRoutes(surface = getSurface()) {
           children: [
             { path: '/creator', element: page(WorkspaceHomePage) },
             { path: '/creator/domains', element: page(DomainsPage) },
+            { path: '/creator/billing', element: page(BillingPage) },
+            { path: '/creator/support', element: page(CreatorSupportPage) },
+            { path: '/creator/support/:id', element: page(CreatorTicketPage) },
             { path: '/creator/account/security', element: page(SecurityPage, { breadcrumbs: [{ label: 'Workspace' }] }) },
           ],
         },

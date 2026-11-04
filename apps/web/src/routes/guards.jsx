@@ -7,7 +7,10 @@ export function landingPath(me, surface) {
   if (!me) return '/login';
   if (me.mfaSetupRequired) return '/setup-2fa';
   if (surface === 'academy') return '/learn';
-  if ((me.platformRoles ?? []).length) return '/super-admin';
+  const roles = me.platformRoles ?? [];
+  if (roles.includes('SUPER_ADMIN') || roles.includes('PLATFORM_ADMIN')) return '/super-admin';
+  if (roles.includes('FINANCE_ADMIN')) return '/finance';
+  if (roles.includes('SUPPORT_ADMIN')) return '/support';
   return me.activeTenantId ? '/creator' : '/account/security';
 }
 

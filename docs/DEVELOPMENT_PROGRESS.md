@@ -7,7 +7,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 | 0 Discovery & planning | env inspection, architecture, ERD, module map, navigation, roadmap, docs | Docs approved by owner | ✅ approved 2026-11-04 |
 | 1 Foundation | pnpm monorepo, NestJS api+worker, React/Vite/Tailwind web, Prisma+MySQL, Redis, BullMQ, docker-compose, env validation, logging, error envelope, Swagger, design-system primitives + layouts, health check, CI | `docker compose up` + `pnpm dev` works; lint/tests green; Storybook-like UI kit page | ✅ 2026-11-04 |
 | 2 Auth & multi-tenancy | registration, login, OTP, email verify, reset, refresh rotation, sessions, 2FA, Google OAuth adapter, RBAC, tenants, TenantContext/Guard/Prisma extension, subdomain + custom-domain resolution foundation | **Tenant isolation suite green** | ✅ 2026-11-04 |
-| 3 Administration | super admin dashboard (real aggregates), tenants, plans/features/prices, platform settings, admins/roles, audit logs, platform/finance/support panels (base), support tickets | e2e admin flows pass | ⬜ |
+| 3 Administration | super admin dashboard (real aggregates), tenants, plans/features/prices, platform settings, admins/roles, audit logs, platform/finance/support panels (base), support tickets | e2e admin flows pass | ✅ 2026-11-04 |
 | 4 Creator platform | onboarding wizard, creator dashboard, academy profile/branding, course builder + drag-and-drop curriculum, uploads (S3 multipart), staff & instructors | creator can build a full draft course | ⬜ |
 | 5 Student platform | student auth on academy host, catalog, free enrollment, player, progress, notes, bookmarks, discussions, quizzes, assignments, certificates (PDF + QR verify) | student completes free course and gets certificate | ⬜ |
 | 6 Video infrastructure | video assets, VdoCipher/Mux/AWS adapters, processing webhooks, playback authorization, watermark, PDF protection | playback works with configured provider test account; unauthorized playback denied | ⬜ |
@@ -47,7 +47,18 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 
 **Deferred**: composite tenant FKs land with the first tenant-owned child tables (Phase 4) · custom-domain count limit enforced by plan entitlements (Phase 3).
 
+## Phase 3 — Administration (✅ complete)
+
+**Delivered (API)**: subscription plans (features, limits, multi-currency monthly/annual prices; prices deactivated, never deleted) · entitlements service (subscription feature snapshot ⊕ per-tenant overrides, Redis-cached) with `@RequireFeature` / limit checks (custom domains enforced now) · default plan assignment at sign-up (trial) + backfill · tenant administration (list/search/filter/sort, detail with usage, activate, suspend → read-only workspace + academy offline + students signed out, plan change, limit overrides, deletion with typed confirmation + 30-day restore) · platform settings registry (validated, unknown keys rejected, secrets encrypted & masked) · admin management (invite by email, role changes, suspend/reactivate, last-super-admin and self-lockout protection) · audit log query API · dashboard KPIs & time series from live data (MRR/ARR per currency) · platform categories & announcements (audience-targeted) · support tickets (creator ↔ support, internal notes hidden from creators, SLA due, assignment, reports, email on reply) · creator billing overview.
+
+**Delivered (Web)**: admin dashboard with date presets and charts · tenants list/detail with all actions · plans list/editor · settings tabs · admins · audit logs with before/after drawer · categories & announcements · support inbox, ticket view and reports · finance overview · creator billing and support · permission-filtered navigation · announcements banner · role-based landing (super/platform → /super-admin, finance → /finance, support → /support).
+
+**Verification**: API e2e 54 ✅ (new platform-admin suite 14 incl. role boundaries) · web 36 ✅ · browser walkthrough of every admin screen without errors.
+
+**Not yet available (by design, later phases)**: transaction revenue, commissions and settlements (Phase 7) · notification/email template management (Phase 10) · online plan purchase (Phase 7).
+
 ## Change log of this file
 - 2026-11-04 — Phase 0 documents drafted and approved.
 - 2026-11-04 — Phase 1 foundation completed.
 - 2026-11-04 — Phase 2 authentication & multi-tenancy completed.
+- 2026-11-04 — Phase 3 administration completed.

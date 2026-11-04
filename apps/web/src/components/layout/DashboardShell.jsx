@@ -67,7 +67,7 @@ function SidebarNav({ nav, collapsed, onNavigate }) {
  * Shared dashboard layout for every panel: collapsible (remembered) sidebar, mobile
  * drawer, top bar with ⌘K search, notifications, theme, language and profile menu.
  */
-export function DashboardShell({ nav, brand, user, footer, onSignOut, notifications = [] }) {
+export function DashboardShell({ nav, brand, user, footer, onSignOut, notifications = [], banner }) {
   const { t, i18n } = useTranslation();
   const { theme, toggle } = useTheme();
   const location = useLocation();
@@ -221,6 +221,7 @@ export function DashboardShell({ nav, brand, user, footer, onSignOut, notificati
           </div>
         </header>
         <main id="main" className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
+          {banner}
           <Outlet />
         </main>
       </div>

@@ -15,22 +15,23 @@ const item = (label, to, icon, phase, extra = {}) => ({ label, to, icon, phase, 
 export const NAV = {
   superAdmin: [
     { label: null, items: [item('Dashboard', '/super-admin', LayoutDashboard, 3, { end: true, available: true })] },
-    { label: 'Tenants', items: [item('All tenants', '/super-admin/tenants', Building2, 3), item('Domains', '/super-admin/domains', Globe, 3)] },
-    { label: 'Subscriptions', items: [item('Plans', '/super-admin/plans', Crown, 3), item('Subscriptions', '/super-admin/subscriptions', CreditCard, 3)] },
+    { label: 'Tenants', items: [item('All tenants', '/super-admin/tenants', Building2, 3, { available: true, perm: 'platform.tenants.read' }), item('Domains', '/super-admin/domains', Globe, 8)] },
+    { label: 'Subscriptions', items: [item('Plans', '/super-admin/plans', Crown, 3, { available: true, perm: 'platform.plans.manage' }), item('Subscriptions', '/super-admin/subscriptions', CreditCard, 7)] },
     {
       label: 'Finance',
-      items: [item('Revenue', '/super-admin/finance', Wallet, 3), item('Transactions', '/super-admin/transactions', Receipt, 7), item('Settlements', '/super-admin/settlements', Banknote, 7)],
+      items: [item('Revenue', '/finance', Wallet, 3, { available: true, perm: 'platform.finance.read' }), item('Transactions', '/super-admin/transactions', Receipt, 7), item('Settlements', '/super-admin/settlements', Banknote, 7)],
     },
-    { label: 'Users', items: [item('Creators', '/super-admin/creators', Users, 3), item('Admins & roles', '/super-admin/admins', ShieldCheck, 3)] },
-    { label: 'Support', items: [item('Tickets', '/super-admin/tickets', LifeBuoy, 3)] },
-    { label: 'Content', items: [item('Categories', '/super-admin/categories', FolderTree, 3), item('Templates', '/super-admin/templates', Mail, 3)] },
+    { label: 'Users', items: [item('Creators', '/super-admin/tenants', Users, 3, { available: true, perm: 'platform.tenants.read' }), item('Admins & roles', '/super-admin/admins', ShieldCheck, 3, { available: true, perm: 'platform.admins.manage' })] },
+    { label: 'Support', items: [item('Tickets', '/support', LifeBuoy, 3, { available: true, perm: 'platform.support.manage' })] },
+    { label: 'Content', items: [item('Categories', '/super-admin/categories', FolderTree, 3, { available: true, perm: 'platform.content.manage' }), item('Announcements', '/super-admin/announcements', Megaphone, 3, { available: true, perm: 'platform.content.manage' }),
+        item('Templates', '/super-admin/templates', Mail, 10)] },
     { label: 'Analytics', items: [item('Platform analytics', '/super-admin/analytics', BarChart3, 10)] },
     {
       label: 'System',
       items: [
-        item('Settings', '/super-admin/settings', Settings, 3),
-        item('Integrations', '/super-admin/integrations', Plug, 3),
-        item('Audit logs', '/super-admin/audit-logs', ScrollText, 3),
+        item('Settings', '/super-admin/settings', Settings, 3, { available: true, perm: 'platform.settings.manage' }),
+        item('Integrations', '/super-admin/integrations', Plug, 6),
+        item('Audit logs', '/super-admin/audit-logs', ScrollText, 3, { available: true, perm: 'platform.audit.read' }),
         item('System status', '/super-admin/status', HeartPulse, 1, { available: true }),
         item('Design system', '/super-admin/design-system', Component, 1, { available: true }),
         item('Account security', '/super-admin/account/security', KeyRound, 2, { available: true }),
@@ -55,7 +56,7 @@ export const NAV = {
       items: [item('Orders', '/creator/orders', ShoppingCart, 7), item('Transactions', '/creator/transactions', Receipt, 7), item('Coupons', '/creator/coupons', Tag, 7)],
     },
     { label: 'Live', items: [item('Live classes', '/creator/live', Radio, 9), item('Webinars', '/creator/webinars', CalendarDays, 9)] },
-    { label: 'Website', items: [item('Website builder', '/creator/website', Brush, 8), item('Domains', '/creator/domains', Globe, 2, { available: true })] },
+    { label: 'Website', items: [item('Website builder', '/creator/website', Brush, 8), item('Domains', '/creator/domains', Globe, 2, { available: true, perm: 'domains.manage' })] },
     {
       label: 'Growth',
       items: [
@@ -72,8 +73,8 @@ export const NAV = {
         item('Staff', '/creator/staff', UserCog, 4),
         item('Integrations', '/creator/integrations', Plug, 6),
         item('Settings', '/creator/settings', Settings, 4),
-        item('Billing', '/creator/billing', CreditCard, 7),
-        item('Support', '/creator/support', LifeBuoy, 3),
+        item('Billing', '/creator/billing', CreditCard, 3, { available: true, perm: 'billing.manage' }),
+        item('Support', '/creator/support', LifeBuoy, 3, { available: true }),
         item('Account security', '/creator/account/security', KeyRound, 2, { available: true }),
       ],
     },
@@ -112,7 +113,7 @@ export const NAV = {
     {
       label: null,
       items: [
-        item('Dashboard', '/finance', LayoutDashboard, 3, { end: true }),
+        item('Dashboard', '/finance', LayoutDashboard, 3, { end: true, available: true }),
         item('Reconciliation', '/finance/reconciliation', Activity, 7),
         item('Refunds', '/finance/refunds', Receipt, 7),
         item('Payouts', '/finance/payouts', Banknote, 7),
@@ -126,10 +127,17 @@ export const NAV = {
     {
       label: null,
       items: [
-        item('Inbox', '/support', Inbox, 3, { end: true }),
-        item('All tickets', '/support/tickets', Ticket, 3),
-        item('Reports', '/support/reports', BarChart3, 3),
+        item('Inbox', '/support', Inbox, 3, { end: true, available: true }),
+        item('All tickets', '/support?view=all', Ticket, 3, { available: true }),
+        item('Reports', '/support/reports', BarChart3, 3, { available: true }),
       ],
     },
   ],
 };
+
+/** Hides navigation items the user lacks permission for (the API enforces this regardless). */
+export function filterNav(nav, can) {
+  return nav
+    .map((g) => ({ ...g, items: g.items.filter((i) => !i.perm || can(i.perm)) }))
+    .filter((g) => g.items.length);
+}

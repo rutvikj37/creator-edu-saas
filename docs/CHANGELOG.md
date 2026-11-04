@@ -2,6 +2,10 @@
 
 Format: Keep a Changelog. Versions follow SemVer once Phase 1 ships.
 
+## [0.3.0] — 2026-11-04 — Phase 3: Administration
+### Added
+- Plans & entitlements, tenant administration, settings, admins, audit logs, dashboard, categories, announcements, support tickets, finance overview, creator billing.
+
 ## [0.2.0] — 2026-11-04 — Phase 2: Authentication & multi-tenancy
 ### Added
 - Registration, login, 2FA, refresh rotation, sessions, email/OTP verification, password flows, Google sign-in adapter, RBAC, tenant resolution and isolation, custom domains; auth UI and account security.

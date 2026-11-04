@@ -28,6 +28,15 @@ Status: **Phase 0 design**. Live docs will be served by Swagger at `/api/docs` (
 | 2 | `GET /auth/providers` · `/auth/google/start` · `/auth/google/callback` · `POST /auth/google/handoff` | public | Google sign-in |
 | 2 | `GET /creator/workspace` · `/creator/members` · `GET/POST /creator/domains` · `POST /creator/domains/:id/verify` · `PATCH /:id/primary` · `DELETE /:id` | workspace + RBAC | Creator workspace |
 | 2 | `GET /public/site` | academy host | Academy identity |
+| 3 | `GET /platform/dashboard` | platform.tenants.read | KPIs + series (`from`,`to`) |
+| 3 | `GET /platform/tenants` · `GET /:id` · `POST /:id/activate` · `/:id/suspend` · `/:id/subscription` · `PUT /:id/limits` · `DELETE /:id` · `POST /:id/restore` | platform.tenants.* | Tenant administration |
+| 3 | `GET /platform/features` · `GET/POST /platform/plans` · `GET/PUT /platform/plans/:id` · `GET /public/plans` | platform.plans.manage / public | Plans |
+| 3 | `GET/PUT /platform/settings` | platform.settings.manage | Settings |
+| 3 | `GET/POST /platform/admins` · `PUT /:id/roles` · `POST /:id/suspend` · `/:id/reactivate` | platform.admins.manage | Administrators |
+| 3 | `GET /platform/audit-logs` | platform.audit.read | Audit trail |
+| 3 | `GET /public/categories` · `POST/PUT/DELETE /platform/categories` · `GET/POST/PUT/DELETE /platform/announcements` · `GET /announcements/active` | platform.content.manage | Content |
+| 3 | `GET/POST /creator/support/tickets` · `GET /:id` · `POST /:id/messages` · `GET /platform/support/tickets` · `GET/PATCH /:id` · `POST /:id/messages` · `GET /platform/support/agents` · `/report` | workspace / platform.support.manage | Support |
+| 3 | `GET /creator/billing` | billing.manage | Plan, entitlements, usage |
 
 ## Route groups (surface → prefix → guard)
 

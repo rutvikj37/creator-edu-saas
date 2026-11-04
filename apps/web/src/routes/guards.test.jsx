@@ -51,7 +51,9 @@ describe('route guards', () => {
 
   it('computes landing paths per surface and role', () => {
     expect(landingPath(me(), 'academy')).toBe('/learn');
-    expect(landingPath(me({ platformRoles: ['FINANCE_ADMIN'] }), 'platform')).toBe('/super-admin');
+    expect(landingPath(me({ platformRoles: ['FINANCE_ADMIN'] }), 'platform')).toBe('/finance');
+    expect(landingPath(me({ platformRoles: ['SUPPORT_ADMIN'] }), 'platform')).toBe('/support');
+    expect(landingPath(me({ platformRoles: ['PLATFORM_ADMIN'] }), 'platform')).toBe('/super-admin');
     expect(landingPath(me(), 'platform')).toBe('/creator');
     expect(landingPath(null, 'platform')).toBe('/login');
   });

@@ -5,7 +5,8 @@ import { DashboardShell } from '../components/layout/DashboardShell.jsx';
 import { Dropdown, DropdownItem, toast } from '../components/ui/index.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { academyApi } from '../services/api/auth.js';
-import { NAV } from './navigation.js';
+import { NAV, filterNav } from './navigation.js';
+import { AnnouncementsBanner } from '../components/common/AnnouncementsBanner.jsx';
 
 /** Signed-in user + sign-out wiring shared by every panel layout. */
 function useShellAccount(profileTo) {
@@ -57,15 +58,28 @@ function WorkspaceSwitcher() {
   );
 }
 
+function usePlatformBrand(subtitle, key) {
+  const info = useQuery({ queryKey: ['system', 'info'], queryFn: () => import('../services/api/system.js').then((m) => m.systemApi.info()), staleTime: 5 * 60_000 });
+  const name = info.data?.name ?? 'Platform';
+  return { key, mark: name.slice(0, 2).toUpperCase(), name, subtitle };
+}
+
 export function SuperAdminLayout(props) {
+  const auth = useAuth();
   const account = useShellAccount('/super-admin/account/security');
-  return <DashboardShell nav={NAV.superAdmin} brand={{ key: 'super-admin', mark: 'CE', name: 'Creator Education', subtitle: 'Super Admin' }} {...account} {...props} />;
+  const roles = auth.me?.platformRoles ?? [];
+  const subtitle = roles.includes('SUPER_ADMIN') ? 'Super Admin' : 'Platform Admin';
+  return <DashboardShell nav={filterNav(NAV.superAdmin, auth.can)} brand={usePlatformBrand(subtitle, 'super-admin')} {...account} {...props} />;
 }
 export function FinanceLayout(props) {
-  return <DashboardShell nav={NAV.finance} brand={{ key: 'finance', mark: 'CE', name: 'Creator Education', subtitle: 'Finance' }} {...props} />;
+  const auth = useAuth();
+  const account = useShellAccount('/super-admin/account/security');
+  return <DashboardShell nav={filterNav(NAV.finance, auth.can)} brand={usePlatformBrand('Finance', 'finance')} {...account} {...props} />;
 }
 export function SupportLayout(props) {
-  return <DashboardShell nav={NAV.support} brand={{ key: 'support', mark: 'CE', name: 'Creator Education', subtitle: 'Support' }} {...props} />;
+  const auth = useAuth();
+  const account = useShellAccount('/super-admin/account/security');
+  return <DashboardShell nav={filterNav(NAV.support, auth.can)} brand={usePlatformBrand('Support', 'support')} {...account} {...props} />;
 }
 export function CreatorLayout({ preview = false, ...props }) {
   const auth = useAuth();
@@ -73,7 +87,8 @@ export function CreatorLayout({ preview = false, ...props }) {
   const name = auth.activeTenant?.name ?? 'Your academy';
   return (
     <DashboardShell
-      nav={NAV.creator}
+      nav={preview ? NAV.creator : filterNav(NAV.creator, auth.can)}
+      banner={preview ? undefined : <AnnouncementsBanner />}
       brand={{ key: 'creator', mark: name.slice(0, 2).toUpperCase(), name, subtitle: auth.activeTenant?.role?.name ?? 'Creator workspace' }}
       footer={preview ? undefined : <WorkspaceSwitcher />}
       {...(preview ? {} : account)}
@@ -85,7 +100,7 @@ export function StudentLayout({ preview = false, ...props }) {
   const account = useShellAccount('/learn/account/security');
   const site = useQuery({ queryKey: ['brand', 'academy'], queryFn: academyApi.site, enabled: !preview, staleTime: 5 * 60_000 });
   const name = site.data?.name ?? 'Academy';
-  return <DashboardShell nav={NAV.student} brand={{ key: 'student', mark: name.slice(0, 2).toUpperCase(), name, subtitle: 'Student' }} {...(preview ? {} : account)} {...props} />;
+  return <DashboardShell nav={NAV.student} brand={{ key: 'student', mark: name.slice(0, 2).toUpperCase(), name, subtitle: 'Student' }} banner={preview ? undefined : <AnnouncementsBanner />} {...(preview ? {} : account)} {...props} />;
 }
 export function AffiliateLayout(props) {
   return <DashboardShell nav={NAV.affiliate} brand={{ key: 'affiliate', mark: 'AF', name: 'Academy', subtitle: 'Affiliate' }} {...props} />;
