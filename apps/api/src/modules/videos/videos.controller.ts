@@ -47,6 +47,10 @@ export class VideosController {
   @Get() @RequirePermissions(PERMISSIONS.COURSES_READ)
   list(@Query() q: ListVideosQuery) { return this.videos.list(q); }
 
+  @Get('config') @RequirePermissions(PERMISSIONS.COURSES_READ)
+  @ApiOperation({ summary: 'Upload settings for the browser (no credentials)' })
+  config() { return this.upload.clientConfig(); }
+
   @Get(':id') @RequirePermissions(PERMISSIONS.COURSES_READ)
   get(@Param('id') id: string) { return this.videos.details(id); }
 

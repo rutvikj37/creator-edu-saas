@@ -11,6 +11,17 @@ export const videosApi = {
   start: (lessonId) => http.post(`/learn/lessons/${lessonId}/video`).then(d),
   heartbeat: (sessionId, body) => http.put(`/learn/video-sessions/${sessionId}/heartbeat`, body).then(d),
   end: (sessionId) => http.delete(`/learn/video-sessions/${sessionId}`).then(d),
+  // Provider pipeline (/api/v1/videos)
+  config: () => http.get('/videos/config').then(d),
+  library: (params) => http.get('/videos', { params }).then(d),
+  details: (id) => http.get(`/videos/${id}`).then(d),
+  status: (id) => http.get(`/videos/${id}/processing-status`).then(d),
+  edit: (id, body) => http.patch(`/videos/${id}`, body).then(d),
+  destroy: (id) => http.delete(`/videos/${id}`).then(d),
+  retryProcessing: (id) => http.post(`/videos/${id}/retry-processing`).then(d),
+  initiate: (body) => http.post('/videos/upload/initiate', body).then(d),
+  complete: (body) => http.post('/videos/upload/complete', body).then(d),
+  playbackAuthorize: (id, lessonId) => http.post(`/videos/${id}/playback-authorize`, { lessonId }).then(d),
 };
 
 /** Reads a local video's duration (seconds) from its metadata before upload. */

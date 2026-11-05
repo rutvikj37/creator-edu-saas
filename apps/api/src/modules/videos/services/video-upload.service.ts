@@ -65,6 +65,16 @@ export class VideoUploadService {
     if (!this.provider.isConfigured()) throw new AppException(ERROR_CODES.INTEGRATION_NOT_CONFIGURED, 'Video hosting is not configured on this platform yet.', HttpStatus.SERVICE_UNAVAILABLE);
   }
 
+  /** What the upload screen needs to know; never includes credentials. */
+  clientConfig() {
+    return {
+      provider: this.provider.isConfigured() ? 'BUNNY' : 'STORAGE',
+      maxUploadBytes: this.config.get('VIDEO_MAX_UPLOAD_BYTES'),
+      mimeTypes: Object.keys(VIDEO_MIME_TYPES),
+      extensions: [...new Set(Object.values(VIDEO_MIME_TYPES).flat())],
+    };
+  }
+
   validateFile(input: Pick<InitiateInput, 'filename' | 'size' | 'mimeType'>) {
     const errors: { field: string; message: string }[] = [];
     const ext = input.filename.split('.').pop()?.toLowerCase() ?? '';
