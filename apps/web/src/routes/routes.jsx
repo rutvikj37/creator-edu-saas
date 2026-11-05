@@ -77,6 +77,12 @@ const NotificationSettingsPage = lazyNamed(() => import('../pages/account/Notifi
 const MarketingPage = lazyNamed(() => import('../pages/creator/MarketingPage.jsx'), 'MarketingPage');
 const AffiliatesPage = lazyNamed(() => import('../pages/creator/AffiliatesPage.jsx'), 'AffiliatesPage');
 const StudentAffiliatePage = lazyNamed(() => import('../pages/creator/AffiliatesPage.jsx'), 'StudentAffiliatePage');
+const CommunityFeedPage = lazyNamed(() => import('../pages/community/CommunityPages.jsx'), 'CommunityFeedPage');
+const CommunityPostPage = lazyNamed(() => import('../pages/community/CommunityPages.jsx'), 'CommunityPostPage');
+const StudentCommunitiesPage = lazyNamed(() => import('../pages/community/CommunityPages.jsx'), 'StudentCommunitiesPage');
+const CreatorCommunitiesPage = lazyNamed(() => import('../pages/community/CommunityPages.jsx'), 'CreatorCommunitiesPage');
+const CreatorMembershipsPage = lazyNamed(() => import('../pages/community/MembershipsPages.jsx'), 'CreatorMembershipsPage');
+const PublicMembershipsPage = lazyNamed(() => import('../pages/community/MembershipsPages.jsx'), 'PublicMembershipsPage');
 const SubscriptionsAdminPage = lazyNamed(() => import('../pages/admin/SubscriptionsAdminPage.jsx'), 'SubscriptionsAdminPage');
 const PlatformTransactionsPage = lazyNamed(() => import('../pages/finance/FinanceDashboardPage.jsx'), 'PlatformTransactionsPage');
 const BillingPage = lazyNamed(() => import('../pages/creator/BillingPage.jsx'), 'BillingPage');
@@ -180,6 +186,10 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/creator/batches', element: page(BatchesPage) },
             { path: '/creator/marketing', element: page(MarketingPage) },
             { path: '/creator/affiliates', element: page(AffiliatesPage) },
+            { path: '/creator/communities', element: page(CreatorCommunitiesPage) },
+            { path: '/creator/communities/:id', element: page(CommunityFeedPage, { staff: true }) },
+            { path: '/creator/communities/:id/posts/:postId', element: page(CommunityPostPage, { staff: true }) },
+            { path: '/creator/memberships', element: page(CreatorMembershipsPage) },
             { path: '/creator/discussions', element: page(DiscussionsPage) },
             { path: '/creator/certificates', element: page(CertificatesAdminPage) },
             { path: '/creator/domains', element: page(DomainsPage) },
@@ -200,6 +210,7 @@ export function buildRoutes(surface = getSurface()) {
     { path: '/', element: page(AcademyLandingPage) },
     { path: '/courses', element: page(AcademyCatalog) },
     { path: '/courses/:slug', element: page(CourseLandingPage) },
+    { path: '/memberships', element: page(PublicMembershipsPage) },
     { path: '/webinars/:slug', element: page(WebinarPage) },
     { path: '/live/ticket/:code', element: page(TicketPage) },
     { element: <GuestOnly />, children: [{ path: '/login', element: page(LoginPage) }, { path: '/register', element: page(StudentRegisterPage) }] },
@@ -218,10 +229,14 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/learn/orders/:id', element: page(OrderStatusPage) },
             { path: '/learn/live', element: page(StudentLivePage) },
             { path: '/learn/affiliate', element: page(StudentAffiliatePage) },
+            { path: '/learn/communities', element: page(StudentCommunitiesPage) },
+            { path: '/learn/communities/:id', element: page(CommunityFeedPage) },
+            { path: '/learn/communities/:id/posts/:postId', element: page(CommunityPostPage) },
           ],
         },
         { path: '/learn/courses/:courseId', element: page(PlayerPage) },
         { path: '/checkout/:slug', element: page(CheckoutPage) },
+        { path: '/checkout/membership/:planId', element: page(CheckoutPage) },
         { path: '/learn/live/:id', element: page(StudentRoomPage) },
       ],
     },
