@@ -1034,6 +1034,8 @@ model QuizQuestion {
   position    Int
   /// FILL_BLANK: { answers: string[], caseSensitive }; MATCHING uses options with matchKey.
   meta        Json?
+  /// Copied from this question-bank entry (copies are independent of later bank edits).
+  bankQuestionId String?   @db.Char(25)
   createdAt   DateTime     @default(now()) @db.DateTime(3)
   updatedAt   DateTime     @updatedAt @db.DateTime(3)
   quiz        Quiz         @relation(fields: [tenantId, quizId], references: [tenantId, id], onDelete: Cascade)
@@ -1041,6 +1043,30 @@ model QuizQuestion {
 
   @@unique([tenantId, id])
   @@index([tenantId, quizId, position])
+}
+
+/// Academy-wide question bank. Quizzes take copies, so editing the bank never changes a quiz
+/// students have already taken.
+model BankQuestion {
+  id          String       @id @default(cuid()) @db.Char(25)
+  tenantId    String       @db.Char(25)
+  type        QuestionType
+  prompt      String       @db.Text
+  explanation String?      @db.Text
+  points      Decimal      @default(1) @db.Decimal(6, 2)
+  /// [{ label, isCorrect, matchKey? }] in display order.
+  options     Json?
+  /// FILL_BLANK: { answers: string[], caseSensitive }.
+  meta        Json?
+  /// Lower-case tags for filtering and random draws, e.g. ["algebra", "chapter-2"].
+  tags        Json
+  createdById String       @db.Char(25)
+  createdAt   DateTime     @default(now()) @db.DateTime(3)
+  updatedAt   DateTime     @updatedAt @db.DateTime(3)
+  deletedAt   DateTime?    @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, deletedAt, createdAt])
 }
 
 model QuizOption {

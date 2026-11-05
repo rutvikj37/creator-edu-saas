@@ -88,6 +88,8 @@ const WORKSPACE_ROUTES_COVERED = [
   // Phase 7 — commerce (cross-tenant behaviour is also exercised in commerce.e2e-spec.ts)
   'GET /api/v1/creator/payments/razorpay', 'PUT /api/v1/creator/payments/razorpay', 'POST /api/v1/creator/payments/razorpay/verify', 'PATCH /api/v1/creator/payments/razorpay', 'DELETE /api/v1/creator/payments/razorpay',
   'GET /api/v1/creator/coupons', 'POST /api/v1/creator/coupons', 'PATCH /api/v1/creator/coupons/:id', 'DELETE /api/v1/creator/coupons/:id',
+  'GET /api/v1/creator/question-bank', 'GET /api/v1/creator/question-bank/tags', 'POST /api/v1/creator/question-bank', 'PUT /api/v1/creator/question-bank/:id', 'DELETE /api/v1/creator/question-bank/:id', // isolation asserted in question-bank.e2e-spec.ts
+  'POST /api/v1/creator/courses/:id/lessons/:lessonId/quiz/questions/from-bank', 'POST /api/v1/creator/courses/:id/lessons/:lessonId/quiz/questions/:qid/save-to-bank',
   'GET /api/v1/creator/reviews', 'POST /api/v1/creator/reviews/:id/reply', 'POST /api/v1/creator/reviews/:id/status', // isolation asserted in reviews.e2e-spec.ts
   'GET /api/v1/creator/bundles', 'GET /api/v1/creator/bundles/:id', 'POST /api/v1/creator/bundles', 'PATCH /api/v1/creator/bundles/:id', 'POST /api/v1/creator/bundles/:id/status',
   'GET /api/v1/creator/orders', 'GET /api/v1/creator/orders/summary', 'GET /api/v1/creator/orders/:id', 'GET /api/v1/creator/orders/:id/invoice', 'POST /api/v1/creator/orders/:id/refunds',

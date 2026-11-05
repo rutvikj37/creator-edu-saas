@@ -9,11 +9,13 @@ import { AssignmentsService } from '../assessment/assignments.service.js';
 import { CertificatesService } from '../certificates/certificates.service.js';
 import { PublicCertificatesController } from '../certificates/public-certificates.controller.js';
 import { ReviewsService } from './reviews.service.js';
+import { QuestionBankService } from '../assessment/question-bank.service.js';
+import { QuestionBankController } from '../assessment/question-bank.controller.js';
 import { CreatorReviewsController, LearnReviewsController, PublicReviewsController } from './reviews.controller.js';
 
 @Module({
-  controllers: [CatalogController, LearnController, CreatorLearningController, PublicCertificatesController, LearnReviewsController, PublicReviewsController, CreatorReviewsController],
-  providers: [ReviewsService, LearningService, CreatorLearningService, QuizzesService, AssignmentsService, CertificatesService],
+  controllers: [CatalogController, LearnController, CreatorLearningController, PublicCertificatesController, LearnReviewsController, PublicReviewsController, CreatorReviewsController, QuestionBankController],
+  providers: [ReviewsService, QuestionBankService, LearningService, CreatorLearningService, QuizzesService, AssignmentsService, CertificatesService],
   exports: [LearningService, ReviewsService],
 })
 export class LearningModule {}

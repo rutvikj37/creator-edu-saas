@@ -2,6 +2,12 @@
 
 Format: Keep a Changelog. Versions follow SemVer once Phase 1 ships.
 
+## [0.18.0] — 2026-11-05 — Question bank
+### Added
+- Academy question bank with tags; add questions to any quiz by picking them or drawing at random from a tag; save quiz questions to the bank. Quizzes keep their own copies.
+### Fixed
+- The quiz editor's question dialog no longer errors when it closes.
+
 ## [0.17.0] — 2026-11-05 — Course reviews and ratings
 ### Added
 - Students rate and review courses they have access to; ratings and reviews (with academy replies) on course pages and cards; creators reply and hide abusive reviews with a reason.

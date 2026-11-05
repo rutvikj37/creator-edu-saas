@@ -10,7 +10,7 @@ import { MANUAL_TYPES, scoreAttempt, shuffle, type GradableQuestion, type Respon
 
 const GRACE_MS = 30_000;
 
-function validateQuestion(dto: QuestionDto): FieldError[] {
+export function validateQuestion(dto: QuestionDto): FieldError[] {
   const opts = dto.options ?? [];
   const correct = opts.filter((o) => o.isCorrect).length;
   switch (dto.type) {

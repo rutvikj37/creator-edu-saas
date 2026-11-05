@@ -1,27 +1,29 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { BookmarkPlus, Library, Pencil, Plus, Trash2 } from 'lucide-react';
+import { questionBankApi } from '../../services/api/questionBank.js';
 import { Badge, Button, Checkbox, Input, Modal, Select, Skeleton, Switch, Tabs, Textarea, toast } from '../../components/ui/index.js';
 import { creatorLearnApi } from '../../services/api/learn.js';
 import { AiQuizGenerator } from '../../components/ai/AiTools.jsx';
 import { formatDate } from '../../utils/format.js';
 
-const TYPES = [
+export const TYPES = [
   { value: 'MCQ_SINGLE', label: 'Multiple choice (one answer)' }, { value: 'MCQ_MULTI', label: 'Multiple select' }, { value: 'TRUE_FALSE', label: 'True / false' },
   { value: 'FILL_BLANK', label: 'Fill in the blank' }, { value: 'MATCHING', label: 'Matching' }, { value: 'SHORT', label: 'Short answer (graded by you)' }, { value: 'LONG', label: 'Long answer (graded by you)' },
 ];
-const blankQuestion = () => ({ type: 'MCQ_SINGLE', prompt: '', points: 1, explanation: '', options: [{ label: '', isCorrect: true }, { label: '', isCorrect: false }], answers: '' });
+export const blankQuestion = () => ({ type: 'MCQ_SINGLE', prompt: '', points: 1, explanation: '', options: [{ label: '', isCorrect: true }, { label: '', isCorrect: false }], answers: '' });
 
-function QuestionModal({ initial, onClose, onSave, saving, error }) {
+export function QuestionModal({ initial, onClose, onSave, saving, error, withTags = false }) {
   const [q, setQ] = useState(initial);
   useEffect(() => setQ(initial), [initial]);
-  if (!q) return null;
+  if (!q || !initial) return null;
   const setType = (type) => setQ({ ...q, type, options: type === 'TRUE_FALSE' ? [{ label: 'True', isCorrect: true }, { label: 'False', isCorrect: false }] : type === 'MATCHING' ? [{ label: '', matchKey: '' }, { label: '', matchKey: '' }] : ['MCQ_SINGLE', 'MCQ_MULTI'].includes(type) ? (q.options?.length ? q.options : blankQuestion().options) : [] });
   const setOpt = (i, patch) => setQ({ ...q, options: q.options.map((o, j) => (j === i ? { ...o, ...patch } : q.type === 'MCQ_SINGLE' || q.type === 'TRUE_FALSE' ? (patch.isCorrect ? { ...o, isCorrect: false } : o) : o)) });
   const body = () => ({
     type: q.type, prompt: q.prompt, points: Number(q.points) || 1, explanation: q.explanation || null,
     options: q.type === 'MATCHING' ? q.options.filter((o) => o.label && o.matchKey).map((o) => ({ label: o.label, matchKey: o.matchKey })) : q.options?.filter((o) => o.label).map((o) => ({ label: o.label, isCorrect: Boolean(o.isCorrect) })),
     meta: q.type === 'FILL_BLANK' ? { answers: q.answers.split(',').map((a) => a.trim()).filter(Boolean) } : undefined,
+    ...(withTags ? { tags: (q.tagsText ?? '').split(',').map((t) => t.trim()).filter(Boolean) } : {}),
   });
   return (
     <Modal open onClose={onClose} title={initial.id ? 'Edit question' : 'Add question'} size="lg"
@@ -48,6 +50,7 @@ function QuestionModal({ initial, onClose, onSave, saving, error }) {
           </div>
         )}
         <Textarea label="Explanation (shown after submitting)" rows={2} value={q.explanation ?? ''} onChange={(e) => setQ({ ...q, explanation: e.target.value })} />
+        {withTags && <Input label="Tags" placeholder="algebra, chapter-2" hint="Comma-separated. Used to filter and to draw random questions into quizzes." value={q.tagsText ?? ''} onChange={(e) => setQ({ ...q, tagsText: e.target.value })} />}
         {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
       </div>
     </Modal>
@@ -84,6 +87,51 @@ function GradeModal({ attemptId, onClose, onGraded }) {
 }
 
 /** Quiz settings, questions and grading for a QUIZ lesson. */
+/** Copy questions from the academy's bank into a quiz: pick them, or draw N at random from a tag. */
+function BankPicker({ courseId, lessonId, inQuiz, onClose, onAdded }) {
+  const [mode, setMode] = useState('pick');
+  const [search, setSearch] = useState('');
+  const [tag, setTag] = useState('');
+  const [chosen, setChosen] = useState([]);
+  const [count, setCount] = useState(5);
+  const [error, setError] = useState(null);
+  const tags = useQuery({ queryKey: ['creator', 'question-bank', 'tags'], queryFn: questionBankApi.tags });
+  const list = useQuery({ queryKey: ['creator', 'question-bank', { search, tag }], queryFn: () => questionBankApi.list({ ...(search ? { q: search } : {}), ...(tag ? { tag } : {}) }) });
+  const add = useMutation({ mutationFn: (body) => questionBankApi.addToQuiz(courseId, lessonId, body), onSuccess: onAdded, onError: (e) => setError(e.details?.[0]?.message ?? e.message) });
+  const toggle = (id) => setChosen(chosen.includes(id) ? chosen.filter((x) => x !== id) : [...chosen, id]);
+  const tagOptions = [{ value: '', label: 'All tags' }, ...(tags.data ?? []).map((t) => ({ value: t.tag, label: `${t.tag} (${t.count})` }))];
+  return (
+    <Modal open onClose={onClose} title="Add from question bank" size="lg"
+      footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button>{mode === 'pick'
+        ? <Button disabled={!chosen.length} loading={add.isPending} onClick={() => { setError(null); add.mutate({ questionIds: chosen }); }}>Add {chosen.length || ''} question{chosen.length === 1 ? '' : 's'}</Button>
+        : <Button disabled={!tag || !(Number(count) > 0)} loading={add.isPending} onClick={() => { setError(null); add.mutate({ tag, count: Number(count) }); }}>Draw questions</Button>}</>}>
+      <div className="space-y-4">
+        <Tabs value={mode} onChange={setMode} tabs={[{ value: 'pick', label: 'Pick questions' }, { value: 'random', label: 'Random from a tag' }]} />
+        {mode === 'pick' ? (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2"><Input aria-label="Search questions" placeholder="Search questions" value={search} onChange={(e) => setSearch(e.target.value)} /><Select aria-label="Tag" value={tag} onChange={(e) => setTag(e.target.value)} options={tagOptions} /></div>
+            <div className="max-h-80 space-y-1.5 overflow-y-auto">
+              {list.isLoading ? <Skeleton className="h-24" /> : (list.data?.items ?? []).length === 0 ? <p className="text-sm text-muted">No questions in your bank match. Add some on the Question bank page, or save questions from a quiz.</p> : list.data.items.map((b) => (
+                <label key={b.id} className={`flex cursor-pointer items-start gap-2 rounded-md border border-line p-2 text-sm ${inQuiz.has(b.id) ? 'opacity-60' : ''}`}>
+                  <input type="checkbox" className="mt-1 size-4 accent-primary-600" disabled={inQuiz.has(b.id)} checked={chosen.includes(b.id)} onChange={() => toggle(b.id)} aria-label={b.prompt} />
+                  <span className="flex-1"><span className="block">{b.prompt}</span><span className="text-xs text-muted">{TYPES.find((t) => t.value === b.type)?.label} · {b.points} pts{b.tags.length ? ` · ${b.tags.join(', ')}` : ''}{inQuiz.has(b.id) ? ' · already in this quiz' : ''}</span></span>
+                </label>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-[1fr_140px]">
+            <Select label="Tag" value={tag} onChange={(e) => setTag(e.target.value)} options={[{ value: '', label: 'Choose a tag' }, ...tagOptions.slice(1)]} />
+            <Input label="How many" type="number" min={1} max={200} value={count} onChange={(e) => setCount(e.target.value)} />
+            <p className="text-xs text-muted sm:col-span-2">Questions already in this quiz are not drawn again. Combine with “Random questions per attempt” in Settings to give each student a different set.</p>
+          </div>
+        )}
+        {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+      </div>
+    </Modal>
+  );
+}
+
 export function QuizEditor({ courseId, lessonId }) {
   const qc = useQueryClient();
   const key = ['creator', 'quiz', lessonId];
@@ -94,6 +142,12 @@ export function QuizEditor({ courseId, lessonId }) {
   const [error, setError] = useState(null);
   const [settings, setSettings] = useState(null);
   const [grading, setGrading] = useState(null);
+  const [picking, setPicking] = useState(false);
+  const saveToBank = useMutation({
+    mutationFn: (questionId) => questionBankApi.saveToBank(courseId, lessonId, questionId, []),
+    onSuccess: () => { toast.success('Saved to your question bank'); qc.invalidateQueries({ queryKey: key }); qc.invalidateQueries({ queryKey: ['creator', 'question-bank'] }); },
+    onError: (e) => toast.error(e.message),
+  });
   useEffect(() => { if (q.data) setSettings({ passPercent: q.data.passPercent, timeLimitMinutes: q.data.timeLimitSeconds ? q.data.timeLimitSeconds / 60 : '', maxAttempts: q.data.maxAttempts ?? '', negativeMarkRatio: q.data.negativeMarkRatio, shuffleQuestions: q.data.shuffleQuestions, shuffleOptions: q.data.shuffleOptions, randomPickCount: q.data.randomPickCount ?? '', showResults: q.data.showResults, instructions: q.data.instructions ?? '' }); }, [q.data]);
   const onSaved = (d) => { qc.setQueryData(key, d); setEditing(null); setError(null); qc.invalidateQueries({ queryKey: ['course', courseId, 'check'] }); };
   const saveQ = useMutation({ mutationFn: (body) => (editing.id ? creatorLearnApi.updateQuestion(courseId, lessonId, editing.id, body) : creatorLearnApi.addQuestion(courseId, lessonId, body)), onSuccess: (d) => { onSaved(d); toast.success('Question saved'); }, onError: (e) => setError(e.details?.[0]?.message ?? e.message) });
@@ -112,13 +166,15 @@ export function QuizEditor({ courseId, lessonId }) {
           {q.data.questions.map((x, i) => (
             <div key={x.id} className="flex items-start gap-2 rounded-md border border-line p-3 text-sm">
               <span className="text-muted">{i + 1}.</span>
-              <div className="flex-1"><p>{x.prompt}</p><p className="text-xs text-muted">{TYPES.find((t) => t.value === x.type)?.label} · {x.points} pts</p></div>
+              <div className="flex-1"><p>{x.prompt}</p><p className="text-xs text-muted">{TYPES.find((t) => t.value === x.type)?.label} · {x.points} pts{x.bankQuestionId ? ' · from question bank' : ''}</p></div>
+              {!x.bankQuestionId && <Button variant="ghost" size="icon-sm" aria-label="Save to question bank" loading={saveToBank.isPending && saveToBank.variables === x.id} onClick={() => saveToBank.mutate(x.id)}><BookmarkPlus className="size-4" /></Button>}
               <Button variant="ghost" size="icon-sm" aria-label="Edit question" onClick={() => setEditing({ ...x, answers: (x.meta?.answers ?? []).join(', '), options: x.options })}><Pencil className="size-4" /></Button>
               <Button variant="ghost" size="icon-sm" aria-label="Delete question" onClick={() => removeQ.mutate(x.id)}><Trash2 className="size-4" /></Button>
             </div>
           ))}
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" leftIcon={Plus} onClick={() => { setError(null); setEditing(blankQuestion()); }}>Add question</Button>
+            <Button variant="secondary" size="sm" leftIcon={Library} onClick={() => setPicking(true)}>Add from question bank</Button>
             <AiQuizGenerator courseId={courseId} lessonId={lessonId} />
           </div>
         </div>
@@ -151,6 +207,7 @@ export function QuizEditor({ courseId, lessonId }) {
       )}
       <QuestionModal initial={editing} onClose={() => setEditing(null)} onSave={(b) => saveQ.mutate(b)} saving={saveQ.isPending} error={error} />
       <GradeModal attemptId={grading} onClose={() => setGrading(null)} onGraded={() => attempts.refetch()} />
+      {picking && <BankPicker courseId={courseId} lessonId={lessonId} inQuiz={new Set(q.data.questions.map((x) => x.bankQuestionId).filter(Boolean))} onClose={() => setPicking(false)} onAdded={(d) => { qc.setQueryData(key, d.quiz); setPicking(false); toast.success(`${d.added} question${d.added === 1 ? '' : 's'} added${d.skipped ? ` (${d.skipped} already in this quiz)` : ''}`); }} />}
     </div>
   );
 }

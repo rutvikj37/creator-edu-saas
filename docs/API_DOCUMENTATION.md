@@ -55,6 +55,8 @@ Status: **Phase 0 design**. Live docs will be served by Swagger at `/api/docs` (
 | 7 | `GET/POST /creator/coupons` · `PATCH/DELETE /creator/coupons/:id` | coupons.manage | Coupons (discount terms locked once used) |
 | 7 | `GET /creator/orders` · `GET /creator/orders/summary` · `GET /creator/orders/:id` · `GET /creator/orders/:id/invoice` · `GET /creator/transactions` | orders.read | Orders, ledger-based revenue summary, invoice PDF, payment attempts |
 | 7 | `POST /creator/orders/:id/refunds` | refunds.manage | Full/partial refund through Razorpay (`revokeAccess` for full refunds) |
+| 5 | `GET /creator/question-bank?q&tag&type&page` · `GET /creator/question-bank/tags` · `POST /creator/question-bank` · `PUT/DELETE /creator/question-bank/:id` (question fields + `tags[]`) | courses.read / courses.manage | Question bank |
+| 5 | `POST /creator/courses/:id/lessons/:lessonId/quiz/questions/from-bank` (`questionIds[]` or `tag` + `count`) · `POST …/quiz/questions/:qid/save-to-bank` (`tags[]`) | courses.manage | Copy between bank and quiz |
 | 5 | `GET/PUT/DELETE /learn/courses/:courseId/review` (`rating` 1–5, `title?`, `body?`) | student with access | Own course review |
 | 5 | `GET /public/courses/:slug/reviews?page&rating` · public course list/detail include `ratingAverage`/`ratingCount` and `rating` summary | academy host | Published reviews and summary |
 | 5 | `GET /creator/reviews?courseId&status(PUBLISHED\|HIDDEN\|UNANSWERED)&rating&page` · `POST /creator/reviews/:id/reply` · `POST /creator/reviews/:id/status` (`reason` required to hide) | courses.read / courses.manage | Moderation |
