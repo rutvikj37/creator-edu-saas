@@ -16,8 +16,8 @@ export const LESSON_TYPES = [
   { value: 'AUDIO', label: 'Audio', icon: AudioLines },
   { value: 'DOWNLOAD', label: 'Download', icon: Download },
   { value: 'LINK', label: 'External link', icon: Link2 },
-  { value: 'QUIZ', label: 'Quiz', icon: ClipboardCheck, soon: 'Phase 5' },
-  { value: 'ASSIGNMENT', label: 'Assignment', icon: PenSquare, soon: 'Phase 5' },
+  { value: 'QUIZ', label: 'Quiz', icon: ClipboardCheck },
+  { value: 'ASSIGNMENT', label: 'Assignment', icon: PenSquare },
   { value: 'LIVE', label: 'Live class', icon: Radio, soon: 'Phase 9' },
 ];
 const TYPE_BY = Object.fromEntries(LESSON_TYPES.map((t) => [t.value, t]));

@@ -243,6 +243,15 @@ export class QuizzesService {
     });
   }
 
+  /** Instructor view of a submitted attempt (answers + correct options). */
+  async attemptForInstructor(attemptId: string) {
+    const a = await this.db.quizAttempt.findFirst({ where: { id: attemptId } });
+    if (!a) throw AppException.notFound('Attempt not found');
+    const view = await this.attempt(a.userId, attemptId);
+    const student = await this.prisma.user.findUnique({ where: { id: a.userId }, select: { fullName: true, email: true } });
+    return { ...view, student };
+  }
+
   /** Instructor grading of SHORT/LONG/FILE_UPLOAD answers; re-totals and may complete the lesson. */
   async grade(attemptId: string, dto: ManualGradeDto, graderId: string) {
     const a = await this.db.quizAttempt.findFirst({ where: { id: attemptId }, include: { quiz: true } });

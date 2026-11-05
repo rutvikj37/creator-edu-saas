@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -22,6 +22,8 @@ const schema = z.object({
 export function StudentRegisterPage() {
   const auth = useAuth();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const next = params.get('next');
   const site = useQuery({ queryKey: ['brand', 'academy'], queryFn: academyApi.site, staleTime: 5 * 60_000 });
   const [error, setError] = useState(null);
   const { register, handleSubmit, setError: setFieldError, formState: { errors, isSubmitting } } = useForm({
@@ -33,7 +35,7 @@ export function StudentRegisterPage() {
     setError(null);
     try {
       await auth.establish(await authApi.registerStudent(values));
-      navigate('/learn', { replace: true });
+      navigate(next && next.startsWith('/') && !next.startsWith('//') ? next : '/learn', { replace: true });
     } catch (e) {
       if (e.code === 'CONFLICT' || e.code === 'FORBIDDEN') setError(e.message);
       else applyApiErrors(e, setFieldError, ['fullName', 'email', 'password']);
@@ -44,7 +46,7 @@ export function StudentRegisterPage() {
     <AuthLayout
       title="Create your account"
       subtitle={site.data ? `Join ${site.data.name} to start learning.` : undefined}
-      footer={<>Already registered? <Link to="/login" className="font-medium text-primary-600 hover:underline">Sign in</Link></>}
+      footer={<>Already registered? <Link to={next ? `/login?next=${encodeURIComponent(next)}` : '/login'} className="font-medium text-primary-600 hover:underline">Sign in</Link></>}
     >
       {site.isLoading ? (
         <Skeleton className="h-40 w-full" />

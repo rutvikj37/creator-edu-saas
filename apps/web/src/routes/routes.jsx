@@ -23,6 +23,7 @@ const SecurityPage = lazyNamed(() => import('../pages/account/SecurityPage.jsx')
 const WorkspaceHomePage = lazyNamed(() => import('../pages/creator/WorkspaceHomePage.jsx'), 'WorkspaceHomePage');
 const DomainsPage = lazyNamed(() => import('../pages/creator/DomainsPage.jsx'), 'DomainsPage');
 const StudentHomePage = lazyNamed(() => import('../pages/student/StudentHomePage.jsx'), 'StudentHomePage');
+const AcademyCatalog = lazy(() => import('../pages/public/AcademyLandingPage.jsx').then((m) => ({ default: () => <m.AcademyLandingPage catalogOnly /> })));
 const SuperAdminHomePage = lazyNamed(() => import('../pages/system/SuperAdminHomePage.jsx'), 'SuperAdminHomePage');
 const SystemStatusPage = lazyNamed(() => import('../pages/system/SystemStatusPage.jsx'), 'SystemStatusPage');
 const DesignSystemPage = lazyNamed(() => import('../pages/system/design-system/DesignSystemPage.jsx'), 'DesignSystemPage');
@@ -48,6 +49,13 @@ const CoursesPage = lazyNamed(() => import('../pages/creator/CoursesPage.jsx'), 
 const CourseEditorPage = lazyNamed(() => import('../pages/creator/CourseEditorPage.jsx'), 'CourseEditorPage');
 const StaffPage = lazyNamed(() => import('../pages/creator/StaffPage.jsx'), 'StaffPage');
 const InvitePage = lazyNamed(() => import('../pages/creator/InvitePage.jsx'), 'InvitePage');
+const CourseLandingPage = lazyNamed(() => import('../pages/public/CourseLandingPage.jsx'), 'CourseLandingPage');
+const VerifyCertificatePage = lazyNamed(() => import('../pages/public/VerifyCertificatePage.jsx'), 'VerifyCertificatePage');
+const PlayerPage = lazyNamed(() => import('../pages/student/PlayerPage.jsx'), 'PlayerPage');
+const StudentCertificatesPage = lazyNamed(() => import('../pages/student/CertificatesPage.jsx'), 'StudentCertificatesPage');
+const StudentsPage = lazyNamed(() => import('../pages/creator/StudentsPage.jsx'), 'StudentsPage');
+const DiscussionsPage = lazyNamed(() => import('../pages/creator/DiscussionsPage.jsx'), 'DiscussionsPage');
+const CertificatesAdminPage = lazyNamed(() => import('../pages/creator/CertificatesAdminPage.jsx'), 'CertificatesAdminPage');
 const BillingPage = lazyNamed(() => import('../pages/creator/BillingPage.jsx'), 'BillingPage');
 const CreatorSupportPage = lazyNamed(() => import('../pages/creator/CreatorSupportPage.jsx'), 'CreatorSupportPage');
 const CreatorTicketPage = lazyNamed(() => import('../pages/creator/CreatorSupportPage.jsx'), 'CreatorTicketPage');
@@ -72,6 +80,8 @@ const sharedAuthRoutes = [
   { path: '/reset-password', element: page(ResetPasswordPage) },
   { path: '/verify-email', element: page(VerifyEmailPage) },
   { path: '/auth/callback', element: page(AuthCallbackPage) },
+  { path: '/verify', element: page(VerifyCertificatePage) },
+  { path: '/verify/:number', element: page(VerifyCertificatePage) },
 ];
 
 export function buildRoutes(surface = getSurface()) {
@@ -133,6 +143,9 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/creator/courses', element: page(CoursesPage) },
             { path: '/creator/courses/:id', element: page(CourseEditorPage) },
             { path: '/creator/staff', element: page(StaffPage) },
+            { path: '/creator/students', element: page(StudentsPage) },
+            { path: '/creator/discussions', element: page(DiscussionsPage) },
+            { path: '/creator/certificates', element: page(CertificatesAdminPage) },
             { path: '/creator/domains', element: page(DomainsPage) },
             { path: '/creator/billing', element: page(BillingPage) },
             { path: '/creator/support', element: page(CreatorSupportPage) },
@@ -147,6 +160,8 @@ export function buildRoutes(surface = getSurface()) {
 
   const academy = [
     { path: '/', element: page(AcademyLandingPage) },
+    { path: '/courses', element: page(AcademyCatalog) },
+    { path: '/courses/:slug', element: page(CourseLandingPage) },
     { element: <GuestOnly />, children: [{ path: '/login', element: page(LoginPage) }, { path: '/register', element: page(StudentRegisterPage) }] },
     ...sharedAuthRoutes,
     {
@@ -157,8 +172,10 @@ export function buildRoutes(surface = getSurface()) {
           children: [
             { path: '/learn', element: page(StudentHomePage) },
             { path: '/learn/account/security', element: page(SecurityPage, { breadcrumbs: [{ label: 'Account' }] }) },
+            { path: '/learn/certificates', element: page(StudentCertificatesPage) },
           ],
         },
+        { path: '/learn/courses/:courseId', element: page(PlayerPage) },
       ],
     },
   ];

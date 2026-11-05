@@ -4,6 +4,8 @@ import { Alert } from '../../components/auth/Alert.jsx';
 import { FileUpload } from '../../components/forms/FileUpload.jsx';
 import { RichTextEditor } from '../../components/forms/RichTextEditor.jsx';
 import { coursesApi } from '../../services/api/creator.js';
+import { QuizEditor } from './QuizEditor.jsx';
+import { AssignmentEditor } from './AssignmentEditor.jsx';
 
 const ACCEPT = {
   PDF: 'application/pdf',
@@ -60,6 +62,8 @@ export function LessonEditor({ courseId, lesson, onClose, onSaved, readOnly }) {
             {errors.fileAssetId && <p className="mt-1 text-xs text-red-600">{errors.fileAssetId}</p>}
           </div>
         )}
+        {lesson.type === 'QUIZ' && <QuizEditor courseId={courseId} lessonId={lesson.id} />}
+        {lesson.type === 'ASSIGNMENT' && <AssignmentEditor courseId={courseId} lessonId={lesson.id} />}
         {lesson.type === 'VIDEO' && (
           <Alert tone="info" title="Video hosting">Upload and protected playback are enabled with the video module. This lesson stays in draft until a processed video is attached.</Alert>
         )}

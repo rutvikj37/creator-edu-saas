@@ -13,6 +13,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { formatDate } from '../../utils/format.js';
 import { CurriculumBuilder } from './CurriculumBuilder.jsx';
 import { LessonEditor } from './LessonEditor.jsx';
+import { CourseStudentsTab } from './CourseStudentsTab.jsx';
 
 function ListEditor({ label, values, onChange, placeholder }) {
   const [text, setText] = useState('');
@@ -129,7 +130,7 @@ export function CourseEditorPage() {
           </>
         )}
       />
-      <Tabs className="mb-6" value={tab} onChange={setTab} tabs={[{ value: 'details', label: 'Details' }, { value: 'curriculum', label: 'Curriculum' }, { value: 'pricing', label: 'Pricing & access' }, { value: 'seo', label: 'SEO' }]} />
+      <Tabs className="mb-6" value={tab} onChange={setTab} tabs={[{ value: 'details', label: 'Details' }, { value: 'curriculum', label: 'Curriculum' }, { value: 'pricing', label: 'Pricing & access' }, { value: 'seo', label: 'SEO' }, { value: 'students', label: 'Students' }]} />
 
       {tab === 'details' && (
         <div className="grid gap-6 lg:grid-cols-3">
@@ -206,6 +207,8 @@ export function CourseEditorPage() {
           </div>
         </CardBody></Card>
       )}
+
+      {tab === 'students' && <CourseStudentsTab courseId={id} canManage={auth.can('students.manage')} />}
 
       <LessonEditor courseId={id} lesson={editing} readOnly={readOnly} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); qc.invalidateQueries({ queryKey: ['course', id, 'curriculum'] }); }} />
 

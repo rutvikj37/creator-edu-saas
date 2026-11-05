@@ -46,11 +46,11 @@ export const NAV = {
       items: [
         item('Courses', '/creator/courses', BookOpen, 4, { available: true, perm: 'courses.read' }),
         item('Products', '/creator/products', Package, 7),
-        item('Question bank', '/creator/question-bank', ClipboardCheck, 5),
-        item('Certificates', '/creator/certificates', Award, 5),
+        item('Discussions', '/creator/discussions', MessagesSquare, 5, { available: true, perm: 'courses.read' }),
+        item('Certificates', '/creator/certificates', Award, 5, { available: true, perm: 'certificates.manage' }),
       ],
     },
-    { label: 'Students', items: [item('Students', '/creator/students', GraduationCap, 5), item('Batches', '/creator/batches', Boxes, 9)] },
+    { label: 'Students', items: [item('Students', '/creator/students', GraduationCap, 5, { available: true, perm: 'students.read' }), item('Batches', '/creator/batches', Boxes, 9)] },
     {
       label: 'Sales',
       items: [item('Orders', '/creator/orders', ShoppingCart, 7), item('Transactions', '/creator/transactions', Receipt, 7), item('Coupons', '/creator/coupons', Tag, 7)],
@@ -84,10 +84,10 @@ export const NAV = {
     {
       label: null,
       items: [
-        item('Home', '/learn', LayoutDashboard, 2, { end: true, available: true }),
-        item('My learning', '/learn/courses', BookOpen, 5),
+        item('My learning', '/learn', LayoutDashboard, 2, { end: true, available: true }),
+        item('Browse courses', '/courses', BookOpen, 5, { available: true }),
         item('Live classes', '/learn/live', Video, 9),
-        item('Certificates', '/learn/certificates', Award, 5),
+        item('Certificates', '/learn/certificates', Award, 5, { available: true }),
         item('Communities', '/learn/communities', MessagesSquare, 10),
         item('Orders', '/learn/orders', Receipt, 7),
         item('Support', '/learn/support', LifeBuoy, 5),

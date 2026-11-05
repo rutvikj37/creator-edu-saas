@@ -13,3 +13,4 @@ playwright-report/
 test-results/
 *.tsbuildinfo
 apps/api/storage/
+dump.rdb

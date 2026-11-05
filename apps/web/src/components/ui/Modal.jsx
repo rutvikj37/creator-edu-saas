@@ -118,7 +118,7 @@ export function Drawer({ open, onClose, title, children, footer, side = 'right' 
         if (e.target === ref.current) onClose?.();
       }}
       className={cn(
-        'fixed top-0 m-0 h-dvh max-h-dvh w-full max-w-md border-line bg-surface p-0 text-fg shadow-lg',
+        'fixed top-0 m-0 h-dvh max-h-dvh w-full max-w-xl border-line bg-surface p-0 text-fg shadow-lg',
         side === 'right' ? 'right-0 left-auto border-l' : 'left-0 border-r',
       )}
     >

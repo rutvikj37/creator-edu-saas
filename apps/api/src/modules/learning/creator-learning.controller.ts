@@ -88,6 +88,9 @@ export class CreatorLearningController {
   @Get('quizzes/:quizId/attempts') @RequirePermissions(PERMISSIONS.ASSESSMENTS_GRADE)
   attempts(@Param('quizId') id: string) { return this.quizzes.attemptsForQuiz(id); }
 
+  @Get('quiz-attempts/:attemptId') @RequirePermissions(PERMISSIONS.ASSESSMENTS_GRADE)
+  attemptDetail(@Param('attemptId') id: string) { return this.quizzes.attemptForInstructor(id); }
+
   @Post('quiz-attempts/:attemptId/grade') @HttpCode(200) @RequirePermissions(PERMISSIONS.ASSESSMENTS_GRADE)
   gradeAttempt(@Param('attemptId') id: string, @Body() dto: ManualGradeDto, @CurrentAuth() auth: AuthContext) { return this.quizzes.grade(id, dto, auth.userId); }
 
