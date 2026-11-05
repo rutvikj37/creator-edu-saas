@@ -1,4 +1,6 @@
-import { Link } from 'react-router';
+import { useEffect } from 'react';
+import { Link, useLocation } from 'react-router';
+import { captureReferral } from '../../services/api/affiliates.js';
 import { useQuery } from '@tanstack/react-query';
 import { BookOpen, Users } from 'lucide-react';
 import { academyApi } from '../../services/api/auth.js';
@@ -9,6 +11,10 @@ import { formatMoney } from '../../utils/format.js';
 
 export function AcademyHeader({ site }) {
   const auth = useAuth();
+  const location = useLocation();
+  useEffect(() => {
+    if (location.search.includes('ref=')) captureReferral(location.search, location.pathname);
+  }, [location.search, location.pathname]);
   return (
     <header className="border-b border-line bg-surface">
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4">

@@ -14,6 +14,7 @@ import { TenantContext } from '../../core/tenancy/tenant-context.service.js';
 import { EntitlementsService } from '../subscriptions/entitlements.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { AppEvents } from '../../core/events/app-events.service.js';
+import { AffiliatesService } from '../affiliates/affiliates.service.js';
 import { enrollmentExpiry, isEnrollmentUsable } from '../learning/access.js';
 import { CouponsService } from './coupons.service.js';
 import { GatewayService } from './gateway.service.js';
@@ -40,6 +41,8 @@ export interface BillingInput {
 export interface CheckoutInput {
   courseId: string;
   couponCode?: string | null;
+  /** Referral code from an affiliate link (?ref=). Invalid or self-referral codes are ignored. */
+  affiliateCode?: string | null;
   billing: BillingInput;
 }
 
@@ -86,6 +89,7 @@ export class OrdersService {
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly notifications: NotificationsService,
     private readonly events: AppEvents,
+    private readonly affiliates: AffiliatesService,
   ) {}
 
   // ── views ─────────────────────────────────────────────────
@@ -170,6 +174,7 @@ export class OrdersService {
       country: input.billing.country ?? user.country ?? null, state: input.billing.state?.trim() || null, gstin: input.billing.gstin?.trim().toUpperCase() || null,
     };
     const cur = course.currency;
+    const affiliateId = await this.affiliates.attribute(input.affiliateCode, userId);
     const order = await this.db.$transaction(async (tx) => {
       // A new checkout supersedes this buyer's earlier unpaid orders for the same course.
       const open = await tx.order.findMany({ where: { userId, status: { in: ['PENDING', 'PAYMENT_INITIATED'] }, items: { some: { courseId: course.id } } }, select: { id: true } });
@@ -180,7 +185,7 @@ export class OrdersService {
           number: `ORD-${String(n).padStart(6, '0')}`, userId, currency: cur,
           subtotalAmount: fromMinor(q.subtotal, cur), discountAmount: fromMinor(q.discount, cur), taxAmount: fromMinor(q.tax, cur), totalAmount: fromMinor(q.total, cur),
           taxRate: tax?.rate ?? null, taxInclusive: tax?.inclusive ?? true, couponId: coupon?.id ?? null, couponCode: coupon?.code ?? null,
-          billing, idempotencyKey: idempotencyKey ?? null, expiresAt: new Date(Date.now() + ORDER_TTL_MS),
+          billing, idempotencyKey: idempotencyKey ?? null, expiresAt: new Date(Date.now() + ORDER_TTL_MS), affiliateId,
         } as never,
       });
       await tx.orderItem.create({ data: { orderId: o.id, courseId: course.id, title: course.title, unitAmount: fromMinor(q.subtotal, cur), discountAmount: fromMinor(q.discount, cur), totalAmount: fromMinor(q.total, cur) } as never });
@@ -352,6 +357,8 @@ export class OrdersService {
         if (q.tax) entries.push({ type: 'TAX', amount: -q.tax, description: `GST ${order.taxRate?.toString() ?? ''}%` });
         if (fee) entries.push({ type: 'GATEWAY_FEE', amount: -fee, description: 'Razorpay fee (incl. GST)' });
         if (commission) entries.push({ type: 'PLATFORM_COMMISSION', amount: -commission, description: `Platform commission ${commissionPct}%` });
+        const conversion = await this.affiliates.recordConversion(tx, { ...order, paidAt: now });
+        if (conversion) entries.push({ type: 'AFFILIATE_COMMISSION', amount: -toMinor(conversion.commission, cur), description: `Affiliate commission ${Number(conversion.percent)}%` });
         for (const e of entries) await tx.ledgerEntry.create({ data: { orderId: order.id, type: e.type, amount: e.amount < 0 ? `-${fromMinor(-e.amount, cur)}` : fromMinor(e.amount, cur), currency: cur, description: e.description } as never });
       }
       const fy = financialYear(now);
@@ -468,7 +475,8 @@ export class OrdersService {
       const tax = -(n('TAX') + n('TAX_REVERSAL'));
       const fees = -n('GATEWAY_FEE');
       const commission = -(n('PLATFORM_COMMISSION') + n('COMMISSION_REVERSAL'));
-      return { currency, gross: gross.toFixed(2), refunds: refunds.toFixed(2), tax: tax.toFixed(2), gatewayFees: fees.toFixed(2), platformCommission: commission.toFixed(2), net: (gross - refunds - tax - fees - commission).toFixed(2) };
+      const affiliate = -(n('AFFILIATE_COMMISSION') + n('AFFILIATE_REVERSAL'));
+      return { currency, gross: gross.toFixed(2), refunds: refunds.toFixed(2), tax: tax.toFixed(2), gatewayFees: fees.toFixed(2), platformCommission: commission.toFixed(2), affiliateCommission: affiliate.toFixed(2), net: (gross - refunds - tax - fees - commission - affiliate).toFixed(2) };
     });
     return { paidOrders, refundsPending, totals };
   }
@@ -534,6 +542,13 @@ export class OrdersService {
       await tx.ledgerEntry.create({ data: { orderId: o.id, refundId: r.id, type: 'REFUND', amount: neg(amount), currency: cur, description: `Refund for ${o.number}` } as never });
       if (taxBack) await tx.ledgerEntry.create({ data: { orderId: o.id, refundId: r.id, type: 'TAX_REVERSAL', amount: fromMinor(taxBack, cur), currency: cur, description: 'GST on refunded amount' } as never });
       if (commissionBack) await tx.ledgerEntry.create({ data: { orderId: o.id, refundId: r.id, type: 'COMMISSION_REVERSAL', amount: fromMinor(commissionBack, cur), currency: cur, description: 'Commission on refunded amount' } as never });
+      const conv = await tx.affiliateConversion.findFirst({ where: { orderId: o.id } });
+      if (conv && conv.status !== 'REVERSED' && conv.status !== 'PAID') {
+        const before = toMinor(conv.commission, cur);
+        const after = await this.affiliates.adjustForRefund(tx, o.id, refunded, total);
+        const now2 = after && 'commission' in after ? toMinor(after.commission, cur) : before;
+        if (before - now2 > 0) await tx.ledgerEntry.create({ data: { orderId: o.id, refundId: r.id, type: 'AFFILIATE_REVERSAL', amount: fromMinor(before - now2, cur), currency: cur, description: 'Affiliate commission on refunded amount' } as never });
+      }
       if (r.revokeAccess && full) {
         await tx.enrollment.updateMany({ where: { userId: o.userId, courseId: { in: o.items.map((i) => i.courseId) }, source: 'PURCHASE' }, data: { status: 'REVOKED' } });
       }

@@ -75,6 +75,8 @@ const WebinarPage = lazyNamed(() => import('../pages/live/LivePages.jsx'), 'Webi
 const TicketPage = lazyNamed(() => import('../pages/live/LivePages.jsx'), 'TicketPage');
 const NotificationSettingsPage = lazyNamed(() => import('../pages/account/NotificationSettingsPage.jsx'), 'NotificationSettingsPage');
 const MarketingPage = lazyNamed(() => import('../pages/creator/MarketingPage.jsx'), 'MarketingPage');
+const AffiliatesPage = lazyNamed(() => import('../pages/creator/AffiliatesPage.jsx'), 'AffiliatesPage');
+const StudentAffiliatePage = lazyNamed(() => import('../pages/creator/AffiliatesPage.jsx'), 'StudentAffiliatePage');
 const SubscriptionsAdminPage = lazyNamed(() => import('../pages/admin/SubscriptionsAdminPage.jsx'), 'SubscriptionsAdminPage');
 const PlatformTransactionsPage = lazyNamed(() => import('../pages/finance/FinanceDashboardPage.jsx'), 'PlatformTransactionsPage');
 const BillingPage = lazyNamed(() => import('../pages/creator/BillingPage.jsx'), 'BillingPage');
@@ -177,6 +179,7 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/creator/live/:id', element: page(LiveClassDetailPage) },
             { path: '/creator/batches', element: page(BatchesPage) },
             { path: '/creator/marketing', element: page(MarketingPage) },
+            { path: '/creator/affiliates', element: page(AffiliatesPage) },
             { path: '/creator/discussions', element: page(DiscussionsPage) },
             { path: '/creator/certificates', element: page(CertificatesAdminPage) },
             { path: '/creator/domains', element: page(DomainsPage) },
@@ -214,6 +217,7 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/learn/orders', element: page(StudentOrdersPage) },
             { path: '/learn/orders/:id', element: page(OrderStatusPage) },
             { path: '/learn/live', element: page(StudentLivePage) },
+            { path: '/learn/affiliate', element: page(StudentAffiliatePage) },
           ],
         },
         { path: '/learn/courses/:courseId', element: page(PlayerPage) },

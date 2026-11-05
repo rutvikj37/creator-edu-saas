@@ -3,6 +3,7 @@ import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
 import type { Job, Queue } from 'bullmq';
 import { QUEUES } from '../../core/queue/queue.constants.js';
 import { OrdersService } from './orders.service.js';
+import { AffiliatesService } from '../affiliates/affiliates.service.js';
 import { WEBHOOK_JOB, WebhooksService } from './webhooks.service.js';
 import { BillingService, PLATFORM_WEBHOOK_JOB } from '../billing/billing.service.js';
 
@@ -42,13 +43,13 @@ export class WebhooksProcessor extends WorkerHost {
 @Processor(QUEUES.COMMERCE)
 export class CommerceProcessor extends WorkerHost {
   private readonly logger = new Logger(CommerceProcessor.name);
-  constructor(private readonly orders: OrdersService) {
+  constructor(private readonly orders: OrdersService, private readonly affiliates: AffiliatesService) {
     super();
   }
   async process(job: Job) {
     if (job.name !== RECONCILE_JOB) throw new Error(`Unknown commerce job: ${job.name}`);
-    const stats = await this.orders.reconcile();
-    if (stats.payments || stats.refunds || stats.expired || stats.errors) this.logger.log(stats, 'reconciliation');
+    const stats = { ...(await this.orders.reconcile()), ...(await this.affiliates.approveDue()) };
+    if (stats.payments || stats.refunds || stats.expired || stats.errors || stats.approved) this.logger.log(stats, 'reconciliation');
     return stats;
   }
 }

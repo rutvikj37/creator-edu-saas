@@ -118,7 +118,7 @@ describe('Commerce — Razorpay (e2e)', () => {
     const ledger = (await authed(app, cs).get(`/api/v1/creator/orders/${order.id}`).expect(200)).body.data.ledger;
     expect(ledger.map((l: any) => [l.type, l.amount])).toEqual([['SALE', '1062'], ['TAX', '-162'], ['GATEWAY_FEE', '-25.06'], ['PLATFORM_COMMISSION', '-45']]);
     const summary = (await authed(app, cs).get('/api/v1/creator/orders/summary').expect(200)).body.data;
-    expect(summary.totals[0]).toEqual({ currency: 'INR', gross: '1062.00', refunds: '0.00', tax: '162.00', gatewayFees: '25.06', platformCommission: '45.00', net: '829.94' });
+    expect(summary.totals[0]).toEqual({ currency: 'INR', gross: '1062.00', refunds: '0.00', tax: '162.00', gatewayFees: '25.06', platformCommission: '45.00', affiliateCommission: '0.00', net: '829.94' });
 
     // Repeat confirmation and the matching webhook change nothing.
     await authed(app, buyer.s).post(`/api/v1/learn/orders/${order.id}/confirm`).send(result).expect(200);

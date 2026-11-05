@@ -65,7 +65,7 @@ export const NAV = {
       label: 'Growth',
       items: [
         item('Marketing', '/creator/marketing', Megaphone, 10, { available: true, perm: 'marketing.manage' }),
-        item('Affiliates', '/creator/affiliates', Handshake, 10),
+        item('Affiliates', '/creator/affiliates', Handshake, 10, { available: true, perm: 'affiliates.manage' }),
         item('Communities', '/creator/communities', MessagesSquare, 10),
         item('Analytics', '/creator/analytics', BarChart3, 10),
         item('AI studio', '/creator/ai', Sparkles, 10),
@@ -94,6 +94,7 @@ export const NAV = {
         item('Certificates', '/learn/certificates', Award, 5, { available: true }),
         item('Communities', '/learn/communities', MessagesSquare, 10),
         item('Orders', '/learn/orders', Receipt, 7, { available: true }),
+        item('Earn by sharing', '/learn/affiliate', Handshake, 10, { available: true }),
         item('Support', '/learn/support', LifeBuoy, 5),
         item('Account security', '/learn/account/security', KeyRound, 2, { available: true }),
       ],

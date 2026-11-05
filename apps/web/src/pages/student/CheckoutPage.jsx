@@ -14,6 +14,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { applyApiErrors } from '../../utils/forms.js';
 import { formatMoney } from '../../utils/format.js';
 import { openRazorpay } from '../../utils/razorpay.js';
+import { storedReferral } from '../../services/api/affiliates.js';
 import { AcademyHeader } from '../public/AcademyLandingPage.jsx';
 
 const schema = z.object({
@@ -65,7 +66,7 @@ export function CheckoutPage() {
       if (attempt.current.coupon !== applied) attempt.current = { key: newKey(), orderId: null, coupon: applied };
       let orderId = attempt.current.orderId;
       if (!orderId) {
-        const order = await checkoutApi.checkout({ courseId, couponCode: applied || undefined, billing: { name: v.name, phone: v.phone || undefined, state: v.state || undefined, gstin: v.gstin || undefined } }, attempt.current.key);
+        const order = await checkoutApi.checkout({ courseId, couponCode: applied || undefined, billing: { name: v.name, phone: v.phone || undefined, state: v.state || undefined, gstin: v.gstin || undefined }, affiliateCode: storedReferral() ?? undefined }, attempt.current.key);
         orderId = order.id;
         attempt.current.orderId = orderId;
         if (order.status === 'PAID') return navigate(`/learn/orders/${orderId}`, { replace: true });

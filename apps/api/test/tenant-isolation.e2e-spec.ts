@@ -47,6 +47,9 @@ const WORKSPACE_ROUTES_COVERED = [
   'POST /api/v1/creator/certificates/:id/revoke', 'POST /api/v1/creator/certificates/:id/reinstate',
   // Phase 6 routes: isolation covered in video.e2e-spec.ts
   'POST /api/v1/creator/files/:id/parts', 'GET /api/v1/creator/videos', 'POST /api/v1/creator/videos', 'PATCH /api/v1/creator/videos/:id', 'GET /api/v1/creator/videos/:id/preview', 'DELETE /api/v1/creator/videos/:id',
+  // Phase 10 — affiliates (affiliates.e2e-spec.ts)
+  'GET /api/v1/creator/affiliates/program', 'PUT /api/v1/creator/affiliates/program', 'GET /api/v1/creator/affiliates', 'GET /api/v1/creator/affiliates/conversions',
+  'PATCH /api/v1/creator/affiliates/:id', 'POST /api/v1/creator/affiliates/:id/payouts',
   // Phase 10 — contacts, campaigns, automations (cross-tenant checks in marketing.e2e-spec.ts)
   'GET /api/v1/creator/leads', 'POST /api/v1/creator/leads/import', 'GET /api/v1/creator/leads/:id', 'PATCH /api/v1/creator/leads/:id', 'DELETE /api/v1/creator/leads/:id',
   'GET /api/v1/creator/campaigns', 'POST /api/v1/creator/campaigns', 'GET /api/v1/creator/campaigns/:id', 'PATCH /api/v1/creator/campaigns/:id', 'POST /api/v1/creator/campaigns/:id/test',

@@ -1382,6 +1382,7 @@ model Order {
   gatewayAccountId String?             @db.Char(25)
   billing          Json
   idempotencyKey   String?             @db.VarChar(64)
+  affiliateId      String?             @db.Char(25)
   paidAt           DateTime?           @db.DateTime(3)
   failureReason    String?             @db.VarChar(500)
   expiresAt        DateTime            @db.DateTime(3)
@@ -1514,6 +1515,8 @@ enum LedgerType {
   REFUND
   TAX_REVERSAL
   COMMISSION_REVERSAL
+  AFFILIATE_COMMISSION
+  AFFILIATE_REVERSAL
 }
 
 /// Signed amounts from the creator's point of view: SALE +, fees/commission/tax/refunds −.
@@ -2112,4 +2115,75 @@ model AutomationRun {
   @@unique([tenantId, id])
   @@unique([tenantId, automationId, dedupeKey])
   @@index([tenantId, automationId, createdAt])
+}
+
+// ───────────────────────────── Affiliates (Phase 10) ─────────────────────────────
+
+model AffiliateProgram {
+  id             String   @id @default(cuid()) @db.Char(25)
+  tenantId       String   @unique @db.Char(25)
+  enabled        Boolean  @default(false)
+  defaultPercent Decimal  @default(20) @db.Decimal(5, 2)
+  cookieDays     Int      @default(30)
+  holdDays       Int      @default(7)
+  autoApprove    Boolean  @default(false)
+  terms          String?  @db.VarChar(2000)
+  createdAt      DateTime @default(now()) @db.DateTime(3)
+  updatedAt      DateTime @updatedAt @db.DateTime(3)
+
+  @@unique([tenantId, id])
+}
+
+model Affiliate {
+  id                String                @id @default(cuid()) @db.Char(25)
+  tenantId          String                @db.Char(25)
+  userId            String                @db.Char(25)
+  code              String                @db.VarChar(32)
+  commissionPercent Decimal               @db.Decimal(5, 2)
+  status            String                @default("PENDING") @db.VarChar(16)
+  payoutDetails     String?               @db.VarChar(500)
+  approvedAt        DateTime?             @db.DateTime(3)
+  createdAt         DateTime              @default(now()) @db.DateTime(3)
+  updatedAt         DateTime              @updatedAt @db.DateTime(3)
+  conversions       AffiliateConversion[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, code])
+  @@unique([tenantId, userId])
+}
+
+model AffiliateClick {
+  id          String   @id @default(cuid()) @db.Char(25)
+  tenantId    String   @db.Char(25)
+  affiliateId String   @db.Char(25)
+  path        String   @db.VarChar(300)
+  ipHash      String?  @db.Char(64)
+  createdAt   DateTime @default(now()) @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, affiliateId, createdAt])
+}
+
+model AffiliateConversion {
+  id           String    @id @default(cuid()) @db.Char(25)
+  tenantId     String    @db.Char(25)
+  affiliateId  String    @db.Char(25)
+  orderId      String    @db.Char(25)
+  currency     String    @db.Char(3)
+  saleAmount   Decimal   @db.Decimal(19, 4)
+  percent      Decimal   @db.Decimal(5, 2)
+  commission   Decimal   @db.Decimal(19, 4)
+  status       String    @default("PENDING") @db.VarChar(16)
+  approvableAt DateTime  @db.DateTime(3)
+  approvedAt   DateTime? @db.DateTime(3)
+  paidAt       DateTime? @db.DateTime(3)
+  payoutRef    String?   @db.VarChar(191)
+  createdAt    DateTime  @default(now()) @db.DateTime(3)
+  updatedAt    DateTime  @updatedAt @db.DateTime(3)
+  affiliate    Affiliate @relation(fields: [tenantId, affiliateId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, orderId])
+  @@index([tenantId, affiliateId, status])
+  @@index([status, approvableAt])
 }

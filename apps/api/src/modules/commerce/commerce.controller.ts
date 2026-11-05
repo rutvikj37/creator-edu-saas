@@ -59,6 +59,7 @@ class QuoteDto {
   @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(40) couponCode?: string | null;
 }
 class CheckoutDto extends QuoteDto {
+  @ApiPropertyOptional({ description: 'Affiliate referral code (?ref=)' }) @IsOptional() @Transform(trim) @IsString() @MaxLength(32) affiliateCode?: string | null;
   @ApiProperty({ type: BillingDto }) @ValidateNested() @Type(() => BillingDto) billing: BillingDto;
 }
 class ConfirmDto {
