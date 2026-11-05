@@ -157,7 +157,7 @@ describe('Platform administration (e2e)', () => {
     expect(d.series.tenantRegistrations).toHaveLength(30);
     expect(d.series.tenantRegistrations.reduce((s: number, x: any) => s + x.count, 0)).toBe(d.tenants.total);
     expect(d.subscriptions.mrr).toEqual(expect.arrayContaining([{ currency: 'INR', amount: 2999 }]));
-    expect(d.commerce.available).toBe(false);
+    expect(d.commerce).toMatchObject({ available: true, paidOrders: 0, gmv: [] });
   });
 
   it('support ticket conversation with internal notes and SLA fields', async () => {

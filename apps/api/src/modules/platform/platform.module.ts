@@ -12,12 +12,13 @@ import { ContentController } from './content.controller.js';
 import { CreatorSupportController, PlatformSupportController } from './support.controller.js';
 import { SupportService } from './support.service.js';
 import { BillingController } from './billing.controller.js';
+import { FinanceController } from './finance.controller.js';
 
 @Module({
   imports: [AuthModule],
   controllers: [
     PlatformTenantsController, PlansController, SettingsController, AdminsController, AuditController, DashboardController,
-    ContentController, CreatorSupportController, PlatformSupportController, BillingController,
+    ContentController, CreatorSupportController, PlatformSupportController, BillingController, FinanceController,
   ],
   providers: [PlatformTenantsService, DashboardService, SupportService],
 })

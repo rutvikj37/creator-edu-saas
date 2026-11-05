@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsEmail, IsInt, IsObject, IsOptional, IsString, IsUrl, Length, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { IsBoolean, IsIn, IsEmail, IsInt, IsObject, IsOptional, IsString, IsUrl, Length, Matches, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 const hex = /^#[0-9a-fA-F]{6}$/;
@@ -42,6 +42,8 @@ export class UpdateBusinessDto {
   @ApiPropertyOptional() @IsOptional() @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value)) @Matches(/^([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z])?$/, { message: 'Invalid GSTIN format' }) gstin?: string;
   @ApiPropertyOptional() @IsOptional() @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value)) @Matches(/^([A-Z]{5}[0-9]{4}[A-Z])?$/, { message: 'Invalid PAN format' }) pan?: string;
   @ApiPropertyOptional() @IsOptional() @Matches(/^[A-Z0-9-]{1,12}$/, { message: 'Up to 12 letters, digits or hyphens' }) invoicePrefix?: string;
+  @ApiPropertyOptional({ description: 'GST slab applied to course sales when GST-registered' }) @IsOptional() @IsIn([0, 5, 12, 18, 28], { message: 'Choose a GST rate: 0, 5, 12, 18 or 28' }) taxRate?: number;
+  @ApiPropertyOptional({ description: 'Course prices already include GST' }) @IsOptional() @IsBoolean() pricesIncludeTax?: boolean;
 }
 
 export class OnboardingStepDto {

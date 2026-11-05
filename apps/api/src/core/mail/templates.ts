@@ -36,6 +36,22 @@ export const emailTemplates = {
       text: `Hi ${p.name},\n\nVerify your email: ${p.url}\nOr enter code ${p.code}. Expires in 24 hours.`,
     };
   },
+  purchaseReceipt(p: { brand: string; name: string; orderNumber: string; items: string[]; total: string; url: string }): RenderedEmail {
+    const list = p.items.map((i) => `<li>${escapeHtml(i)}</li>`).join('');
+    return {
+      subject: `Payment received — order ${p.orderNumber}`,
+      html: layout(p.brand, 'Thanks for your purchase', `<p>Hi ${escapeHtml(p.name)},</p><p>We received your payment of <strong>${escapeHtml(p.total)}</strong> for order ${escapeHtml(p.orderNumber)}. You now have access to:</p><ul>${list}</ul><p>Your invoice is available in your order history.</p>`, { label: 'Start learning', url: p.url }),
+      text: `Hi ${p.name},\n\nWe received your payment of ${p.total} for order ${p.orderNumber}.\nYou now have access to:\n${p.items.map((i) => `- ${i}`).join('\n')}\n\nStart learning: ${p.url}`,
+    };
+  },
+  refundIssued(p: { brand: string; name: string; orderNumber: string; amount: string; accessRevoked: boolean }): RenderedEmail {
+    const access = p.accessRevoked ? 'Access to the purchased course has ended.' : 'Your course access is unchanged.';
+    return {
+      subject: `Refund processed — order ${p.orderNumber}`,
+      html: layout(p.brand, 'Your refund is on its way', `<p>Hi ${escapeHtml(p.name)},</p><p>A refund of <strong>${escapeHtml(p.amount)}</strong> for order ${escapeHtml(p.orderNumber)} has been processed. Banks usually take 5–7 working days to show it.</p><p>${access}</p>`),
+      text: `Hi ${p.name},\n\nA refund of ${p.amount} for order ${p.orderNumber} has been processed. Banks usually take 5-7 working days to show it.\n${access}`,
+    };
+  },
   passwordReset(p: { brand: string; name: string; url: string }): RenderedEmail {
     return {
       subject: `Reset your ${p.brand} password`,

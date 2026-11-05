@@ -23,10 +23,7 @@ export function dailySeries(start: Date, end: Date, rows: Array<{ day: string | 
   return out;
 }
 
-/**
- * Platform KPIs computed from live data. Transaction revenue and commissions are added when the
- * commerce module (Phase 7) records payments; until then they are reported as not yet available.
- */
+/** Platform KPIs computed from live data, including academy sales from the commerce ledger. */
 @Injectable()
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
@@ -78,7 +75,33 @@ export class DashboardService {
       },
       planDistribution: planDist.map((p) => ({ planId: p.planId, name: planName.get(p.planId) ?? 'Unknown', count: p._count._all })),
       series: { tenantRegistrations: dailySeries(start, end, newTenants), studentRegistrations: dailySeries(start, end, newStudents) },
-      commerce: { available: false, reason: 'Transaction revenue appears once payments are enabled.' },
+      commerce: await this.commerce(start, end),
+    };
+  }
+
+  /**
+   * Academy sales from the ledger. Academies collect through their own Razorpay accounts, so this is
+   * GMV (not platform cash); platformCommission is what academies owe the platform under their plan.
+   */
+  async commerce(start: Date, end: Date) {
+    const [byType, paidOrders, sellingAcademies, daily] = await Promise.all([
+      this.prisma.ledgerEntry.groupBy({ by: ['type', 'currency'], where: { createdAt: { gte: start, lte: end } }, _sum: { amount: true } }),
+      this.prisma.order.count({ where: { paidAt: { gte: start, lte: end } } }),
+      this.prisma.paymentGatewayAccount.count({ where: { isActive: true, status: 'VERIFIED' } }),
+      this.prisma.$queryRaw<Array<{ day: Date; count: bigint }>>`SELECT DATE(paidAt) AS day, COUNT(*) AS count FROM \`Order\` WHERE paidAt BETWEEN ${start} AND ${end} GROUP BY DATE(paidAt)`,
+    ]);
+    const cur: Record<string, Record<string, number>> = {};
+    for (const r of byType) (cur[r.currency] ??= {})[r.type] = Number(r._sum.amount ?? 0);
+    const round = (n: number) => Math.round(n * 100) / 100;
+    const per = (fn: (t: Record<string, number>) => number) => Object.entries(cur).map(([currency, t]) => ({ currency, amount: round(fn(t)) }));
+    return {
+      available: true,
+      paidOrders,
+      sellingAcademies,
+      gmv: per((t) => t.SALE ?? 0),
+      refunds: per((t) => -(t.REFUND ?? 0)),
+      platformCommission: per((t) => -((t.PLATFORM_COMMISSION ?? 0) + (t.COMMISSION_REVERSAL ?? 0))),
+      series: dailySeries(start, end, daily),
     };
   }
 }

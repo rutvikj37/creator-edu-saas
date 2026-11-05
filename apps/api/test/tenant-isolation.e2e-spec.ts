@@ -47,6 +47,11 @@ const WORKSPACE_ROUTES_COVERED = [
   'POST /api/v1/creator/certificates/:id/revoke', 'POST /api/v1/creator/certificates/:id/reinstate',
   // Phase 6 routes: isolation covered in video.e2e-spec.ts
   'POST /api/v1/creator/files/:id/parts', 'GET /api/v1/creator/videos', 'POST /api/v1/creator/videos', 'PATCH /api/v1/creator/videos/:id', 'GET /api/v1/creator/videos/:id/preview', 'DELETE /api/v1/creator/videos/:id',
+  // Phase 7 — commerce (cross-tenant behaviour is also exercised in commerce.e2e-spec.ts)
+  'GET /api/v1/creator/payments/razorpay', 'PUT /api/v1/creator/payments/razorpay', 'POST /api/v1/creator/payments/razorpay/verify', 'PATCH /api/v1/creator/payments/razorpay', 'DELETE /api/v1/creator/payments/razorpay',
+  'GET /api/v1/creator/coupons', 'POST /api/v1/creator/coupons', 'PATCH /api/v1/creator/coupons/:id', 'DELETE /api/v1/creator/coupons/:id',
+  'GET /api/v1/creator/orders', 'GET /api/v1/creator/orders/summary', 'GET /api/v1/creator/orders/:id', 'GET /api/v1/creator/orders/:id/invoice', 'POST /api/v1/creator/orders/:id/refunds',
+  'GET /api/v1/creator/transactions',
   'GET /api/v1/creator/staff', 'POST /api/v1/creator/staff/invitations', 'DELETE /api/v1/creator/staff/invitations/:id', 'PATCH /api/v1/creator/staff/:memberId', 'DELETE /api/v1/creator/staff/:memberId',
 ];
 
@@ -93,6 +98,14 @@ describe('Tenant isolation (e2e)', () => {
     await authed(app, B.session).patch(`/api/v1/creator/domains/${domainA.id}/primary`).expect(404);
     await authed(app, B.session).delete(`/api/v1/creator/domains/${domainA.id}`).expect(404);
     expect(await prisma.tenantDomain.findUnique({ where: { id: domainA.id } })).not.toBeNull();
+
+    const coupon = (await authed(app, A.session).post('/api/v1/creator/coupons').send({ code: 'ALPHA20', type: 'PERCENT', value: 20 }).expect(201)).body.data;
+    await authed(app, B.session).patch(`/api/v1/creator/coupons/${coupon.id}`).send({ isActive: false }).expect(404);
+    await authed(app, B.session).delete(`/api/v1/creator/coupons/${coupon.id}`).expect(404);
+    expect((await authed(app, B.session).get('/api/v1/creator/coupons').expect(200)).body.data).toEqual([]);
+    // Same code is free to use in another academy.
+    await authed(app, B.session).post('/api/v1/creator/coupons').send({ code: 'ALPHA20', type: 'FIXED', value: 50 }).expect(201);
+    await authed(app, B.session).get('/api/v1/creator/orders/ckxxxxxxxxxxxxxxxxxxxxxxx/invoice').expect(404);
   });
 
   it('client-supplied tenantId is rejected, never trusted', async () => {
@@ -155,6 +168,11 @@ describe('Tenant isolation (e2e)', () => {
     await authed(app, session).get('/api/v1/creator/domains').expect(403);
     await authed(app, session).post('/api/v1/creator/domains').send({ hostname: 'x.instructor-example.com' }).expect(403);
     await authed(app, session).get('/api/v1/creator/members').expect(403);
+    await authed(app, session).get('/api/v1/creator/orders').expect(403);
+    await authed(app, session).get('/api/v1/creator/transactions').expect(403);
+    await authed(app, session).post('/api/v1/creator/orders/ckxxxxxxxxxxxxxxxxxxxxxxx/refunds').send({}).expect(403);
+    await authed(app, session).get('/api/v1/creator/coupons').expect(403);
+    await authed(app, session).put('/api/v1/creator/payments/razorpay').send({ keyId: 'rzp_test_AbCdEf123456', keySecret: 'secret-secret' }).expect(403);
 
     // Removing membership cuts access immediately (membership verified per request).
     await prisma.tenantMember.updateMany({ where: { userId: user.id }, data: { status: 'REMOVED' } });

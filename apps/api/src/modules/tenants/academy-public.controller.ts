@@ -25,7 +25,9 @@ export class AcademyPublicController {
     if (host.kind !== 'tenant') return null;
     const t = await this.prisma.tenant.findUniqueOrThrow({ where: { id: host.tenantId }, select: { name: true, slug: true, status: true, locale: true, defaultCurrency: true, academy: true } });
     const a = t.academy;
+    const gateway = await this.prisma.paymentGatewayAccount.count({ where: { tenantId: host.tenantId, isActive: true, status: 'VERIFIED' } });
     return {
+      paymentsEnabled: gateway > 0,
       name: t.name, slug: t.slug, isLive: t.status === 'ACTIVE', acceptingRegistrations: t.status === 'ACTIVE', locale: t.locale, currency: t.defaultCurrency,
       tagline: a?.tagline ?? null, description: a?.description ?? null, supportEmail: a?.supportEmail ?? null, socialLinks: a?.socialLinks ?? {},
       theme: { primaryColor: a?.primaryColor ?? '#4f46e5', accentColor: a?.accentColor ?? '#0d9488', fontHeading: a?.fontHeading ?? 'Inter', fontBody: a?.fontBody ?? 'Inter' },

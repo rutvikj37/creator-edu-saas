@@ -17,7 +17,7 @@ export const tenantHost = (slug: string) => `${slug}.lvh.me`;
 
 export async function createTestApp() {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-  const app = moduleRef.createNestApplication<NestExpressApplication>({ bufferLogs: true });
+  const app = moduleRef.createNestApplication<NestExpressApplication>({ bufferLogs: true, rawBody: true });
   configureApp(app);
   await app.init();
   return app;

@@ -20,6 +20,7 @@ import { AcademyModule } from './modules/academy/academy.module.js';
 import { CoursesModule } from './modules/courses/courses.module.js';
 import { StaffModule } from './modules/staff/staff.module.js';
 import { LearningModule } from './modules/learning/learning.module.js';
+import { CommerceModule } from './modules/commerce/commerce.module.js';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard.js';
 import { TenantGuard } from './modules/auth/guards/tenant.guard.js';
 import { PermissionsGuard } from './modules/auth/guards/permissions.guard.js';
@@ -45,6 +46,7 @@ import { PermissionsGuard } from './modules/auth/guards/permissions.guard.js';
     CoursesModule,
     StaffModule,
     LearningModule,
+    CommerceModule,
     HealthModule,
     SystemModule,
   ],

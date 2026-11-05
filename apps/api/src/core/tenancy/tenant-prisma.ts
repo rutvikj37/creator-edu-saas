@@ -12,6 +12,7 @@ export const TENANT_MODELS = new Set<string>(['TenantMember', 'TenantSetting', '
   'Enrollment', 'LessonProgress', 'LessonNote', 'CourseBookmark', 'LessonComment', 'Quiz', 'QuizQuestion', 'QuizOption', 'QuizAttempt', 'QuizAnswer',
   'Assignment', 'AssignmentSubmission', 'CertificateTemplate', 'Certificate',
   'VideoAsset', 'VideoPlaybackSession',
+  'PaymentGatewayAccount', 'Coupon', 'CouponRedemption', 'Order', 'OrderItem', 'Payment', 'Refund', 'LedgerEntry', 'Invoice', 'TenantSequence',
 ]);
 
 export class TenantContextMissingError extends Error {

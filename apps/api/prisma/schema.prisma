@@ -631,22 +631,24 @@ model Academy {
 }
 
 model TenantBusinessProfile {
-  id            String   @id @default(cuid()) @db.Char(25)
-  tenantId      String   @unique @db.Char(25)
-  legalName     String?  @db.VarChar(200)
-  addressLine1  String?  @db.VarChar(200)
-  addressLine2  String?  @db.VarChar(200)
-  city          String?  @db.VarChar(100)
-  state         String?  @db.VarChar(100)
-  postalCode    String?  @db.VarChar(20)
-  country       String?  @db.Char(2)
-  gstRegistered Boolean  @default(false)
-  gstin         String?  @db.VarChar(15)
-  pan           String?  @db.VarChar(10)
-  invoicePrefix String   @default("INV") @db.VarChar(12)
-  createdAt     DateTime @default(now()) @db.DateTime(3)
-  updatedAt     DateTime @updatedAt @db.DateTime(3)
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id               String   @id @default(cuid()) @db.Char(25)
+  tenantId         String   @unique @db.Char(25)
+  legalName        String?  @db.VarChar(200)
+  addressLine1     String?  @db.VarChar(200)
+  addressLine2     String?  @db.VarChar(200)
+  city             String?  @db.VarChar(100)
+  state            String?  @db.VarChar(100)
+  postalCode       String?  @db.VarChar(20)
+  country          String?  @db.Char(2)
+  gstRegistered    Boolean  @default(false)
+  gstin            String?  @db.VarChar(15)
+  pan              String?  @db.VarChar(10)
+  invoicePrefix    String   @default("INV") @db.VarChar(12)
+  taxRate          Decimal  @default(18) @db.Decimal(5, 2)
+  pricesIncludeTax Boolean  @default(true)
+  createdAt        DateTime @default(now()) @db.DateTime(3)
+  updatedAt        DateTime @updatedAt @db.DateTime(3)
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, id])
 }
@@ -1263,4 +1265,296 @@ model VideoPlaybackSession {
   @@index([tenantId, userId, lastSeenAt])
 }
 
+// ───────────────────────────── Commerce (Phase 7) ─────────────────────────────
 
+/// Razorpay only for now (owner decision 2026-11-05). Add values here when other gateways are introduced.
+enum PaymentProviderKey {
+  RAZORPAY
+}
+
+enum GatewayMode {
+  TEST
+  LIVE
+}
+
+enum GatewayStatus {
+  CONFIGURED
+  VERIFIED
+  ERROR
+}
+
+/// A tenant's own Razorpay merchant account (creator-owned model). Secrets are AES-256-GCM encrypted.
+model PaymentGatewayAccount {
+  id               String             @id @default(cuid()) @db.Char(25)
+  tenantId         String             @db.Char(25)
+  provider         PaymentProviderKey
+  mode             GatewayMode        @default(TEST)
+  /// Razorpay key id.
+  publicKey        String             @db.VarChar(191)
+  secretEnc        String             @db.Text
+  webhookSecretEnc String?            @db.Text
+  status           GatewayStatus      @default(CONFIGURED)
+  lastVerifiedAt   DateTime?          @db.DateTime(3)
+  lastError        String?            @db.VarChar(500)
+  isDefault        Boolean            @default(false)
+  isActive         Boolean            @default(true)
+  createdById      String             @db.Char(25)
+  createdAt        DateTime           @default(now()) @db.DateTime(3)
+  updatedAt        DateTime           @updatedAt @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, provider])
+}
+
+enum CouponType {
+  PERCENT
+  FIXED
+}
+
+model Coupon {
+  id              String             @id @default(cuid()) @db.Char(25)
+  tenantId        String             @db.Char(25)
+  code            String             @db.VarChar(40)
+  description     String?            @db.VarChar(200)
+  type            CouponType
+  value           Decimal            @db.Decimal(19, 4)
+  maxRedemptions  Int?
+  perUserLimit    Int                @default(1)
+  minOrderAmount  Decimal?           @db.Decimal(19, 4)
+  startsAt        DateTime?          @db.DateTime(3)
+  endsAt          DateTime?          @db.DateTime(3)
+  courseIds       Json?
+  isActive        Boolean            @default(true)
+  redemptionCount Int                @default(0)
+  createdById     String             @db.Char(25)
+  createdAt       DateTime           @default(now()) @db.DateTime(3)
+  updatedAt       DateTime           @updatedAt @db.DateTime(3)
+  deletedAt       DateTime?          @db.DateTime(3)
+  redemptions     CouponRedemption[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, code])
+}
+
+model CouponRedemption {
+  id        String   @id @default(cuid()) @db.Char(25)
+  tenantId  String   @db.Char(25)
+  couponId  String   @db.Char(25)
+  orderId   String   @db.Char(25)
+  userId    String   @db.Char(25)
+  amount    Decimal  @db.Decimal(19, 4)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  coupon    Coupon   @relation(fields: [tenantId, couponId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, orderId])
+  @@index([tenantId, couponId, userId])
+}
+
+enum OrderStatus {
+  PENDING
+  PAYMENT_INITIATED
+  PAID
+  FAILED
+  CANCELLED
+  EXPIRED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+model Order {
+  id               String              @id @default(cuid()) @db.Char(25)
+  tenantId         String              @db.Char(25)
+  number           String              @db.VarChar(32)
+  userId           String              @db.Char(25)
+  status           OrderStatus         @default(PENDING)
+  currency         String              @db.Char(3)
+  subtotalAmount   Decimal             @db.Decimal(19, 4)
+  discountAmount   Decimal             @default(0) @db.Decimal(19, 4)
+  taxAmount        Decimal             @default(0) @db.Decimal(19, 4)
+  totalAmount      Decimal             @db.Decimal(19, 4)
+  refundedAmount   Decimal             @default(0) @db.Decimal(19, 4)
+  taxRate          Decimal?            @db.Decimal(5, 2)
+  taxInclusive     Boolean             @default(true)
+  couponId         String?             @db.Char(25)
+  couponCode       String?             @db.VarChar(40)
+  provider         PaymentProviderKey?
+  gatewayAccountId String?             @db.Char(25)
+  billing          Json
+  idempotencyKey   String?             @db.VarChar(64)
+  paidAt           DateTime?           @db.DateTime(3)
+  failureReason    String?             @db.VarChar(500)
+  expiresAt        DateTime            @db.DateTime(3)
+  createdAt        DateTime            @default(now()) @db.DateTime(3)
+  updatedAt        DateTime            @updatedAt @db.DateTime(3)
+  items            OrderItem[]
+  payments         Payment[]
+  refunds          Refund[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, number])
+  @@unique([tenantId, userId, idempotencyKey])
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, userId, createdAt])
+  @@index([status, updatedAt])
+}
+
+model OrderItem {
+  id             String   @id @default(cuid()) @db.Char(25)
+  tenantId       String   @db.Char(25)
+  orderId        String   @db.Char(25)
+  courseId       String   @db.Char(25)
+  title          String   @db.VarChar(200)
+  unitAmount     Decimal  @db.Decimal(19, 4)
+  discountAmount Decimal  @default(0) @db.Decimal(19, 4)
+  totalAmount    Decimal  @db.Decimal(19, 4)
+  createdAt      DateTime @default(now()) @db.DateTime(3)
+  order          Order    @relation(fields: [tenantId, orderId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, courseId])
+}
+
+enum PaymentStatus {
+  CREATED
+  CAPTURED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+model Payment {
+  id                String             @id @default(cuid()) @db.Char(25)
+  tenantId          String             @db.Char(25)
+  orderId           String             @db.Char(25)
+  provider          PaymentProviderKey
+  gatewayAccountId  String             @db.Char(25)
+  providerOrderId   String             @db.VarChar(191)
+  providerPaymentId String?            @db.VarChar(191)
+  status            PaymentStatus      @default(CREATED)
+  amount            Decimal            @db.Decimal(19, 4)
+  currency          String             @db.Char(3)
+  method            String?            @db.VarChar(40)
+  feeAmount         Decimal?           @db.Decimal(19, 4)
+  failureReason     String?            @db.VarChar(500)
+  raw               Json?
+  capturedAt        DateTime?          @db.DateTime(3)
+  createdAt         DateTime           @default(now()) @db.DateTime(3)
+  updatedAt         DateTime           @updatedAt @db.DateTime(3)
+  order             Order              @relation(fields: [tenantId, orderId], references: [tenantId, id], onDelete: Cascade)
+  refunds           Refund[]
+
+  @@unique([tenantId, id])
+  @@unique([provider, providerOrderId])
+  @@index([provider, providerPaymentId])
+  @@index([tenantId, status, createdAt])
+}
+
+enum RefundStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+model Refund {
+  id               String       @id @default(cuid()) @db.Char(25)
+  tenantId         String       @db.Char(25)
+  orderId          String       @db.Char(25)
+  paymentId        String       @db.Char(25)
+  amount           Decimal      @db.Decimal(19, 4)
+  reason           String?      @db.VarChar(500)
+  status           RefundStatus @default(PENDING)
+  providerRefundId String?      @db.VarChar(191)
+  revokeAccess     Boolean      @default(false)
+  failureReason    String?      @db.VarChar(500)
+  requestedById    String       @db.Char(25)
+  processedAt      DateTime?    @db.DateTime(3)
+  createdAt        DateTime     @default(now()) @db.DateTime(3)
+  updatedAt        DateTime     @updatedAt @db.DateTime(3)
+  order            Order        @relation(fields: [tenantId, orderId], references: [tenantId, id], onDelete: Cascade)
+  payment          Payment      @relation(fields: [tenantId, paymentId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([providerRefundId])
+  @@index([tenantId, status, createdAt])
+}
+
+enum WebhookStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+}
+
+/// Inbound provider events. Not tenant-scoped (resolved from the gateway account); unique per provider event id.
+model WebhookEvent {
+  id               String             @id @default(cuid()) @db.Char(25)
+  provider         PaymentProviderKey
+  gatewayAccountId String?            @db.Char(25)
+  tenantId         String?            @db.Char(25)
+  eventId          String             @db.VarChar(191)
+  type             String             @db.VarChar(100)
+  payload          Json
+  status           WebhookStatus      @default(RECEIVED)
+  error            String?            @db.VarChar(1000)
+  attempts         Int                @default(0)
+  receivedAt       DateTime           @default(now()) @db.DateTime(3)
+  processedAt      DateTime?          @db.DateTime(3)
+
+  @@unique([provider, eventId])
+  @@index([status, receivedAt])
+  @@index([tenantId, receivedAt])
+}
+
+enum LedgerType {
+  SALE
+  TAX
+  GATEWAY_FEE
+  PLATFORM_COMMISSION
+  REFUND
+  TAX_REVERSAL
+  COMMISSION_REVERSAL
+}
+
+/// Signed amounts from the creator's point of view: SALE +, fees/commission/tax/refunds −.
+model LedgerEntry {
+  id          String     @id @default(cuid()) @db.Char(25)
+  tenantId    String     @db.Char(25)
+  orderId     String?    @db.Char(25)
+  refundId    String?    @db.Char(25)
+  type        LedgerType
+  amount      Decimal    @db.Decimal(19, 4)
+  currency    String     @db.Char(3)
+  description String?    @db.VarChar(255)
+  createdAt   DateTime   @default(now()) @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, type, createdAt])
+  @@index([type, createdAt])
+  @@index([tenantId, orderId])
+}
+
+model Invoice {
+  id       String   @id @default(cuid()) @db.Char(25)
+  tenantId String   @db.Char(25)
+  orderId  String   @db.Char(25)
+  number   String   @db.VarChar(40)
+  seller   Json
+  buyer    Json
+  lines    Json
+  totals   Json
+  issuedAt DateTime @default(now()) @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, number])
+  @@unique([tenantId, orderId])
+}
+
+/// Gap-free per-tenant counters (order and invoice numbers). Incremented inside the paying transaction.
+model TenantSequence {
+  tenantId String @db.Char(25)
+  name     String @db.VarChar(40)
+  value    Int    @default(0)
+
+  @@id([tenantId, name])
+}
