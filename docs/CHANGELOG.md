@@ -2,6 +2,14 @@
 
 Format: Keep a Changelog. Versions follow SemVer once Phase 1 ships.
 
+## [0.11.0] — 2026-11-05 — Video management & processing
+### Added
+- Bunny Stream provider (provider-neutral interface): direct resumable browser uploads with short-lived credentials, webhook handling verified against the Bunny API, status history, timeouts, retries, cleanup; token-authenticated playback with resume and progress.
+- Encrypted (AES-256-GCM) Google Drive backups of original videos and course documents with checksum verification, retries, quota monitoring and verified restore.
+- Video usage tracking with configurable provider rates; Super Admin Video usage and Backups pages; creator video library redesign.
+### Fixed
+- Filenames in Indic scripts kept intact; large sizes shown in TB; BigInt sizes in video details serialised correctly.
+
 ## [0.10.0] — 2026-11-05 — Phase 10: Growth & advanced
 ### Added
 - Notifications (in-app, email, web push, SMS/WhatsApp adapters) with preferences; contacts with consent; email campaigns and automations; affiliate program with held commissions and payouts; communities with moderation; memberships sold through checkout; analytics, CSV exports and a GST report; AI features (course outline, lesson draft, quiz questions, student study assistant) metered by monthly plan credits.

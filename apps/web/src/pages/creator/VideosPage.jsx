@@ -10,7 +10,7 @@ import { coursesApi } from '../../services/api/creator.js';
 import { formatDate } from '../../utils/format.js';
 
 export const fmtDuration = (s) => (s ? `${Math.floor(s / 3600) ? `${Math.floor(s / 3600)}:` : ''}${Math.floor((s % 3600) / 60)}:${String(s % 60).padStart(2, '0')}` : '—');
-export const fmtSize = (b) => (!b ? '—' : b >= 1024 ** 3 ? `${(b / 1024 ** 3).toFixed(1)} GB` : b >= 1024 ** 2 ? `${Math.round(b / 1024 ** 2)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
+export const fmtSize = (b) => (!b ? '—' : b >= 1024 ** 4 ? `${(b / 1024 ** 4).toFixed(2)} TB` : b >= 1024 ** 3 ? `${(b / 1024 ** 3).toFixed(1)} GB` : b >= 1024 ** 2 ? `${Math.round(b / 1024 ** 2)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
 const STATUS_LABEL = { CREATED: 'Created', UPLOAD_AUTHORIZED: 'Waiting for upload', UPLOADING: 'Uploading', UPLOADED: 'Uploaded', PROCESSING: 'Processing', READY: 'Ready', FAILED: 'Failed', DELETING: 'Deleting', DELETED: 'Deleted' };
 const STATUS_TONE = { UPLOAD_AUTHORIZED: 'PENDING', UPLOADING: 'PROCESSING', UPLOADED: 'PROCESSING', PROCESSING: 'PROCESSING', DELETING: 'PENDING', CREATED: 'PENDING' };
@@ -257,7 +257,7 @@ function Details({ id, onClose, onPreview }) {
               <Row label="Original file">{v.originalFilename ?? v.file?.fileName}</Row>
               <Row label="Original size">{fmtSize(v.originalSize ?? v.file?.sizeBytes)}</Row>
               <Row label="Duration">{fmtDuration(v.durationSeconds)}</Row>
-              <Row label="Resolution">{v.width && v.height ? `${v.width}×${v.height}` : null}{v.availableResolutions?.length ? <span className="ml-2 text-xs text-muted">({v.availableResolutions.join(', ')})</span> : null}</Row>
+              <Row label="Resolution">{v.width && v.height ? <>{`${v.width}×${v.height}`}{v.availableResolutions?.length ? <span className="ml-2 text-xs text-muted">({v.availableResolutions.join(', ')})</span> : null}</> : null}</Row>
               <Row label="Storage used">{v.storageSize ? fmtSize(v.storageSize) : null}</Row>
               <Row label="Uploaded">{formatDate(v.createdAt, { withTime: true })}</Row>
               {v.readyAt && <Row label="Ready">{formatDate(v.readyAt, { withTime: true })}</Row>}

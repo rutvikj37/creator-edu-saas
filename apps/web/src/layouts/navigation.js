@@ -30,6 +30,8 @@ export const NAV = {
       label: 'System',
       items: [
         item('Settings', '/super-admin/settings', Settings, 3, { available: true, perm: 'platform.settings.manage' }),
+        item('Video usage', '/super-admin/video-usage', Video, 10, { available: true, perm: 'platform.system.read' }),
+        item('Backups', '/super-admin/backups', Boxes, 10, { available: true, perm: 'platform.system.read' }),
         item('Integrations', '/super-admin/integrations', Plug, 6),
         item('Audit logs', '/super-admin/audit-logs', ScrollText, 3, { available: true, perm: 'platform.audit.read' }),
         item('System status', '/super-admin/status', HeartPulse, 1, { available: true }),

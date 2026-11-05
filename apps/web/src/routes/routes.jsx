@@ -34,6 +34,8 @@ const TenantDetailPage = lazyNamed(() => import('../pages/admin/TenantDetailPage
 const PlansPage = lazyNamed(() => import('../pages/admin/PlansPage.jsx'), 'PlansPage');
 const PlanEditorPage = lazyNamed(() => import('../pages/admin/PlanEditorPage.jsx'), 'PlanEditorPage');
 const SettingsPage = lazyNamed(() => import('../pages/admin/SettingsPage.jsx'), 'SettingsPage');
+const BackupsPage = lazyNamed(() => import('../pages/admin/VideoAdminPages.jsx'), 'BackupsPage');
+const VideoUsagePage = lazyNamed(() => import('../pages/admin/VideoAdminPages.jsx'), 'VideoUsagePage');
 const AdminsPage = lazyNamed(() => import('../pages/admin/AdminsPage.jsx'), 'AdminsPage');
 const AuditLogsPage = lazyNamed(() => import('../pages/admin/AuditLogsPage.jsx'), 'AuditLogsPage');
 const CategoriesPage = lazyNamed(() => import('../pages/admin/ContentPages.jsx'), 'CategoriesPage');
@@ -137,6 +139,8 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/super-admin/plans/new', element: page(PlanEditorPage) },
             { path: '/super-admin/plans/:id', element: page(PlanEditorPage) },
             { path: '/super-admin/settings', element: page(SettingsPage) },
+            { path: '/super-admin/backups', element: page(BackupsPage) },
+            { path: '/super-admin/video-usage', element: page(VideoUsagePage) },
             { path: '/super-admin/admins', element: page(AdminsPage) },
             { path: '/super-admin/audit-logs', element: page(AuditLogsPage) },
             { path: '/super-admin/categories', element: page(CategoriesPage) },

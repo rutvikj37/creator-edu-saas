@@ -84,3 +84,4 @@ Status: **Phase 0 design**. Live docs will be served by Swagger at `/api/docs` (
 | 10 | `GET /creator/ai/usage` · `GET/PUT /creator/ai/settings` | courses.read / academy.manage | Monthly AI credits (plan `ai.credits`), study-assistant settings |
 | 10 | `POST /creator/ai/course-outline` · `POST /creator/ai/courses/:id/apply-outline` · `POST /creator/ai/lesson-draft` · `POST /creator/ai/quiz-questions` | courses.manage | Claude: outline (added as draft lessons), lesson draft (rich text), multiple-choice questions |
 | 10 | `GET/POST /learn/ai/tutor` | student with lesson access | Study assistant over the current lesson (daily per-student limit) |
+| 11 | `/videos/*`, `/videos/webhooks/bunny`, `/backups/*`, `/platform/videos/usage` | see [video-management/api-reference.md](video-management/api-reference.md) | Bunny Stream uploads/processing/playback, Google Drive backups, video usage |

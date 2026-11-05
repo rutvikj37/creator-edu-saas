@@ -152,6 +152,10 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 
 **Not verified here**: a live Claude call (no Anthropic API key in this environment; the platform needs `ANTHROPIC_API_KEY`), SMS/WhatsApp delivery (no provider credentials), web-push delivery to a real browser push service, and a paid Razorpay membership purchase (Razorpay blocked by network policy; tested with the Razorpay stand-in).
 
+## Video management & processing module (✅ 2026-11-05)
+
+Bunny Stream as primary video host (direct TUS uploads, webhook + API-verified processing status, token-authenticated playback), encrypted Google Drive backups with verification and restore, usage tracking and Super Admin dashboards. Full record, test mapping and items to verify with real accounts: [video-management/implementation-progress.md](video-management/implementation-progress.md). Verified by API e2e 108 ✅, API unit 103 ✅, web 96 ✅.
+
 ## Change log of this file
 - 2026-11-04 — Phase 0 documents drafted and approved.
 - 2026-11-04 — Phase 1 foundation completed.
@@ -164,3 +168,4 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 - 2026-11-05 — Phase 8 started: both domain options (branded subdomain, own domain).
 - 2026-11-05 — Phase 9 live learning completed (LiveKit + meeting links).
 - 2026-11-05 — Phase 10 growth & advanced completed (notifications, marketing, affiliates, communities, memberships, analytics/GST, AI credits).
+- 2026-11-05 — Video management module (Bunny Stream, Google Drive backups, usage) completed.
