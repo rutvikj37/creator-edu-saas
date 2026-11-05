@@ -1,6 +1,12 @@
 # Payment Integration
 
-Status: **Phase 0 design** — implemented in Phase 7. Nothing is live until real credentials are configured and webhook tests pass.
+Status: **Phase 7 shipped with Razorpay only** (owner decision, 2026-11-05), creator-owned merchant model. Cashfree, Stripe and PayPal below remain design only. Implementation: `apps/api/src/modules/commerce` (adapter in `providers/razorpay.adapter.ts`); see DEVELOPMENT_PROGRESS → Phase 7 for what is verified.
+
+### Go-live checklist (per academy)
+1. Creator → Payments: enter `rzp_test_` key id + secret → status **Connected**.
+2. Razorpay Dashboard → Webhooks: add the shown URL, events `payment.captured, payment.failed, order.paid, refund.processed, refund.failed`, and the same secret in Payments.
+3. Buy a course with a Razorpay test card/UPI; confirm access, invoice and the webhook marked processed. Refund it.
+4. Repeat with `rzp_live_` keys.
 
 ## Adapter interface
 ```ts

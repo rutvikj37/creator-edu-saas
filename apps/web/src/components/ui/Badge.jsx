@@ -22,7 +22,7 @@ export function Badge({ tone = 'neutral', dot = false, className, children }) {
 const STATUS_TONES = {
   ACTIVE: 'success', PUBLISHED: 'success', PAID: 'success', VERIFIED: 'success', COMPLETED: 'success', up: 'success', ok: 'success',
   DRAFT: 'neutral', PENDING: 'warning', PAYMENT_INITIATED: 'info', ONBOARDING: 'info', SCHEDULED: 'info', PROCESSING: 'info',
-  SUSPENDED: 'danger', FAILED: 'danger', CANCELLED: 'neutral', REFUNDED: 'neutral', PARTIALLY_REFUNDED: 'warning', down: 'danger', error: 'danger',
+  SUSPENDED: 'danger', FAILED: 'danger', CAPTURED: 'success', PROCESSED: 'success', CREATED: 'info', EXPIRED: 'neutral', EXHAUSTED: 'neutral', DISABLED: 'neutral', CANCELLED: 'neutral', REFUNDED: 'neutral', PARTIALLY_REFUNDED: 'warning', down: 'danger', error: 'danger',
 };
 
 export function StatusBadge({ status, label }) {

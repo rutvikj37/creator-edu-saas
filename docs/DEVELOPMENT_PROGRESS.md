@@ -11,7 +11,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 | 4 Creator platform | onboarding wizard, creator dashboard, academy profile/branding, course builder + drag-and-drop curriculum, uploads (S3 multipart), staff & instructors | creator can build a full draft course | ✅ 2026-11-04 |
 | 5 Student platform | student auth on academy host, catalog, free enrollment, player, progress, notes, bookmarks, discussions, quizzes, assignments, certificates (PDF + QR verify) | student completes free course and gets certificate | ✅ 2026-11-05 |
 | 6 Video (no DRM — scope set by owner 2026-11-05) | video library, direct + multipart uploads, signed playback sessions, resume, auto-complete, concurrent-stream limit, revocation | student plays an attached video; unauthorized playback denied | ✅ 2026-11-05 |
-| 7 Commerce | products, prices, cart, checkout, coupons, orders, Razorpay/Cashfree/Stripe/PayPal adapters, webhooks, refunds, invoices, ledger, commissions, SaaS billing & dunning | full 13-step e2e journey with provider test mode | ⬜ |
+| 7 Commerce (Razorpay only — owner decision 2026-11-05) | Razorpay gateway per academy, checkout, coupons, GST, orders, webhooks, reconciliation, refunds, invoices, ledger, commission recording, finance views | paid checkout → access → invoice → refund, verified against Razorpay's API contract | ✅ 2026-11-05 (SaaS plan billing pending) |
 | 8 Website builder | themes, templates, block page builder, versions, undo/redo, previews, blog, SEO meta injection, custom domains + TLS | creator publishes branded site on custom domain | ⬜ |
 | 9 Live learning | LiveKit (primary), Zoom, Google Meet adapters, scheduling, recurring, waiting room, chat/polls/Q&A, attendance, recordings, webinars, batches/cohorts | real A/V session with attendance recorded | ⬜ |
 | 10 Growth & advanced | notifications (email/SMS/WhatsApp/web-push), campaigns, automations, leads, consent, affiliates, communities, memberships, advanced analytics + exports, AI features with credits | module tests + e2e | ⬜ |
@@ -93,6 +93,22 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 
 **Fixed during verification**: final heartbeat on leaving the lesson was skipped (ref already detached) — now uses the last observed position · small files showed "0 MB".
 
+## Phase 7 — Commerce with Razorpay (✅ complete; SaaS plan billing pending)
+
+**Scope decisions (owner, 2026-11-05)**: Razorpay is the only gateway ("give only razorpay option now"). Cashfree, Stripe and PayPal are not built; the adapter interface remains so they can be added later. Merchant model is **creator-owned**: each academy connects its own Razorpay account and money settles directly to it, so platform settlements/payouts do not apply.
+
+**Delivered (API)**: Razorpay account per academy — keys AES-256-GCM encrypted, never returned, verified against Razorpay before selling (rejected keys vs unreachable reported separately) · checkout quote and order creation with coupons (percent/fixed, course scope, dates, total and per-student limits, minimum price) and GST (inclusive or exclusive, slab from business settings, only when GST-registered) · `Idempotency-Key` on checkout · Razorpay Orders API + Checkout.js; confirmation verifies the checkout signature and re-reads the payment from Razorpay (authorized payments are captured), never trusting the browser · webhooks verified with HMAC over the raw body, stored once per event id, processed in the worker by re-reading state from Razorpay (duplicates and out-of-order events are harmless) · fulfilment in one transaction guarded by a conditional status update: order PAID, enrolment, coupon redemption, ledger (sale, GST, Razorpay fee, plan commission), invoice numbered per Indian financial year · amount/currency mismatch never grants access · reconciliation every 5 minutes re-reads unsettled payments and refunds and expires unpaid orders after 2 h (late captures still fulfil) · 100% coupons complete without Razorpay · full and partial refunds through Razorpay with GST and commission reversals and optional access revocation (full refunds only), pending refunds settled by webhook or reconciliation · invoice PDFs · receipt and refund emails · platform finance overview (GMV, refunds, commission owed) and cross-academy transactions.
+
+**Delivered (Web)**: creator Payments page (connect keys, webhook setup with copyable URL, pause/resume, re-check, disconnect) · GST rate and inclusive/exclusive pricing in business settings · Coupons · Orders with revenue summary · order detail with payments, refunds, ledger, refund dialog and invoice · Transactions · student Buy now → Checkout (billing details, optional GSTIN, coupon, GST breakdown) → Razorpay Checkout.js → order status page that polls until confirmed → order history with invoices · finance dashboard with academy sales and a transactions page.
+
+**Verification**: API unit 60 ✅ (Razorpay adapter with real HMAC signatures and recorded response shapes, pricing/GST maths) · API e2e 74 ✅ (commerce suite: gateway setup, coupon + GST checkout, forged signature, webhook-only payment, invalid/duplicate webhooks, decline and retry, amount mismatch, reconciliation capture, expiry, 100% coupon, partial/pending/full refunds with revocation, ledger and summary figures, finance permissions, cross-academy isolation; isolation suite covers every new creator route) · web 63 ✅ · browser: creator connects keys (shown as "couldn't verify" because Razorpay is unreachable here), creates coupons, student sees GST checkout, applies coupons, completes a 100%-coupon purchase, downloads the invoice, opens the course; creator sees the order.
+
+**Not verified here**: a live payment against Razorpay. This environment's network policy blocks `api.razorpay.com` and `checkout.razorpay.com`; the e2e suite runs the production adapter against an in-memory implementation of Razorpay's documented API. Before going live: run one test-mode purchase and refund with real `rzp_test_` keys and a configured webhook.
+
+**Fixed during verification**: gateway deletion was allowed once payments were refunded (now blocked whenever payments exist) · the payments page called an unreachable Razorpay "rejected keys" · ₹0 orders said "Payment successful".
+
+**Pending / not in this phase**: SaaS plan billing and dunning (creators paying the platform for plans and collecting commission) · multi-course cart and bundles · GST reports/exports (Phase 10) · Content-Security-Policy, if one is added, must allow `checkout.razorpay.com` (script/frame) and `api.razorpay.com` (connect).
+
 ## Change log of this file
 - 2026-11-04 — Phase 0 documents drafted and approved.
 - 2026-11-04 — Phase 1 foundation completed.
@@ -101,3 +117,4 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 - 2026-11-04 — Phase 4 creator platform completed.
 - 2026-11-05 — Phase 5 student platform completed.
 - 2026-11-05 — Phase 6 video (no DRM) completed.
+- 2026-11-05 — Phase 7 commerce (Razorpay) completed; SaaS plan billing pending.

@@ -33,7 +33,9 @@ export function CourseLandingPage() {
     if (enrolled) return navigate(`/learn/courses/${c.id}`);
     if (auth.status !== 'authenticated') return navigate(`/register?next=${encodeURIComponent(`/courses/${slug}`)}`);
     if (c.isFree) return enroll.mutate();
+    return navigate(`/checkout/${slug}`);
   };
+  const canBuy = !c?.isFree && site.data?.paymentsEnabled;
 
   return (
     <div className="min-h-dvh" style={{ fontFamily: site.data?.theme?.fontBody }}>
@@ -57,8 +59,8 @@ export function CourseLandingPage() {
                 {c.thumbnailUrl && <img src={c.thumbnailUrl} alt="" className="aspect-video w-full object-cover" />}
                 <CardBody className="space-y-4">
                   <p className="text-3xl font-semibold">{c.isFree ? 'Free' : formatMoney(c.priceAmount, c.currency)}{!c.isFree && c.compareAtAmount && <span className="ml-2 text-base font-normal text-muted line-through">{formatMoney(c.compareAtAmount, c.currency)}</span>}</p>
-                  {enrolled || c.isFree || auth.status !== 'authenticated' ? (
-                    <Button className="w-full" size="lg" loading={enroll.isPending} onClick={cta} style={{ background: color }}>{enrolled ? 'Continue learning' : c.isFree ? (auth.status === 'authenticated' ? 'Enrol for free' : 'Sign up to enrol') : 'Sign up to buy'}</Button>
+                  {enrolled || c.isFree || canBuy ? (
+                    <Button className="w-full" size="lg" loading={enroll.isPending} onClick={cta} style={{ background: color }}>{enrolled ? 'Continue learning' : c.isFree ? (auth.status === 'authenticated' ? 'Enrol for free' : 'Sign up to enrol') : auth.status === 'authenticated' ? 'Buy now' : 'Sign up to buy'}</Button>
                   ) : (
                     <Alert tone="info">Online checkout opens once this academy enables payments.</Alert>
                   )}

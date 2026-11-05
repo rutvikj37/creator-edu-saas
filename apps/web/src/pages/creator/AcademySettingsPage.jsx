@@ -76,7 +76,7 @@ export function BusinessFields({ form, setForm, errors }) {
       {f('postalCode', 'Postal code')}
       <Select label="Country" placeholder="Select" value={form.country ?? ''} onChange={(e) => setForm({ ...form, country: e.target.value })} options={countries} />
       {f('pan', 'PAN (India, optional)', { placeholder: 'AAAAA9999A' })}
-      {f('invoicePrefix', 'Invoice prefix', { hint: 'e.g. INV → INV-0001' })}
+      {f('invoicePrefix', 'Invoice prefix', { hint: 'e.g. INV → INV/2026-27/00001' })}
     </div>
   );
 }
@@ -85,8 +85,18 @@ export function GstFields({ form, setForm, errors }) {
   return (
     <div className="space-y-4">
       <Switch label="My business is GST registered" checked={Boolean(form.gstRegistered)} onChange={(v) => setForm({ ...form, gstRegistered: v })} />
-      {form.gstRegistered && <Input label="GSTIN" placeholder="22AAAAA0000A1Z5" value={form.gstin ?? ''} onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })} error={errors.gstin} />}
-      <p className="text-xs text-muted">GST details appear on invoices issued to your students.</p>
+      {form.gstRegistered && (
+        <>
+          <Input label="GSTIN" placeholder="22AAAAA0000A1Z5" value={form.gstin ?? ''} onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })} error={errors.gstin} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Select label="GST rate on course sales" value={String(Number(form.taxRate ?? 18))} onChange={(e) => setForm({ ...form, taxRate: Number(e.target.value) })} error={errors.taxRate}
+              options={[0, 5, 12, 18, 28].map((r) => ({ value: String(r), label: `${r}%` }))} hint="Online courses are usually 18%. Check with your tax advisor." />
+            <Select label="Course prices" value={form.pricesIncludeTax === false ? 'exclusive' : 'inclusive'} onChange={(e) => setForm({ ...form, pricesIncludeTax: e.target.value === 'inclusive' })}
+              options={[{ value: 'inclusive', label: 'Include GST (student pays the listed price)' }, { value: 'exclusive', label: 'Exclude GST (added at checkout)' }]} />
+          </div>
+        </>
+      )}
+      <p className="text-xs text-muted">GST is applied at checkout and shown on invoices only when you are GST registered.</p>
     </div>
   );
 }
@@ -98,7 +108,8 @@ export const academyPayload = (form, logo, favicon) => ({
 });
 export const businessPayload = (b) => {
   const out = {};
-  for (const k of ['legalName', 'addressLine1', 'addressLine2', 'city', 'state', 'postalCode', 'country', 'gstRegistered', 'gstin', 'pan', 'invoicePrefix']) if (b[k] !== null && b[k] !== undefined) out[k] = b[k];
+  for (const k of ['legalName', 'addressLine1', 'addressLine2', 'city', 'state', 'postalCode', 'country', 'gstRegistered', 'gstin', 'pan', 'invoicePrefix', 'pricesIncludeTax']) if (b[k] !== null && b[k] !== undefined) out[k] = b[k];
+  if (b.taxRate !== null && b.taxRate !== undefined) out.taxRate = Number(b.taxRate);
   return out;
 };
 

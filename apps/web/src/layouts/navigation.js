@@ -1,7 +1,7 @@
 import {
   Activity, Award, Banknote, BarChart3, BookOpen, Boxes, Brush, Building2, CalendarDays, ClipboardCheck, Component,
   CreditCard, Crown, FileText, FolderTree, Globe, GraduationCap, Handshake, HeartPulse, Inbox, LayoutDashboard, LifeBuoy,
-  KeyRound, Link2, Mail, Megaphone, MessagesSquare, Package, Palette, Percent, Plug, Radio, Receipt, ScrollText, Settings, ShieldCheck,
+  KeyRound, Link2, Mail, Megaphone, MessagesSquare, Palette, Percent, Plug, Radio, Receipt, ScrollText, Settings, ShieldCheck,
   ShoppingCart, Sparkles, Tag, Ticket, UserCog, Users, Video, Wallet,
 } from 'lucide-react';
 
@@ -19,7 +19,7 @@ export const NAV = {
     { label: 'Subscriptions', items: [item('Plans', '/super-admin/plans', Crown, 3, { available: true, perm: 'platform.plans.manage' }), item('Subscriptions', '/super-admin/subscriptions', CreditCard, 7)] },
     {
       label: 'Finance',
-      items: [item('Revenue', '/finance', Wallet, 3, { available: true, perm: 'platform.finance.read' }), item('Transactions', '/super-admin/transactions', Receipt, 7), item('Settlements', '/super-admin/settlements', Banknote, 7)],
+      items: [item('Revenue', '/finance', Wallet, 3, { available: true, perm: 'platform.finance.read' }), item('Transactions', '/finance/transactions', Receipt, 7, { available: true, perm: 'platform.finance.read' })],
     },
     { label: 'Users', items: [item('Creators', '/super-admin/tenants', Users, 3, { available: true, perm: 'platform.tenants.read' }), item('Admins & roles', '/super-admin/admins', ShieldCheck, 3, { available: true, perm: 'platform.admins.manage' })] },
     { label: 'Support', items: [item('Tickets', '/support', LifeBuoy, 3, { available: true, perm: 'platform.support.manage' })] },
@@ -46,7 +46,6 @@ export const NAV = {
       items: [
         item('Courses', '/creator/courses', BookOpen, 4, { available: true, perm: 'courses.read' }),
         item('Videos', '/creator/videos', Video, 6, { available: true, perm: 'courses.read' }),
-        item('Products', '/creator/products', Package, 7),
         item('Discussions', '/creator/discussions', MessagesSquare, 5, { available: true, perm: 'courses.read' }),
         item('Certificates', '/creator/certificates', Award, 5, { available: true, perm: 'certificates.manage' }),
       ],
@@ -54,7 +53,11 @@ export const NAV = {
     { label: 'Students', items: [item('Students', '/creator/students', GraduationCap, 5, { available: true, perm: 'students.read' }), item('Batches', '/creator/batches', Boxes, 9)] },
     {
       label: 'Sales',
-      items: [item('Orders', '/creator/orders', ShoppingCart, 7), item('Transactions', '/creator/transactions', Receipt, 7), item('Coupons', '/creator/coupons', Tag, 7)],
+      items: [
+        item('Orders', '/creator/orders', ShoppingCart, 7, { available: true, perm: 'orders.read' }),
+        item('Transactions', '/creator/transactions', Receipt, 7, { available: true, perm: 'orders.read' }),
+        item('Coupons', '/creator/coupons', Tag, 7, { available: true, perm: 'coupons.manage' }),
+      ],
     },
     { label: 'Live', items: [item('Live classes', '/creator/live', Radio, 9), item('Webinars', '/creator/webinars', CalendarDays, 9)] },
     { label: 'Website', items: [item('Website builder', '/creator/website', Brush, 8), item('Domains', '/creator/domains', Globe, 2, { available: true, perm: 'domains.manage' })] },
@@ -72,7 +75,7 @@ export const NAV = {
       label: 'Workspace',
       items: [
         item('Staff', '/creator/staff', UserCog, 4, { available: true, perm: 'staff.manage' }),
-        item('Integrations', '/creator/integrations', Plug, 6),
+        item('Payments', '/creator/payments', Plug, 7, { available: true, perm: 'integrations.manage' }),
         item('Settings', '/creator/academy?tab=business', Settings, 4, { available: true, perm: 'academy.manage' }),
         item('Billing', '/creator/billing', CreditCard, 3, { available: true, perm: 'billing.manage' }),
         item('Support', '/creator/support', LifeBuoy, 3, { available: true }),
@@ -90,7 +93,7 @@ export const NAV = {
         item('Live classes', '/learn/live', Video, 9),
         item('Certificates', '/learn/certificates', Award, 5, { available: true }),
         item('Communities', '/learn/communities', MessagesSquare, 10),
-        item('Orders', '/learn/orders', Receipt, 7),
+        item('Orders', '/learn/orders', Receipt, 7, { available: true }),
         item('Support', '/learn/support', LifeBuoy, 5),
         item('Account security', '/learn/account/security', KeyRound, 2, { available: true }),
       ],
@@ -115,11 +118,9 @@ export const NAV = {
       label: null,
       items: [
         item('Dashboard', '/finance', LayoutDashboard, 3, { end: true, available: true }),
-        item('Reconciliation', '/finance/reconciliation', Activity, 7),
-        item('Refunds', '/finance/refunds', Receipt, 7),
-        item('Payouts', '/finance/payouts', Banknote, 7),
-        item('Invoices', '/finance/invoices', FileText, 7),
-        item('Tax reports', '/finance/tax', Percent, 7),
+        item('Transactions', '/finance/transactions', Receipt, 7, { available: true }),
+        item('Invoices', '/finance/invoices', FileText, 10),
+        item('Tax reports', '/finance/tax', Percent, 10),
       ],
     },
   ],

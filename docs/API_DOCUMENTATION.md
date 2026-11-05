@@ -51,3 +51,10 @@ Status: **Phase 0 design**. Live docs will be served by Swagger at `/api/docs` (
 | 6 | `POST /creator/files/:id/parts` · `POST /creator/files/:id/complete` (`{parts}` for multipart) · `GET /files/local/:token` (HTTP Range) | workspace / signed token | Multipart uploads (>100 MB on S3), ranged reads |
 | 6 | `GET/POST /creator/videos` · `PATCH/DELETE /:id` · `GET /:id/preview` | courses.read / courses.manage | Video library (DELETE → 409 while used in lessons) |
 | 6 | `POST /learn/lessons/:lessonId/video` · `PUT /learn/video-sessions/:id/heartbeat` · `DELETE /learn/video-sessions/:id` | student | Playback session (signed URL + `resumeAt`; 429 over 3 streams), heartbeat (position, `completed`; 403 when access ended), end |
+| 7 | `GET/PUT/PATCH/DELETE /creator/payments/razorpay` · `POST /creator/payments/razorpay/verify` | integrations.manage | Academy's Razorpay account (secrets write-only; returns webhook URL) |
+| 7 | `GET/POST /creator/coupons` · `PATCH/DELETE /creator/coupons/:id` | coupons.manage | Coupons (discount terms locked once used) |
+| 7 | `GET /creator/orders` · `GET /creator/orders/summary` · `GET /creator/orders/:id` · `GET /creator/orders/:id/invoice` · `GET /creator/transactions` | orders.read | Orders, ledger-based revenue summary, invoice PDF, payment attempts |
+| 7 | `POST /creator/orders/:id/refunds` | refunds.manage | Full/partial refund through Razorpay (`revokeAccess` for full refunds) |
+| 7 | `POST /learn/checkout/quote` · `POST /learn/checkout` (`Idempotency-Key`) · `GET /learn/orders[/:id]` · `POST /learn/orders/:id/pay|confirm|abandon` · `GET /learn/orders/:id/invoice` | student | Checkout → Razorpay Checkout.js options → signature-verified confirmation |
+| 7 | `POST /webhooks/razorpay/:accountId` | public (X-Razorpay-Signature) | Razorpay webhooks: `payment.*`, `order.paid`, `refund.*` |
+| 7 | `GET /platform/finance/overview` · `GET /platform/finance/transactions` | platform.finance.read | Academy GMV, refunds, commission; payments across academies |

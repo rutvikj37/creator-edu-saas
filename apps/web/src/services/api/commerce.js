@@ -1,0 +1,39 @@
+import { http } from './client.js';
+
+const d = (r) => r.data;
+const page = (r) => ({ items: r.data, meta: r.meta });
+const blob = (r) => r.data;
+
+export const creatorCommerceApi = {
+  gateway: () => http.get('/creator/payments/razorpay').then(d),
+  saveGateway: (body) => http.put('/creator/payments/razorpay', body).then(d),
+  verifyGateway: () => http.post('/creator/payments/razorpay/verify').then(d),
+  setGatewayActive: (isActive) => http.patch('/creator/payments/razorpay', { isActive }).then(d),
+  removeGateway: () => http.delete('/creator/payments/razorpay').then(d),
+  coupons: (q) => http.get('/creator/coupons', { params: q ? { q } : {} }).then(d),
+  createCoupon: (body) => http.post('/creator/coupons', body).then(d),
+  updateCoupon: (id, body) => http.patch(`/creator/coupons/${id}`, body).then(d),
+  deleteCoupon: (id) => http.delete(`/creator/coupons/${id}`).then(d),
+  orders: (params) => http.get('/creator/orders', { params }).then(page),
+  order: (id) => http.get(`/creator/orders/${id}`).then(d),
+  summary: (params) => http.get('/creator/orders/summary', { params }).then(d),
+  refund: (id, body) => http.post(`/creator/orders/${id}/refunds`, body).then(d),
+  invoice: (id) => http.get(`/creator/orders/${id}/invoice`, { responseType: 'blob' }).then(blob),
+  transactions: (params) => http.get('/creator/transactions', { params }).then(page),
+};
+
+export const checkoutApi = {
+  quote: (body) => http.post('/learn/checkout/quote', body).then(d),
+  checkout: (body, idempotencyKey) => http.post('/learn/checkout', body, { headers: { 'Idempotency-Key': idempotencyKey } }).then(d),
+  orders: () => http.get('/learn/orders').then(d),
+  order: (id) => http.get(`/learn/orders/${id}`).then(d),
+  pay: (id) => http.post(`/learn/orders/${id}/pay`).then(d),
+  confirm: (id, body) => http.post(`/learn/orders/${id}/confirm`, body).then(d),
+  abandon: (id, reason) => http.post(`/learn/orders/${id}/abandon`, { reason }).then(d),
+  invoice: (id) => http.get(`/learn/orders/${id}/invoice`, { responseType: 'blob' }).then(blob),
+};
+
+export const financeApi = {
+  overview: (params) => http.get('/platform/finance/overview', { params }).then(d),
+  transactions: (params) => http.get('/platform/finance/transactions', { params }).then(page),
+};

@@ -189,8 +189,17 @@ export class OrdersService {
   async getForUser(userId: string, id: string) {
     const o = await this.db.order.findFirst({ where: { id, userId }, include: { items: true, payments: { orderBy: { createdAt: 'desc' } }, refunds: { orderBy: { createdAt: 'desc' } } } });
     if (!o) throw AppException.notFound('Order not found');
-    const invoice = await this.db.invoice.findFirst({ where: { orderId: o.id }, select: { number: true } });
-    return { ...this.view(o), invoiceNumber: invoice?.number ?? null };
+    const [invoice, slugs] = await Promise.all([
+      this.db.invoice.findFirst({ where: { orderId: o.id }, select: { number: true } }),
+      this.courseSlugs(o.items.map((i) => i.courseId)),
+    ]);
+    const v = this.view(o);
+    return { ...v, items: v.items!.map((i: { courseId: string }) => ({ ...i, courseSlug: slugs.get(i.courseId) ?? null })), invoiceNumber: invoice?.number ?? null };
+  }
+
+  private async courseSlugs(ids: string[]) {
+    const rows = await this.db.course.findMany({ where: { id: { in: ids } }, select: { id: true, slug: true } });
+    return new Map(rows.map((r) => [r.id, r.slug]));
   }
 
   async listForUser(userId: string) {

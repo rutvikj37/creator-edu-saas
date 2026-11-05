@@ -57,6 +57,15 @@ const StudentsPage = lazyNamed(() => import('../pages/creator/StudentsPage.jsx')
 const DiscussionsPage = lazyNamed(() => import('../pages/creator/DiscussionsPage.jsx'), 'DiscussionsPage');
 const CertificatesAdminPage = lazyNamed(() => import('../pages/creator/CertificatesAdminPage.jsx'), 'CertificatesAdminPage');
 const VideosPage = lazyNamed(() => import('../pages/creator/VideosPage.jsx'), 'VideosPage');
+const PaymentsPage = lazyNamed(() => import('../pages/creator/PaymentsPage.jsx'), 'PaymentsPage');
+const CouponsPage = lazyNamed(() => import('../pages/creator/CouponsPage.jsx'), 'CouponsPage');
+const OrdersPage = lazyNamed(() => import('../pages/creator/OrdersPage.jsx'), 'OrdersPage');
+const TransactionsPage = lazyNamed(() => import('../pages/creator/OrdersPage.jsx'), 'TransactionsPage');
+const OrderDetailPage = lazyNamed(() => import('../pages/creator/OrderDetailPage.jsx'), 'OrderDetailPage');
+const CheckoutPage = lazyNamed(() => import('../pages/student/CheckoutPage.jsx'), 'CheckoutPage');
+const OrderStatusPage = lazyNamed(() => import('../pages/student/OrdersPages.jsx'), 'OrderStatusPage');
+const StudentOrdersPage = lazyNamed(() => import('../pages/student/OrdersPages.jsx'), 'StudentOrdersPage');
+const PlatformTransactionsPage = lazyNamed(() => import('../pages/finance/FinanceDashboardPage.jsx'), 'PlatformTransactionsPage');
 const BillingPage = lazyNamed(() => import('../pages/creator/BillingPage.jsx'), 'BillingPage');
 const CreatorSupportPage = lazyNamed(() => import('../pages/creator/CreatorSupportPage.jsx'), 'CreatorSupportPage');
 const CreatorTicketPage = lazyNamed(() => import('../pages/creator/CreatorSupportPage.jsx'), 'CreatorTicketPage');
@@ -119,7 +128,7 @@ export function buildRoutes(surface = getSurface()) {
         ...Object.entries(PREVIEW_LAYOUTS).map(([key, Layout]) => ({ path: `/preview/${key}`, element: <Layout />, children: [{ index: true, element: page(LayoutPreviewPage) }] })),
         {
           element: <FinanceLayout />,
-          children: [{ path: '/finance', element: page(FinanceDashboardPage) }],
+          children: [{ path: '/finance', element: page(FinanceDashboardPage) }, { path: '/finance/transactions', element: page(PlatformTransactionsPage) }],
         },
         {
           element: <SupportLayout />,
@@ -146,6 +155,11 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/creator/staff', element: page(StaffPage) },
             { path: '/creator/students', element: page(StudentsPage) },
             { path: '/creator/videos', element: page(VideosPage) },
+            { path: '/creator/payments', element: page(PaymentsPage) },
+            { path: '/creator/coupons', element: page(CouponsPage) },
+            { path: '/creator/orders', element: page(OrdersPage) },
+            { path: '/creator/orders/:id', element: page(OrderDetailPage) },
+            { path: '/creator/transactions', element: page(TransactionsPage) },
             { path: '/creator/discussions', element: page(DiscussionsPage) },
             { path: '/creator/certificates', element: page(CertificatesAdminPage) },
             { path: '/creator/domains', element: page(DomainsPage) },
@@ -175,9 +189,12 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/learn', element: page(StudentHomePage) },
             { path: '/learn/account/security', element: page(SecurityPage, { breadcrumbs: [{ label: 'Account' }] }) },
             { path: '/learn/certificates', element: page(StudentCertificatesPage) },
+            { path: '/learn/orders', element: page(StudentOrdersPage) },
+            { path: '/learn/orders/:id', element: page(OrderStatusPage) },
           ],
         },
         { path: '/learn/courses/:courseId', element: page(PlayerPage) },
+        { path: '/checkout/:slug', element: page(CheckoutPage) },
       ],
     },
   ];

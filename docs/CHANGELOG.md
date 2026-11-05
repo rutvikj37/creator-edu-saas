@@ -2,6 +2,14 @@
 
 Format: Keep a Changelog. Versions follow SemVer once Phase 1 ships.
 
+## [0.7.0] — 2026-11-05 — Phase 7: Commerce (Razorpay)
+### Added
+- Academy-owned Razorpay accounts, checkout with coupons and GST, signature-verified payments, webhooks, reconciliation, refunds, invoices (FY series), ledger with plan commission, receipt/refund emails, creator orders/coupons/transactions/payments pages, student checkout and order history, platform finance overview and transactions.
+### Fixed
+- Gateway accounts with any payment history can no longer be deleted.
+### Notes
+- Razorpay only, by owner decision. SaaS plan billing is not yet built. No live Razorpay call was possible from the build environment.
+
 ## [0.6.0] — 2026-11-05 — Phase 6: Video (no DRM)
 ### Added
 - Video library, multipart uploads, ranged local streaming, lesson video attach + publish checks, signed playback sessions with resume, heartbeats, auto-complete, concurrent-stream limit and revocation; creator Videos page and student video player.
