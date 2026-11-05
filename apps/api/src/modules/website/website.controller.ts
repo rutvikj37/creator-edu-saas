@@ -11,13 +11,23 @@ import { apiOrigin } from '../files/files.controller.js';
 import { BlogService } from './blog.service.js';
 import { PublicSiteService } from './public-site.service.js';
 import { WebsiteService } from './website.service.js';
+import { WebsiteAiService } from './website-ai.service.js';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 
 class SettingsDto {
+  @ApiPropertyOptional({ enum: ['PLATFORM', 'EXTERNAL'] }) @IsOptional() @IsIn(['PLATFORM', 'EXTERNAL']) mode?: 'PLATFORM' | 'EXTERNAL';
+  @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsString() @MaxLength(500) externalUrl?: string | null;
   @ApiPropertyOptional() @IsOptional() @IsString() template?: string;
   @ApiPropertyOptional() @IsOptional() @IsObject() header?: Record<string, unknown>;
   @ApiPropertyOptional() @IsOptional() @IsObject() footer?: Record<string, unknown>;
+}
+class AiLandingDto {
+  @ApiProperty({ example: 'Personal finance' }) @Transform(trim) @IsString() @Length(2, 120) industry: string;
+  @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(300) audience?: string;
+  @ApiPropertyOptional({ enum: ['friendly', 'professional', 'energetic', 'premium'] }) @IsOptional() @IsIn(['friendly', 'professional', 'energetic', 'premium']) tone?: 'friendly' | 'professional' | 'energetic' | 'premium';
+  @ApiPropertyOptional({ enum: ['en', 'hi', 'gu'] }) @IsOptional() @IsIn(['en', 'hi', 'gu']) language?: 'en' | 'hi' | 'gu';
+  @ApiPropertyOptional({ description: 'What makes the academy different, in the creator’s words' }) @IsOptional() @Transform(trim) @IsString() @MaxLength(1500) highlights?: string;
 }
 class ApplyTemplateDto {
   @ApiPropertyOptional({ description: 'Overwrite drafts of pages the template also defines' }) @IsOptional() @IsBoolean() replace?: boolean;
@@ -66,7 +76,11 @@ class PublicListQuery {
 @RequireFeature(FEATURES.WEBSITE_BUILDER.key)
 @Controller({ path: 'creator/website', version: '1' })
 export class CreatorWebsiteController {
-  constructor(private readonly website: WebsiteService) {}
+  constructor(private readonly website: WebsiteService, private readonly websiteAi: WebsiteAiService) {}
+
+  @Post('ai-landing') @HttpCode(200) @RequirePermissions(PERMISSIONS.WEBSITE_MANAGE)
+  @ApiOperation({ summary: 'Generate the home page with AI from the academy profile, courses and industry (saved as a draft; uses AI credits)' })
+  aiLanding(@Body() dto: AiLandingDto, @CurrentAuth() auth: AuthContext, @Req() req: AppRequest) { return this.websiteAi.generateLanding(dto, auth.userId, apiOrigin(req)); }
 
   @Get() @RequirePermissions(PERMISSIONS.WEBSITE_MANAGE)
   @ApiOperation({ summary: 'Settings, templates and pages' })

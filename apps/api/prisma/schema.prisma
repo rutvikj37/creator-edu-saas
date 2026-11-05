@@ -1854,14 +1854,23 @@ model BillingPayment {
 // ───────────────────────────── Website builder (Phase 8) ─────────────────────────────
 
 /// One per academy: template style, header links and footer.
+enum WebsiteMode {
+  /// Academy home is served by the platform (AI landing page / block pages, or the default catalogue page).
+  PLATFORM
+  /// Academy has its own website; the academy home redirects there. Courses, checkout and learning stay on the platform.
+  EXTERNAL
+}
+
 model SiteSettings {
-  id        String   @id @default(cuid()) @db.Char(25)
-  tenantId  String   @unique @db.Char(25)
-  template  String   @default("classic") @db.VarChar(40)
-  header    Json
-  footer    Json
-  createdAt DateTime @default(now()) @db.DateTime(3)
-  updatedAt DateTime @updatedAt @db.DateTime(3)
+  id          String      @id @default(cuid()) @db.Char(25)
+  tenantId    String      @unique @db.Char(25)
+  mode        WebsiteMode @default(PLATFORM)
+  externalUrl String?     @db.VarChar(500)
+  template    String      @default("classic") @db.VarChar(40)
+  header      Json
+  footer      Json
+  createdAt   DateTime    @default(now()) @db.DateTime(3)
+  updatedAt   DateTime    @updatedAt @db.DateTime(3)
 
   @@unique([tenantId, id])
 }
@@ -2518,6 +2527,7 @@ model Membership {
 // ── Phase 10.9: AI with monthly credits ───────────────────────
 
 enum AiFeature {
+  LANDING_PAGE
   COURSE_OUTLINE
   LESSON_DRAFT
   QUIZ_QUESTIONS

@@ -16,7 +16,7 @@ import { EntitlementsService } from '../subscriptions/entitlements.service.js';
 import { AiClient, type AiCall, type AiResult } from './ai.client.js';
 import { creditsFor, monthStart, reserveFor } from './credits.js';
 
-type Feature = 'COURSE_OUTLINE' | 'LESSON_DRAFT' | 'QUIZ_QUESTIONS' | 'TUTOR';
+type Feature = 'LANDING_PAGE' | 'COURSE_OUTLINE' | 'LESSON_DRAFT' | 'QUIZ_QUESTIONS' | 'TUTOR';
 const PENDING_WINDOW_MS = 5 * 60_000;
 const TUTOR_KEY = 'ai.tutor';
 const DEFAULT_TUTOR = { enabled: false, dailyLimit: 20 };
@@ -31,6 +31,20 @@ const DraftSchema = z.object({
 const QuizSchema = z.object({
   questions: z.array(z.object({ prompt: z.string(), options: z.array(z.string()), correctIndex: z.number().int(), explanation: z.string() })),
 });
+
+const LandingSchema = z.object({
+  seoTitle: z.string(),
+  seoDescription: z.string(),
+  hero: z.object({ heading: z.string(), subheading: z.string(), ctaLabel: z.string() }),
+  features: z.object({ heading: z.string(), items: z.array(z.object({ title: z.string(), text: z.string() })) }),
+  courses: z.object({ heading: z.string(), featuredCourseIds: z.array(z.string()) }),
+  about: z.object({ heading: z.string(), paragraphs: z.array(z.string()) }),
+  faq: z.object({ heading: z.string(), items: z.array(z.object({ q: z.string(), a: z.string() })) }),
+  cta: z.object({ heading: z.string(), text: z.string(), buttonLabel: z.string() }),
+});
+const LANGUAGES: Record<string, string> = { en: 'English', hi: 'Hindi (Devanagari script)', gu: 'Gujarati (Gujarati script)' };
+
+export interface LandingInput { industry: string; audience?: string; tone?: 'friendly' | 'professional' | 'energetic' | 'premium'; language?: 'en' | 'hi' | 'gu'; highlights?: string }
 
 export type OutlineDraft = z.infer<typeof OutlineSchema>;
 const clip = (s: string, n: number) => s.trim().slice(0, n);
@@ -162,6 +176,75 @@ export class AiService {
 
   private async academyName() {
     return (await this.prisma.tenant.findUniqueOrThrow({ where: { id: this.ctx.requireTenantId() }, select: { name: true } })).name;
+  }
+
+  // ── landing page ──────────────────────────────────────────
+  /**
+   * Landing page blocks from the academy's real profile, courses and the creator's own words.
+   * Testimonials, ratings, learner counts, awards and guarantees are never generated; the stats
+   * block is computed here from real enrolment data, and contact details come from the profile.
+   */
+  async landingPage(userId: string, input: LandingInput) {
+    const tenantId = this.ctx.requireTenantId();
+    const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, include: { academy: true } });
+    const business = await this.db.tenantBusinessProfile.findFirst({});
+    const courses = await this.db.course.findMany({
+      where: { status: 'PUBLISHED', visibility: 'PUBLIC', deletedAt: null }, orderBy: { publishedAt: 'desc' }, take: 30,
+      select: { id: true, title: true, shortDescription: true, level: true, isFree: true, priceAmount: true, currency: true, accessType: true, accessDays: true, certificateEnabled: true, language: true },
+    });
+    const [learners, lessons] = await Promise.all([
+      this.db.enrollment.groupBy({ by: ['userId'], where: { status: { in: ['ACTIVE', 'COMPLETED'] } } }).then((r) => r.length),
+      this.db.courseLesson.count({ where: { isPublished: true, course: { status: 'PUBLISHED', deletedAt: null } } }),
+    ]);
+    const lang = LANGUAGES[input.language ?? 'en'] ?? 'English';
+    const facts = {
+      academy: { name: tenant.name, tagline: tenant.academy?.tagline ?? null, description: tenant.academy?.description ?? null },
+      industry: input.industry, audience: input.audience ?? null, creatorHighlights: input.highlights ?? null,
+      courses: courses.map((c) => ({
+        id: c.id, title: c.title, summary: c.shortDescription, level: c.level, price: c.isFree ? 'free' : c.priceAmount ? `${c.priceAmount.toString()} ${c.currency}` : null,
+        access: c.accessType === 'LIFETIME' ? 'lifetime access' : c.accessDays ? `${c.accessDays} days of access` : null, certificate: c.certificateEnabled, language: c.language,
+      })),
+      platformFacts: ['Learners study online on phone or computer', 'Payments by UPI, cards, net banking and wallets through Razorpay', ...(courses.some((c) => c.certificateEnabled) ? ['Some courses include a certificate on completion (see each course)'] : [])],
+    };
+    const { result, credits } = await this.run('LANDING_PAGE', userId, null, {
+      system: [
+        'You write the home page of an online academy run by an independent educator. Copy is specific to the academy and its courses, benefit-led and easy to scan; no clichés or filler.',
+        'Use only the facts provided. Never invent testimonials, reviews, ratings, learner or student numbers, years of experience, awards, certifications, partnerships, results, guarantees, discounts or prices.',
+        'FAQ answers must follow from the facts; leave out a question rather than guess. featuredCourseIds must be ids from the courses list (up to 6, best first); use an empty list when there are no courses.',
+        'Limits: hero heading ≤ 80 characters, subheading ≤ 200, button labels ≤ 30, feature titles ≤ 60 and texts ≤ 200, 3–6 features, 2–4 about paragraphs, 3–6 FAQ items, SEO title ≤ 60, SEO description ≤ 155.',
+        `Write everything in ${lang}. Tone: ${input.tone ?? 'friendly'}.`,
+      ].join(' '),
+      context: `Academy facts (JSON):\n${JSON.stringify(facts)}`,
+      messages: [{ role: 'user', content: 'Write the landing page.' }],
+      schema: LandingSchema,
+      effort: 'medium',
+      maxTokens: 8000,
+    });
+    const o = result.output!;
+    const validIds = new Set(courses.map((c) => c.id));
+    const featured = [...new Set(o.courses.featuredCourseIds.filter((id) => validIds.has(id)))].slice(0, 6);
+    const para = (t: string) => ({ type: 'paragraph', content: t.trim() ? [{ type: 'text', text: clip(t, 2000) }] : [] });
+    const blocks: { id: string; type: string; props: Record<string, unknown> }[] = [
+      { id: 'hero', type: 'hero', props: { heading: clip(o.hero.heading, 120) || tenant.name, subheading: clip(o.hero.subheading, 300), ctaLabel: clip(o.hero.ctaLabel, 40) || 'Browse courses', ctaHref: '/courses', imageFileId: null, align: 'center' } },
+    ];
+    const stats = [
+      ...(courses.length >= 2 ? [{ value: String(courses.length), label: 'Courses' }] : []),
+      ...(lessons >= 10 ? [{ value: String(lessons), label: 'Lessons' }] : []),
+      ...(learners >= 10 ? [{ value: `${learners}+`, label: 'Learners' }] : []),
+    ];
+    if (stats.length >= 2) blocks.push({ id: 'stats', type: 'stats', props: { items: stats } });
+    const features = o.features.items.map((f) => ({ title: clip(f.title, 80), text: clip(f.text, 300) })).filter((f) => f.title).slice(0, 12);
+    if (features.length) blocks.push({ id: 'features', type: 'features', props: { heading: clip(o.features.heading, 120), items: features } });
+    if (courses.length) blocks.push({ id: 'courses', type: 'courseGrid', props: featured.length ? { heading: clip(o.courses.heading, 120), mode: 'selected', courseIds: featured, limit: 6 } : { heading: clip(o.courses.heading, 120), mode: 'all', courseIds: [], limit: 6 } });
+    const about = o.about.paragraphs.filter((t) => t.trim()).slice(0, 6);
+    if (about.length) blocks.push({ id: 'about', type: 'richText', props: { content: { type: 'doc', content: [{ type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: clip(o.about.heading, 120) || `About ${tenant.name}` }] }, ...about.map(para)] } } });
+    const faq = o.faq.items.map((f) => ({ q: clip(f.q, 200), a: clip(f.a, 2000) })).filter((f) => f.q && f.a).slice(0, 30);
+    if (faq.length) blocks.push({ id: 'faq', type: 'faq', props: { heading: clip(o.faq.heading, 120), items: faq } });
+    blocks.push({ id: 'cta', type: 'cta', props: { heading: clip(o.cta.heading, 120) || 'Start learning', text: clip(o.cta.text, 300), buttonLabel: clip(o.cta.buttonLabel, 40) || 'Browse courses', buttonHref: '/courses' } });
+    const email = tenant.academy?.supportEmail ?? '';
+    const address = [business?.city, business?.state].filter(Boolean).join(', ');
+    if (email || address) blocks.push({ id: 'contact', type: 'contact', props: { heading: input.language === 'hi' ? 'संपर्क करें' : input.language === 'gu' ? 'સંપર્ક કરો' : 'Get in touch', email, phone: '', address } });
+    return { blocks, seoTitle: clip(o.seoTitle, 70), seoDescription: clip(o.seoDescription, 170), credits };
   }
 
   // ── creator features ──────────────────────────────────────

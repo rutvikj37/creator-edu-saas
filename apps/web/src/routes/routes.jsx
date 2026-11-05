@@ -11,6 +11,7 @@ import { getSurface } from '../utils/host.js';
 const lazyNamed = (loader, name) => lazy(() => loader().then((m) => ({ default: m[name] })));
 const PlatformLandingPage = lazyNamed(() => import('../pages/public/PlatformLandingPage.jsx'), 'PlatformLandingPage');
 const AcademyLandingPage = lazyNamed(() => import('../pages/public/AcademyLandingPage.jsx'), 'AcademyLandingPage');
+const AcademySitePage = lazyNamed(() => import('../pages/public/AcademySitePage.jsx'), 'AcademySitePage');
 const LoginPage = lazyNamed(() => import('../pages/auth/LoginPage.jsx'), 'LoginPage');
 const SignupPage = lazyNamed(() => import('../pages/auth/SignupPage.jsx'), 'SignupPage');
 const StudentRegisterPage = lazyNamed(() => import('../pages/auth/StudentRegisterPage.jsx'), 'StudentRegisterPage');
@@ -59,6 +60,7 @@ const StudentsPage = lazyNamed(() => import('../pages/creator/StudentsPage.jsx')
 const DiscussionsPage = lazyNamed(() => import('../pages/creator/DiscussionsPage.jsx'), 'DiscussionsPage');
 const CertificatesAdminPage = lazyNamed(() => import('../pages/creator/CertificatesAdminPage.jsx'), 'CertificatesAdminPage');
 const VideosPage = lazyNamed(() => import('../pages/creator/VideosPage.jsx'), 'VideosPage');
+const WebsitePage = lazyNamed(() => import('../pages/creator/WebsitePage.jsx'), 'WebsitePage');
 const PaymentsPage = lazyNamed(() => import('../pages/creator/PaymentsPage.jsx'), 'PaymentsPage');
 const CouponsPage = lazyNamed(() => import('../pages/creator/CouponsPage.jsx'), 'CouponsPage');
 const OrdersPage = lazyNamed(() => import('../pages/creator/OrdersPage.jsx'), 'OrdersPage');
@@ -200,6 +202,7 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/creator/ai', element: page(AiStudioPage) },
             { path: '/creator/discussions', element: page(DiscussionsPage) },
             { path: '/creator/certificates', element: page(CertificatesAdminPage) },
+            { path: '/creator/website', element: page(WebsitePage) },
             { path: '/creator/domains', element: page(DomainsPage) },
             { path: '/creator/billing', element: page(BillingPage) },
             { path: '/creator/support', element: page(CreatorSupportPage) },
@@ -215,7 +218,8 @@ export function buildRoutes(surface = getSurface()) {
   ];
 
   const academy = [
-    { path: '/', element: page(AcademyLandingPage) },
+    { path: '/', element: page(AcademySitePage) },
+    { path: '/p/:slug', element: page(AcademySitePage) },
     { path: '/courses', element: page(AcademyCatalog) },
     { path: '/courses/:slug', element: page(CourseLandingPage) },
     { path: '/memberships', element: page(PublicMembershipsPage) },

@@ -9,7 +9,8 @@ import { Card, EmptyState, ErrorState, Skeleton } from '../../components/ui/inde
 import { useAuth } from '../../context/AuthContext.jsx';
 import { formatMoney } from '../../utils/format.js';
 
-export function AcademyHeader({ site }) {
+/** `nav` = links from the website builder (header settings + published pages). */
+export function AcademyHeader({ site, nav }) {
   const auth = useAuth();
   const location = useLocation();
   useEffect(() => {
@@ -23,7 +24,9 @@ export function AcademyHeader({ site }) {
           {site?.name}
         </Link>
         <nav className="flex items-center gap-2">
-          <Link to="/courses" className="hidden h-9 items-center rounded-md px-3 text-sm font-medium text-fg-2 hover:bg-surface-2 sm:inline-flex">Courses</Link>
+          {(nav ?? [{ label: 'Courses', href: '/courses' }]).map((l) => (l.href.startsWith('/') && !l.href.startsWith('//')
+            ? <Link key={`${l.label}${l.href}`} to={l.href} className="hidden h-9 items-center rounded-md px-3 text-sm font-medium text-fg-2 hover:bg-surface-2 sm:inline-flex">{l.label}</Link>
+            : <a key={`${l.label}${l.href}`} href={l.href} rel="noreferrer noopener" className="hidden h-9 items-center rounded-md px-3 text-sm font-medium text-fg-2 hover:bg-surface-2 sm:inline-flex">{l.label}</a>))}
           {auth.status === 'authenticated' ? (
             <Link to="/learn" className="inline-flex h-9 items-center rounded-md px-4 text-sm font-medium text-white" style={{ background: site?.theme?.primaryColor }}>My learning</Link>
           ) : (

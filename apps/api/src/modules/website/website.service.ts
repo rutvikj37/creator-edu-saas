@@ -18,6 +18,8 @@ const MAX_PAGES = 50;
 const MAX_VERSIONS = 30;
 const PREVIEW_TTL_MS = 60 * 60_000;
 
+export type WebsiteMode = 'PLATFORM' | 'EXTERNAL';
+
 export interface NavLink { label: string; href: string }
 export interface HeaderConfig { links: NavLink[]; showCoursesLink: boolean; showBlogLink: boolean }
 export interface FooterConfig { text: string; links: NavLink[] }
@@ -70,8 +72,34 @@ export class WebsiteService {
   async settings() {
     const s = await this.db.siteSettings.findFirst({});
     return s
-      ? { template: s.template as TemplateKey, header: { ...DEFAULT_HEADER, ...(s.header as object) } as HeaderConfig, footer: { ...DEFAULT_FOOTER, ...(s.footer as object) } as FooterConfig }
-      : { template: 'classic' as TemplateKey, header: DEFAULT_HEADER, footer: DEFAULT_FOOTER };
+      ? { mode: s.mode as WebsiteMode, externalUrl: s.externalUrl, template: s.template as TemplateKey, header: { ...DEFAULT_HEADER, ...(s.header as object) } as HeaderConfig, footer: { ...DEFAULT_FOOTER, ...(s.footer as object) } as FooterConfig }
+      : { mode: 'PLATFORM' as WebsiteMode, externalUrl: null as string | null, template: 'classic' as TemplateKey, header: DEFAULT_HEADER, footer: DEFAULT_FOOTER };
+  }
+
+  /**
+   * An external website must be a public https address that is not served by this platform
+   * (the platform domain or one of the academy's own connected domains) — otherwise the academy
+   * home would redirect to itself.
+   */
+  private async validateExternalUrl(raw: string): Promise<string> {
+    let u: URL;
+    try {
+      u = new URL(raw.trim());
+    } catch {
+      throw AppException.validation([{ field: 'externalUrl', message: 'Enter a full address, e.g. https://www.example.com' }]);
+    }
+    const host = u.hostname.toLowerCase();
+    const root = this.config.get('PLATFORM_ROOT_DOMAIN').toLowerCase();
+    const problems: string[] = [];
+    if (u.protocol !== 'https:') problems.push('Use an https:// address');
+    if (u.username || u.password) problems.push('Do not include a username or password');
+    if (!host.includes('.') || /^(localhost|\d{1,3}(\.\d{1,3}){3}|\[.*\])$/.test(host)) problems.push('Use your website’s public domain name');
+    if (host === root || host.endsWith(`.${root}`)) problems.push('This address is your academy on our platform; enter your own website');
+    const own = await this.db.tenantDomain.findFirst({ where: { hostname: host } });
+    if (own) problems.push('This domain is connected to your academy on our platform; enter the website you host elsewhere');
+    if (problems.length) throw AppException.validation(problems.map((message) => ({ field: 'externalUrl', message })));
+    u.hash = '';
+    return u.toString().slice(0, 500);
   }
 
   async overview() {
@@ -83,9 +111,13 @@ export class WebsiteService {
     };
   }
 
-  async updateSettings(input: { template?: string; header?: Partial<HeaderConfig>; footer?: Partial<FooterConfig> }, actorUserId: string) {
+  async updateSettings(input: { mode?: WebsiteMode; externalUrl?: string | null; template?: string; header?: Partial<HeaderConfig>; footer?: Partial<FooterConfig> }, actorUserId: string) {
     const current = await this.settings();
     const errors: { field: string; message: string }[] = [];
+    const mode = input.mode ?? current.mode;
+    let externalUrl = current.externalUrl;
+    if (input.externalUrl !== undefined) externalUrl = input.externalUrl ? await this.validateExternalUrl(input.externalUrl) : null;
+    if (mode === 'EXTERNAL' && !externalUrl) errors.push({ field: 'externalUrl', message: 'Enter your website address to use it as your academy home' });
     if (input.template !== undefined && !(input.template in TEMPLATES)) errors.push({ field: 'template', message: 'Unknown template' });
     const header = { ...current.header, ...(input.header ?? {}) };
     const footer = { ...current.footer, ...(input.footer ?? {}) };
@@ -95,6 +127,8 @@ export class WebsiteService {
     if (typeof footer.text !== 'string' || footer.text.length > 300) errors.push({ field: 'footer.text', message: 'Up to 300 characters' });
     if (errors.length) throw AppException.validation(errors);
     const data = {
+      mode,
+      externalUrl,
       template: input.template ?? current.template,
       header: { links: hl.links, showCoursesLink: Boolean(header.showCoursesLink), showBlogLink: Boolean(header.showBlogLink) },
       footer: { text: footer.text.trim(), links: fl.links },

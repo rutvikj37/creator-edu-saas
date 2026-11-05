@@ -77,7 +77,7 @@ const WORKSPACE_ROUTES_COVERED = [
   'GET /api/v1/creator/batches', 'POST /api/v1/creator/batches', 'GET /api/v1/creator/batches/:id', 'PATCH /api/v1/creator/batches/:id', 'POST /api/v1/creator/batches/:id/members',
   'POST /api/v1/creator/batches/:id/members/:memberId/remove', 'POST /api/v1/creator/batches/:id/archive',
   // Phase 8 — website builder & blog (cross-tenant checks in website.e2e-spec.ts)
-  'GET /api/v1/creator/website', 'PUT /api/v1/creator/website/settings', 'POST /api/v1/creator/website/templates/:key/apply', 'POST /api/v1/creator/website/preview-token',
+  'GET /api/v1/creator/website', 'PUT /api/v1/creator/website/settings', 'POST /api/v1/creator/website/templates/:key/apply', 'POST /api/v1/creator/website/preview-token', 'POST /api/v1/creator/website/ai-landing',
   'POST /api/v1/creator/website/pages', 'GET /api/v1/creator/website/pages/:id', 'PATCH /api/v1/creator/website/pages/:id', 'POST /api/v1/creator/website/pages/:id/publish',
   'POST /api/v1/creator/website/pages/:id/unpublish', 'GET /api/v1/creator/website/pages/:id/versions', 'POST /api/v1/creator/website/pages/:id/versions/:versionId/restore',
   'POST /api/v1/creator/website/pages/:id/home', 'DELETE /api/v1/creator/website/pages/:id',

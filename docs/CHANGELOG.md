@@ -2,6 +2,11 @@
 
 Format: Keep a Changelog. Versions follow SemVer once Phase 1 ships.
 
+## [0.12.0] — 2026-11-05 — Academy website: own website or AI landing page
+### Added
+- Website mode per academy: connect an existing website (academy home redirects; courses, checkout and learning stay on the platform; link kit with buy buttons) or an AI-generated landing page from the academy profile, courses and industry (English, Hindi, Gujarati), saved as an editable draft with live preview, history and publish.
+- Public academy home renders the published landing page with search-engine title and description.
+
 ## [0.11.0] — 2026-11-05 — Video management & processing
 ### Added
 - Bunny Stream provider (provider-neutral interface): direct resumable browser uploads with short-lived credentials, webhook handling verified against the Bunny API, status history, timeouts, retries, cleanup; token-authenticated playback with resume and progress.

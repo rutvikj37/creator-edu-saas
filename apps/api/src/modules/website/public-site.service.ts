@@ -28,7 +28,10 @@ export class PublicSiteService {
       ...(settings.header.showBlogLink ? [{ label: 'Blog', href: '/blog' }] : []),
       ...settings.header.links,
     ];
-    return { template: settings.template, nav, footer: settings.footer, hasHomePage: Boolean(home), preview: isPreview };
+    return {
+      mode: settings.mode, externalUrl: settings.mode === 'EXTERNAL' ? settings.externalUrl : null,
+      template: settings.template, nav, footer: settings.footer, hasHomePage: Boolean(home), preview: isPreview,
+    };
   }
 
   /** `slug` = null for the home page. */
