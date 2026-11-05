@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createHmac } from 'node:crypto';
 import { mkdir, open, rm, stat, writeFile } from 'node:fs/promises';
+export { stat as statFile };
 import { createReadStream } from 'node:fs';
 import { dirname, resolve, sep } from 'node:path';
-import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { AbortMultipartUploadCommand, CompleteMultipartUploadCommand, CreateMultipartUploadCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client, UploadPartCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { AppConfig } from '../../config/app-config.service.js';
 import { safeEqual } from '../crypto/crypto.service.js';
@@ -83,8 +84,37 @@ export class StorageService {
     await writeFile(p, data);
   }
 
-  localReadStream(key: string) {
-    return createReadStream(this.localPath(key));
+  localReadStream(key: string, range?: { start: number; end: number }) {
+    return createReadStream(this.localPath(key), range);
+  }
+
+  async localSize(key: string) {
+    return (await stat(this.localPath(key))).size;
+  }
+
+  // ── multipart (S3 only; large videos) ────────────────────
+  get supportsMultipart() {
+    return this.driver === 's3';
+  }
+
+  async createMultipart(ref: ObjectRef, contentType: string): Promise<string> {
+    const out = await this.s3!.send(new CreateMultipartUploadCommand({ Bucket: ref.bucket, Key: ref.key, ContentType: contentType }));
+    return out.UploadId!;
+  }
+
+  signPart(ref: ObjectRef, uploadId: string, partNumber: number): Promise<string> {
+    return getSignedUrl(this.s3!, new UploadPartCommand({ Bucket: ref.bucket, Key: ref.key, UploadId: uploadId, PartNumber: partNumber }), { expiresIn: 3600 });
+  }
+
+  async completeMultipart(ref: ObjectRef, uploadId: string, parts: Array<{ partNumber: number; etag: string }>) {
+    await this.s3!.send(new CompleteMultipartUploadCommand({
+      Bucket: ref.bucket, Key: ref.key, UploadId: uploadId,
+      MultipartUpload: { Parts: [...parts].sort((a, b) => a.partNumber - b.partNumber).map((p) => ({ PartNumber: p.partNumber, ETag: p.etag })) },
+    }));
+  }
+
+  async abortMultipart(ref: ObjectRef, uploadId: string) {
+    await this.s3!.send(new AbortMultipartUploadCommand({ Bucket: ref.bucket, Key: ref.key, UploadId: uploadId }));
   }
 
   // ── common API ───────────────────────────────────────────
@@ -99,9 +129,9 @@ export class StorageService {
     return { url, method: 'PUT', headers: { 'Content-Type': contentType }, expiresAt };
   }
 
-  async downloadUrl(ref: ObjectRef, fileName: string, apiOrigin: string, ttlSeconds = 900, inline = true): Promise<string> {
+  async downloadUrl(ref: ObjectRef & { mimeType?: string }, fileName: string, apiOrigin: string, ttlSeconds = 900, inline = true): Promise<string> {
     if (ref.driver === 'local') {
-      const token = this.createLocalToken({ op: 'get', key: ref.key, exp: Date.now() + ttlSeconds * 1000, name: fileName });
+      const token = this.createLocalToken({ op: 'get', key: ref.key, exp: Date.now() + ttlSeconds * 1000, name: fileName, type: ref.mimeType });
       return `${apiOrigin}/api/v1/files/local/${token}${inline ? '' : '?download=1'}`;
     }
     const disposition = `${inline ? 'inline' : 'attachment'}; filename="${fileName.replace(/"/g, '')}"`;

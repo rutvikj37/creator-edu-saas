@@ -45,6 +45,8 @@ const WORKSPACE_ROUTES_COVERED = [
   'GET /api/v1/creator/courses/:id/lessons/:lessonId/assignment', 'PUT /api/v1/creator/courses/:id/lessons/:lessonId/assignment', 'GET /api/v1/creator/assignments/:assignmentId/submissions',
   'POST /api/v1/creator/submissions/:submissionId/grade', 'GET /api/v1/creator/certificates/template', 'PUT /api/v1/creator/certificates/template', 'GET /api/v1/creator/certificates',
   'POST /api/v1/creator/certificates/:id/revoke', 'POST /api/v1/creator/certificates/:id/reinstate',
+  // Phase 6 routes: isolation covered in video.e2e-spec.ts
+  'POST /api/v1/creator/files/:id/parts', 'GET /api/v1/creator/videos', 'POST /api/v1/creator/videos', 'PATCH /api/v1/creator/videos/:id', 'GET /api/v1/creator/videos/:id/preview', 'DELETE /api/v1/creator/videos/:id',
   'GET /api/v1/creator/staff', 'POST /api/v1/creator/staff/invitations', 'DELETE /api/v1/creator/staff/invitations/:id', 'PATCH /api/v1/creator/staff/:memberId', 'DELETE /api/v1/creator/staff/:memberId',
 ];
 

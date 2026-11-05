@@ -127,6 +127,7 @@ export class LearningService {
       id: lesson.id, title: lesson.title, type: lesson.type, content: lesson.content, externalUrl: lesson.externalUrl, durationSeconds: lesson.durationSeconds, courseId: lesson.courseId,
       // Short-lived signed URL; downloads are only offered for DOWNLOAD lessons.
       file: file && file.status === 'READY' ? { fileName: file.fileName, mimeType: file.mimeType, sizeBytes: Number(file.sizeBytes), url: await this.files.urlFor(file.id, apiOrigin, 600), downloadable: lesson.type === 'DOWNLOAD' } : null,
+      hasVideo: lesson.type === 'VIDEO' && Boolean(lesson.videoAssetId),
       preview: !enrollment,
     };
   }

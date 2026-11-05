@@ -1,4 +1,4 @@
-import { matchesSignature, safeFileName } from './file-rules.js';
+import { matchesSignature, multipartPlan, safeFileName } from './file-rules.js';
 import { StorageService } from './storage.service.js';
 
 describe('file signatures', () => {
@@ -23,5 +23,13 @@ describe('local storage tokens', () => {
     expect(svc.verifyLocalToken(t)?.key).toBe('tenants/a/b.png');
     expect(svc.verifyLocalToken(t.slice(0, -2) + 'xx')).toBeNull();
     expect(svc.verifyLocalToken(svc.createLocalToken({ op: 'get', key: 'k', exp: Date.now() - 1 }))).toBeNull();
+  });
+});
+
+describe('multipartPlan', () => {
+  it('uses 8 MiB parts and caps at 10,000 parts', () => {
+    expect(multipartPlan(200 * 1024 * 1024)).toEqual({ partSize: 8 * 1024 * 1024, partCount: 25 });
+    const big = multipartPlan(200 * 1024 ** 3);
+    expect(big.partCount).toBeLessThanOrEqual(10_000);
   });
 });

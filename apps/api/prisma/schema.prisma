@@ -835,6 +835,7 @@ model CourseLesson {
   position        Int
   content         Json?
   fileAssetId     String?        @db.Char(25)
+  videoAssetId    String?        @db.Char(25)
   externalUrl     String?        @db.VarChar(1000)
   durationSeconds Int?
   isFreePreview   Boolean        @default(false)
@@ -1200,3 +1201,66 @@ model CertificateVerification {
 
   @@index([certificateId, createdAt])
 }
+
+// ───────────────────────────── Video & protection ─────────────────────────────
+
+/// Delivery backend. STORAGE = private object storage with short-lived signed URLs (no DRM).
+enum VideoProviderType {
+  STORAGE
+}
+
+enum VideoStatus {
+  UPLOADED
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum VideoProtection {
+  SIGNED
+}
+
+model VideoAsset {
+  id              String                 @id @default(cuid()) @db.Char(25)
+  tenantId        String                 @db.Char(25)
+  title           String                 @db.VarChar(200)
+  sourceFileId    String                 @db.Char(25)
+  provider        VideoProviderType
+  providerAssetId String?                @db.VarChar(191)
+  playbackId      String?                @db.VarChar(191)
+  status          VideoStatus            @default(UPLOADED)
+  protection      VideoProtection        @default(SIGNED)
+  durationSeconds Int?
+  errorMessage    String?                @db.VarChar(500)
+  createdById     String                 @db.Char(25)
+  createdAt       DateTime               @default(now()) @db.DateTime(3)
+  updatedAt       DateTime               @updatedAt @db.DateTime(3)
+  deletedAt       DateTime?              @db.DateTime(3)
+  sessions        VideoPlaybackSession[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, status, createdAt])
+  @@index([provider, providerAssetId])
+}
+
+model VideoPlaybackSession {
+  id           String     @id @default(cuid()) @db.Char(25)
+  tenantId     String     @db.Char(25)
+  videoAssetId String     @db.Char(25)
+  lessonId     String     @db.Char(25)
+  userId       String     @db.Char(25)
+  enrollmentId String     @db.Char(25)
+  ipHash       String?    @db.Char(64)
+  userAgent    String?    @db.VarChar(512)
+  lastSeenAt   DateTime   @default(now()) @db.DateTime(3)
+  expiresAt    DateTime   @db.DateTime(3)
+  revokedAt    DateTime?  @db.DateTime(3)
+  revokeReason String?    @db.VarChar(64)
+  createdAt    DateTime   @default(now()) @db.DateTime(3)
+  video        VideoAsset @relation(fields: [tenantId, videoAssetId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, userId, lastSeenAt])
+}
+
+

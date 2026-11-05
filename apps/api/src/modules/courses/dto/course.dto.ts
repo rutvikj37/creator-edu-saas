@@ -68,6 +68,7 @@ export class UpdateLessonDto {
   @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @Length(1, 200) title?: string;
   @ApiPropertyOptional() @IsOptional() @IsObject() content?: Record<string, unknown> | null;
   @ApiPropertyOptional() @IsOptional() @IsString() @Length(25, 25) fileAssetId?: string | null;
+  @ApiPropertyOptional() @IsOptional() @IsString() @Length(25, 25) videoAssetId?: string | null;
   @ApiPropertyOptional() @IsOptional() @IsUrl({ protocols: ['https', 'http'], require_protocol: true }) @MaxLength(1000) externalUrl?: string | null;
   @ApiPropertyOptional() @IsOptional() @IsInt() @Min(0) @Max(86400 * 10) durationSeconds?: number | null;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() isFreePreview?: boolean;

@@ -64,3 +64,10 @@ export function safeFileName(name: string): string {
   const cleaned = name.normalize('NFKC').replace(/[^\w.\- ]+/g, '_').replace(/\s+/g, ' ').trim();
   return (cleaned || 'file').slice(0, 200);
 }
+
+/** S3 multipart plan: parts of at least 8 MiB, at most 10,000 parts. */
+export const MULTIPART_THRESHOLD = 100 * MB;
+export function multipartPlan(sizeBytes: number) {
+  const partSize = Math.max(8 * MB, Math.ceil(sizeBytes / 10_000 / MB) * MB);
+  return { partSize, partCount: Math.ceil(sizeBytes / partSize) };
+}

@@ -155,6 +155,7 @@ export class CoursesService {
       this.db.assignment.findMany({ where: { courseId: id }, select: { lessonId: true, instructions: true } }),
     ]);
     const quizIds = new Set(quizzes.map((q) => q.lessonId));
+    const readyVideos = new Set((await this.db.videoAsset.findMany({ where: { status: 'READY', deletedAt: null, id: { in: lessons.map((l) => l.videoAssetId).filter(Boolean) as string[] } }, select: { id: true } })).map((v) => v.id));
     const assignmentIds = new Set(assignments.filter((a) => a.instructions).map((a) => a.lessonId));
     const problems: FieldError[] = [];
     if (!c.isFree && (c.priceAmount === null || Number(c.priceAmount) <= 0)) problems.push({ field: 'priceAmount', message: 'Set a price or mark the course as free' });
@@ -164,11 +165,11 @@ export class CoursesService {
         (l.type === 'TEXT' && !l.content) ||
         (l.type === 'LINK' && !l.externalUrl) ||
         (FILE_TYPES[l.type] && !l.fileAssetId) ||
-        l.type === 'VIDEO' || l.type === 'LIVE' ||
+        (l.type === 'VIDEO' && !readyVideos.has(l.videoAssetId ?? '')) || l.type === 'LIVE' ||
         (l.type === 'QUIZ' && !quizIds.has(l.id)) ||
         (l.type === 'ASSIGNMENT' && !assignmentIds.has(l.id));
       if (missing) {
-        const what = l.type === 'VIDEO' ? 'attach a processed video (video hosting must be configured)' : l.type === 'QUIZ' ? 'add at least one question' : l.type === 'ASSIGNMENT' ? 'write the instructions' : l.type === 'TEXT' ? 'add content' : l.type === 'LINK' ? 'add a URL' : FILE_TYPES[l.type] ? 'upload a file' : 'finish configuring it';
+        const what = l.type === 'VIDEO' ? 'attach a video from your library' : l.type === 'QUIZ' ? 'add at least one question' : l.type === 'ASSIGNMENT' ? 'write the instructions' : l.type === 'TEXT' ? 'add content' : l.type === 'LINK' ? 'add a URL' : FILE_TYPES[l.type] ? 'upload a file' : 'finish configuring it';
         problems.push({ field: `lesson:${l.id}`, message: `“${l.title}”: ${what}, or unpublish the lesson` });
       }
     }
@@ -323,7 +324,17 @@ export class CoursesService {
       if (!FILE_MIME[l.type](f.mimeType)) throw AppException.validation([{ field: 'fileAssetId', message: `This file type does not fit a ${l.type.toLowerCase()} lesson` }]);
     }
     if (dto.externalUrl && l.type !== 'LINK') throw AppException.validation([{ field: 'externalUrl', message: 'Only link lessons take a URL' }]);
-    if (dto.isPublished && l.type === 'VIDEO') throw AppException.validation([{ field: 'isPublished', message: 'Attach a processed video before publishing this lesson' }]);
+    if (dto.videoAssetId !== undefined) {
+      if (l.type !== 'VIDEO') throw AppException.validation([{ field: 'videoAssetId', message: 'Only video lessons take a video' }]);
+      if (dto.videoAssetId) {
+        const v = await this.db.videoAsset.findFirst({ where: { id: dto.videoAssetId, deletedAt: null } });
+        if (!v || v.status !== 'READY') throw AppException.validation([{ field: 'videoAssetId', message: 'Video not found or not ready' }]);
+        if (dto.durationSeconds === undefined && v.durationSeconds) dto.durationSeconds = v.durationSeconds;
+      }
+    }
+    const videoId = dto.videoAssetId !== undefined ? dto.videoAssetId : l.videoAssetId;
+    if (dto.isPublished && l.type === 'VIDEO' && !videoId) throw AppException.validation([{ field: 'isPublished', message: 'Attach a video before publishing this lesson' }]);
+    if (dto.videoAssetId === null && l.type === 'VIDEO') dto.isPublished = false;
     return this.db.courseLesson.update({
       where: { id: lessonId },
       data: { ...dto, content: dto.content as never, unlockAt: dto.unlockAt === undefined ? undefined : dto.unlockAt ? new Date(dto.unlockAt) : null },

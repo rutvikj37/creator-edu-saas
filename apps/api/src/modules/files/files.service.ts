@@ -2,7 +2,9 @@ import { Inject, Injectable } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import { AppException } from '../../common/errors/app-exception.js';
 import { StorageService } from '../../core/storage/storage.service.js';
-import { FILE_RULES, matchesSignature, safeFileName } from '../../core/storage/file-rules.js';
+import { FILE_RULES, MULTIPART_THRESHOLD, matchesSignature, multipartPlan, safeFileName } from '../../core/storage/file-rules.js';
+import { InjectRedis } from './redis-inject.js';
+import type { Redis } from 'ioredis';
 import { TENANT_PRISMA } from '../../core/tenancy/tenancy.module.js';
 import type { TenantPrismaClient } from '../../core/tenancy/tenant-prisma.js';
 import { TenantContext } from '../../core/tenancy/tenant-context.service.js';
@@ -25,6 +27,7 @@ export class FilesService {
     private readonly storage: StorageService,
     private readonly ctx: TenantContext,
     private readonly entitlements: EntitlementsService,
+    @InjectRedis() private readonly redis: Redis,
   ) {}
 
   /** Starts an upload: validates type/size/quota and returns a short-lived direct upload URL. */
@@ -51,8 +54,29 @@ export class FilesService {
         key, fileName: name, mimeType: p.mimeType, sizeBytes: BigInt(p.sizeBytes), isPublic: rule.public,
       } as never,
     });
+    // Large files on S3 upload in parallel parts (resumable per part); otherwise one signed PUT.
+    if (this.storage.supportsMultipart && p.sizeBytes > MULTIPART_THRESHOLD) {
+      const uploadId = await this.storage.createMultipart(file, p.mimeType);
+      await this.redis.set(`multipart:${file.id}`, uploadId, 'EX', 7 * 86_400);
+      return { fileId: file.id, multipart: { ...multipartPlan(p.sizeBytes) } };
+    }
     const upload = await this.storage.uploadTarget(file, p.mimeType, p.sizeBytes, p.apiOrigin);
     return { fileId: file.id, upload };
+  }
+
+  async signParts(id: string, partNumbers: number[]) {
+    const file = await this.db.fileAsset.findUnique({ where: { id } });
+    const uploadId = file && (await this.redis.get(`multipart:${id}`));
+    if (!file || !uploadId || file.status !== 'UPLOADING') throw AppException.notFound('Upload not found');
+    return Promise.all(partNumbers.map(async (partNumber) => ({ partNumber, url: await this.storage.signPart(file, uploadId, partNumber) })));
+  }
+
+  async completeMultipart(id: string, parts: Array<{ partNumber: number; etag: string }>) {
+    const file = await this.db.fileAsset.findUnique({ where: { id } });
+    const uploadId = file && (await this.redis.get(`multipart:${id}`));
+    if (!file || !uploadId) throw AppException.notFound('Upload not found');
+    await this.storage.completeMultipart(file, uploadId, parts);
+    await this.redis.del(`multipart:${id}`);
   }
 
   /** Confirms the object exists, has the declared size and that its bytes match the declared type. */
