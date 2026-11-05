@@ -74,6 +74,7 @@ const StudentLivePage = lazyNamed(() => import('../pages/live/LivePages.jsx'), '
 const WebinarPage = lazyNamed(() => import('../pages/live/LivePages.jsx'), 'WebinarPage');
 const TicketPage = lazyNamed(() => import('../pages/live/LivePages.jsx'), 'TicketPage');
 const NotificationSettingsPage = lazyNamed(() => import('../pages/account/NotificationSettingsPage.jsx'), 'NotificationSettingsPage');
+const MarketingPage = lazyNamed(() => import('../pages/creator/MarketingPage.jsx'), 'MarketingPage');
 const SubscriptionsAdminPage = lazyNamed(() => import('../pages/admin/SubscriptionsAdminPage.jsx'), 'SubscriptionsAdminPage');
 const PlatformTransactionsPage = lazyNamed(() => import('../pages/finance/FinanceDashboardPage.jsx'), 'PlatformTransactionsPage');
 const BillingPage = lazyNamed(() => import('../pages/creator/BillingPage.jsx'), 'BillingPage');
@@ -175,6 +176,7 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/creator/live', element: page(LiveClassesPage) },
             { path: '/creator/live/:id', element: page(LiveClassDetailPage) },
             { path: '/creator/batches', element: page(BatchesPage) },
+            { path: '/creator/marketing', element: page(MarketingPage) },
             { path: '/creator/discussions', element: page(DiscussionsPage) },
             { path: '/creator/certificates', element: page(CertificatesAdminPage) },
             { path: '/creator/domains', element: page(DomainsPage) },
