@@ -43,9 +43,18 @@ export function RequireAuth({ admin = false, workspace = false, allowMfaSetup = 
 }
 
 /** Sign-in/sign-up pages: bounce signed-in users to their home. */
+/** Only same-site relative paths are accepted as post-sign-in destinations (no open redirects). */
+export function safeNextPath(next) {
+  return next && next.startsWith('/') && !next.startsWith('//') ? next : null;
+}
+
 export function GuestOnly() {
   const auth = useAuth();
+  const location = useLocation();
   if (auth.status === 'loading') return <FullPageSpinner />;
-  if (auth.status === 'authenticated') return <Navigate to={landingPath(auth.me, auth.surface)} replace />;
+  if (auth.status === 'authenticated') {
+    const next = safeNextPath(new URLSearchParams(location.search).get('next'));
+    return <Navigate to={auth.me?.mfaSetupRequired ? '/setup-2fa' : next ?? landingPath(auth.me, auth.surface)} replace />;
+  }
   return <Outlet />;
 }

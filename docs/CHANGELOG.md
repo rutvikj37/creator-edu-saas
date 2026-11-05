@@ -2,6 +2,10 @@
 
 Format: Keep a Changelog. Versions follow SemVer once Phase 1 ships.
 
+## [0.5.0] — 2026-11-05 — Phase 5: Student platform
+### Added
+- Catalogue, enrolment, player, progress, notes/bookmarks/Q&A, quizzes, assignments, certificates with verification; creator student and grading tools.
+
 ## [0.4.0] — 2026-11-04 — Phase 4: Creator platform
 ### Added
 - File storage, academy profile & onboarding, course builder with drag-and-drop curriculum, rich text, staff invitations, creator dashboard.

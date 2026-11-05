@@ -9,7 +9,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 | 2 Auth & multi-tenancy | registration, login, OTP, email verify, reset, refresh rotation, sessions, 2FA, Google OAuth adapter, RBAC, tenants, TenantContext/Guard/Prisma extension, subdomain + custom-domain resolution foundation | **Tenant isolation suite green** | ✅ 2026-11-04 |
 | 3 Administration | super admin dashboard (real aggregates), tenants, plans/features/prices, platform settings, admins/roles, audit logs, platform/finance/support panels (base), support tickets | e2e admin flows pass | ✅ 2026-11-04 |
 | 4 Creator platform | onboarding wizard, creator dashboard, academy profile/branding, course builder + drag-and-drop curriculum, uploads (S3 multipart), staff & instructors | creator can build a full draft course | ✅ 2026-11-04 |
-| 5 Student platform | student auth on academy host, catalog, free enrollment, player, progress, notes, bookmarks, discussions, quizzes, assignments, certificates (PDF + QR verify) | student completes free course and gets certificate | ⬜ |
+| 5 Student platform | student auth on academy host, catalog, free enrollment, player, progress, notes, bookmarks, discussions, quizzes, assignments, certificates (PDF + QR verify) | student completes free course and gets certificate | ✅ 2026-11-05 |
 | 6 Video infrastructure | video assets, VdoCipher/Mux/AWS adapters, processing webhooks, playback authorization, watermark, PDF protection | playback works with configured provider test account; unauthorized playback denied | ⬜ |
 | 7 Commerce | products, prices, cart, checkout, coupons, orders, Razorpay/Cashfree/Stripe/PayPal adapters, webhooks, refunds, invoices, ledger, commissions, SaaS billing & dunning | full 13-step e2e journey with provider test mode | ⬜ |
 | 8 Website builder | themes, templates, block page builder, versions, undo/redo, previews, blog, SEO meta injection, custom domains + TLS | creator publishes branded site on custom domain | ⬜ |
@@ -69,9 +69,22 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 
 **Lesson types arriving later**: video playback (Phase 6), quizzes/assignments (Phase 5), live classes (Phase 9) — offered as disabled options in the builder; video lessons can be structured but stay unpublished until a processed video is attached.
 
+## Phase 5 — Student platform (✅ complete)
+
+**Delivered (API)**: public catalogue + course landing with outline (content never exposed) and free previews · enrolment (free, manual grant incl. invited accounts; purchase grants arrive with Phase 7) with access expiry · player with drip (days-after-enrol / dates; lesson overrides section), lock state and resume · lesson content with short-lived signed file URLs · progress + completion threshold over required lessons · notes, bookmarks, lesson Q&A with instructor replies and moderation · quizzes: 7 question types, shuffling, random pick, time limit with grace, attempt limits, negative marking, auto + manual grading, results visibility · assignments: rich-text instructions, due dates/late policy, student uploads (signature-verified), resubmission, grading/return · certificates: per-tenant template, idempotent issuance on completion, PDF with QR, public verification (any host), revoke/reinstate · creator students list/detail, course enrolments, discussions.
+
+**Delivered (Web)**: academy home with live catalogue · course landing (objectives, outline, preview modal, enrol CTA) · My learning · full-screen player (curriculum with lock/complete states, content renderers per type, notes and Q&A panels, prev/next, bookmark, mark complete) · quiz runner (timer, autosave, results with feedback) · assignment panel (attachments) · certificates with PDF download · public verification page · creator: students, discussions, certificates (template + issued), quiz builder and grading, assignment editor and grading, course Students tab.
+
+**Verification**: API e2e 69 ✅ (student-platform suite 3 incl. full journey, access rules, isolation) · API unit 43 ✅ (grading, access rules, certificate numbers) · web 48 ✅ · browser journey: academy → preview → sign up → enrol → complete → quiz pass → assignment → certificate PDF → public verification.
+
+**Fixed during verification**: sign-up/sign-in now return to the `?next=` page (guest guard no longer overrides it) · creator attempt detail endpoint for grading.
+
+**Deferred**: standalone question bank (questions live per quiz) · course reviews/ratings (Phase 10 with communities).
+
 ## Change log of this file
 - 2026-11-04 — Phase 0 documents drafted and approved.
 - 2026-11-04 — Phase 1 foundation completed.
 - 2026-11-04 — Phase 2 authentication & multi-tenancy completed.
 - 2026-11-04 — Phase 3 administration completed.
 - 2026-11-04 — Phase 4 creator platform completed.
+- 2026-11-05 — Phase 5 student platform completed.

@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { vi } from 'vitest';
-import { RequireAuth, GuestOnly, landingPath } from './guards.jsx';
+import { RequireAuth, GuestOnly, landingPath, safeNextPath } from './guards.jsx';
 
 const authState = { current: null };
 vi.mock('../context/AuthContext.jsx', () => ({ useAuth: () => authState.current }));
@@ -56,5 +56,19 @@ describe('route guards', () => {
     expect(landingPath(me({ platformRoles: ['PLATFORM_ADMIN'] }), 'platform')).toBe('/super-admin');
     expect(landingPath(me(), 'platform')).toBe('/creator');
     expect(landingPath(null, 'platform')).toBe('/login');
+  });
+});
+
+describe('GuestOnly', () => {
+  it('sends signed-in users to a safe ?next destination', () => {
+    authState.current = { status: 'authenticated', surface: 'academy', me: me() };
+    const router = renderAt('/signup?next=%2Fcourses%2Fsql', [...routes, { path: '/courses/sql', element: <p>course page</p> }]);
+    expect(screen.getByText('course page')).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/courses/sql');
+  });
+  it('rejects open redirects', () => {
+    expect(safeNextPath('//evil.example')).toBeNull();
+    expect(safeNextPath('https://evil.example')).toBeNull();
+    expect(safeNextPath('/learn')).toBe('/learn');
   });
 });
