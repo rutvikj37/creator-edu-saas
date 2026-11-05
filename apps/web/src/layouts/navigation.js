@@ -45,6 +45,7 @@ export const NAV = {
       label: 'Content',
       items: [
         item('Courses', '/creator/courses', BookOpen, 4, { available: true, perm: 'courses.read' }),
+        item('Videos', '/creator/videos', Video, 6, { available: true, perm: 'courses.read' }),
         item('Products', '/creator/products', Package, 7),
         item('Discussions', '/creator/discussions', MessagesSquare, 5, { available: true, perm: 'courses.read' }),
         item('Certificates', '/creator/certificates', Award, 5, { available: true, perm: 'certificates.manage' }),

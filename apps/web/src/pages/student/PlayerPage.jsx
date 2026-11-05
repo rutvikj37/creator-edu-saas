@@ -10,6 +10,7 @@ import { cn } from '../../utils/cn.js';
 import { formatDate } from '../../utils/format.js';
 import { QuizRunner } from './QuizRunner.jsx';
 import { AssignmentPanel } from './AssignmentPanel.jsx';
+import { VideoPlayer } from '../../components/video/VideoPlayer.jsx';
 
 function flatLessons(sections) {
   return sections.flatMap((s) => s.lessons.flatMap((l) => [l, ...(l.children ?? [])]));
@@ -30,7 +31,7 @@ function LessonContent({ lessonId, onAutoComplete }) {
     case 'DOWNLOAD': return l.file ? <a href={`${l.file.url}${l.file.downloadable ? (l.file.url.includes('?') ? '&' : '?') + 'download=1' : ''}`} className="inline-flex items-center gap-2 rounded-md border border-line px-4 py-3 text-sm font-medium hover:bg-surface-2"><Download className="size-4" />{l.file.fileName}</a> : null;
     case 'QUIZ': return <QuizRunner lessonId={lessonId} onPassed={onAutoComplete} />;
     case 'ASSIGNMENT': return <AssignmentPanel lessonId={lessonId} onSubmitted={onAutoComplete} />;
-    case 'VIDEO': return <Alert tone="info">Video playback is being enabled for this academy.</Alert>;
+    case 'VIDEO': return l.hasVideo ? <VideoPlayer lessonId={lessonId} onCompleted={onAutoComplete} /> : <Alert tone="info">This video isn't available yet.</Alert>;
     default: return null;
   }
 }

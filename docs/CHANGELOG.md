@@ -2,6 +2,14 @@
 
 Format: Keep a Changelog. Versions follow SemVer once Phase 1 ships.
 
+## [0.6.0] — 2026-11-05 — Phase 6: Video (no DRM)
+### Added
+- Video library, multipart uploads, ranged local streaming, lesson video attach + publish checks, signed playback sessions with resume, heartbeats, auto-complete, concurrent-stream limit and revocation; creator Videos page and student video player.
+### Fixed
+- Final position heartbeat is sent when leaving a video lesson.
+### Notes
+- DRM, third-party video providers, transcoding and watermarking are out of scope by owner decision.
+
 ## [0.5.0] — 2026-11-05 — Phase 5: Student platform
 ### Added
 - Catalogue, enrolment, player, progress, notes/bookmarks/Q&A, quizzes, assignments, certificates with verification; creator student and grading tools.

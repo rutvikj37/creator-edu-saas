@@ -1,6 +1,6 @@
 # Video Hosting & DRM
 
-Status: **Phase 0 design** — implemented in Phase 6. DRM is reported as active **only** when a DRM-capable provider is configured and a license playback test passes (`VideoProvider.status = VERIFIED`, `drmCapable = true`).
+Status: **Phase 6 shipped without DRM** (owner decision, 2026-11-05): videos are stored privately and played via signed, short-lived playback sessions (see DEVELOPMENT_PROGRESS → Phase 6). The provider/DRM design below is kept for a future phase and is **not implemented**. DRM is reported as active **only** when a DRM-capable provider is configured and a license playback test passes (`VideoProvider.status = VERIFIED`, `drmCapable = true`).
 
 ## Honest capability matrix
 

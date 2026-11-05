@@ -10,7 +10,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 | 3 Administration | super admin dashboard (real aggregates), tenants, plans/features/prices, platform settings, admins/roles, audit logs, platform/finance/support panels (base), support tickets | e2e admin flows pass | ✅ 2026-11-04 |
 | 4 Creator platform | onboarding wizard, creator dashboard, academy profile/branding, course builder + drag-and-drop curriculum, uploads (S3 multipart), staff & instructors | creator can build a full draft course | ✅ 2026-11-04 |
 | 5 Student platform | student auth on academy host, catalog, free enrollment, player, progress, notes, bookmarks, discussions, quizzes, assignments, certificates (PDF + QR verify) | student completes free course and gets certificate | ✅ 2026-11-05 |
-| 6 Video infrastructure | video assets, VdoCipher/Mux/AWS adapters, processing webhooks, playback authorization, watermark, PDF protection | playback works with configured provider test account; unauthorized playback denied | ⬜ |
+| 6 Video (no DRM — scope set by owner 2026-11-05) | video library, direct + multipart uploads, signed playback sessions, resume, auto-complete, concurrent-stream limit, revocation | student plays an attached video; unauthorized playback denied | ✅ 2026-11-05 |
 | 7 Commerce | products, prices, cart, checkout, coupons, orders, Razorpay/Cashfree/Stripe/PayPal adapters, webhooks, refunds, invoices, ledger, commissions, SaaS billing & dunning | full 13-step e2e journey with provider test mode | ⬜ |
 | 8 Website builder | themes, templates, block page builder, versions, undo/redo, previews, blog, SEO meta injection, custom domains + TLS | creator publishes branded site on custom domain | ⬜ |
 | 9 Live learning | LiveKit (primary), Zoom, Google Meet adapters, scheduling, recurring, waiting room, chat/polls/Q&A, attendance, recordings, webinars, batches/cohorts | real A/V session with attendance recorded | ⬜ |
@@ -81,6 +81,18 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 
 **Deferred**: standalone question bank (questions live per quiz) · course reviews/ratings (Phase 10 with communities).
 
+## Phase 6 — Video (✅ complete, no DRM)
+
+**Scope decision (owner, 2026-11-05)**: "video only, not DRM". Out of scope: VdoCipher/Mux/MediaConvert adapters, HLS transcoding, Widevine/FairPlay, watermarking, PDF protection. The UI says plainly that playback is not DRM.
+
+**Delivered (API)**: `VideoAsset` library per tenant (title, source file, duration, status, usage) · uploads reuse the verified file pipeline; files over 100 MB on S3 use multipart (8 MiB parts, signed per part, Redis-held upload id) · local driver serves HTTP `Range` (206/416) so seeking works in dev · lesson attach (VIDEO lessons only, READY, same tenant; duration copied) and publish checks require a ready video · playback sessions: enrolment/drip/expiry checks, short-lived signed URL (TTL scales with duration, 30 min–6 h), resume position, at most 3 concurrent streams per student (429), heartbeat re-checks access every 15 s and revokes on lost enrolment (403), auto-complete at 90 % watched, explicit end · deleting a video in use is refused (409); deleting revokes live sessions · both new tables are tenant-scoped and covered by the isolation suite.
+
+**Delivered (Web)**: Videos page (drag-and-drop upload queue with progress, parallel multipart parts with retry, library table, preview modal, delete confirm) · lesson editor video picker · student `VideoPlayer` (session start, resume, heartbeats, auto-complete, revoked/limit errors, ends session on leave).
+
+**Verification**: API e2e 71 ✅ (video suite: upload → attach → publish → play → resume → auto-complete, device limit, revocation, isolation) · API unit 45 ✅ · web 52 ✅ (VideoPlayer: session lifecycle, completion, revocation, start errors) · browser: creator uploads MP4 in the UI → preview plays → attach → student enrols → player loads 40 s video → watching to the end marks lesson Completed, course 100 %.
+
+**Fixed during verification**: final heartbeat on leaving the lesson was skipped (ref already detached) — now uses the last observed position · small files showed "0 MB".
+
 ## Change log of this file
 - 2026-11-04 — Phase 0 documents drafted and approved.
 - 2026-11-04 — Phase 1 foundation completed.
@@ -88,3 +100,4 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 - 2026-11-04 — Phase 3 administration completed.
 - 2026-11-04 — Phase 4 creator platform completed.
 - 2026-11-05 — Phase 5 student platform completed.
+- 2026-11-05 — Phase 6 video (no DRM) completed.

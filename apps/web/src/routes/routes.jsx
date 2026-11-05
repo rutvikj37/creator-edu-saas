@@ -56,6 +56,7 @@ const StudentCertificatesPage = lazyNamed(() => import('../pages/student/Certifi
 const StudentsPage = lazyNamed(() => import('../pages/creator/StudentsPage.jsx'), 'StudentsPage');
 const DiscussionsPage = lazyNamed(() => import('../pages/creator/DiscussionsPage.jsx'), 'DiscussionsPage');
 const CertificatesAdminPage = lazyNamed(() => import('../pages/creator/CertificatesAdminPage.jsx'), 'CertificatesAdminPage');
+const VideosPage = lazyNamed(() => import('../pages/creator/VideosPage.jsx'), 'VideosPage');
 const BillingPage = lazyNamed(() => import('../pages/creator/BillingPage.jsx'), 'BillingPage');
 const CreatorSupportPage = lazyNamed(() => import('../pages/creator/CreatorSupportPage.jsx'), 'CreatorSupportPage');
 const CreatorTicketPage = lazyNamed(() => import('../pages/creator/CreatorSupportPage.jsx'), 'CreatorTicketPage');
@@ -144,6 +145,7 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/creator/courses/:id', element: page(CourseEditorPage) },
             { path: '/creator/staff', element: page(StaffPage) },
             { path: '/creator/students', element: page(StudentsPage) },
+            { path: '/creator/videos', element: page(VideosPage) },
             { path: '/creator/discussions', element: page(DiscussionsPage) },
             { path: '/creator/certificates', element: page(CertificatesAdminPage) },
             { path: '/creator/domains', element: page(DomainsPage) },
