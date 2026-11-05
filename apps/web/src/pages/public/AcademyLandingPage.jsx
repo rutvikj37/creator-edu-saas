@@ -9,6 +9,7 @@ import { catalogApi } from '../../services/api/learn.js';
 import { Card, EmptyState, ErrorState, Skeleton } from '../../components/ui/index.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { formatMoney } from '../../utils/format.js';
+import { RatingSummary } from '../../components/reviews/Stars.jsx';
 
 /** `nav` = links from the website builder (header settings + published pages). */
 function CartLink() {
@@ -62,6 +63,7 @@ export function CourseCard({ c, color }) {
         <div className="space-y-2 p-4">
           <p className="line-clamp-2 font-semibold">{c.title}</p>
           {c.shortDescription && <p className="line-clamp-2 text-sm text-muted">{c.shortDescription}</p>}
+          <RatingSummary average={c.ratingAverage} count={c.ratingCount} />
           <div className="flex items-center justify-between text-sm">
             <span className="font-semibold" style={{ color }}>{c.isFree ? 'Free' : formatMoney(c.priceAmount, c.currency)}{!c.isFree && c.compareAtAmount && <span className="ml-2 font-normal text-muted line-through">{formatMoney(c.compareAtAmount, c.currency)}</span>}</span>
             <span className="flex items-center gap-1 text-muted"><Users className="size-3.5" />{c.studentCount}</span>

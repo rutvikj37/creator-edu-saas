@@ -2,6 +2,10 @@
 
 Format: Keep a Changelog. Versions follow SemVer once Phase 1 ships.
 
+## [0.17.0] — 2026-11-05 — Course reviews and ratings
+### Added
+- Students rate and review courses they have access to; ratings and reviews (with academy replies) on course pages and cards; creators reply and hide abusive reviews with a reason.
+
 ## [0.16.0] — 2026-11-05 — Paid webinars
 ### Added
 - Webinar tickets: set a price, sell through Razorpay checkout with coupons and GST; the join link is emailed after payment; refunds can cancel the ticket.

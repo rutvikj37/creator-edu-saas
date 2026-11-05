@@ -11,6 +11,8 @@ import { RichTextView } from '../../components/forms/RichTextView.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { formatMoney } from '../../utils/format.js';
 import { AcademyHeader } from './AcademyLandingPage.jsx';
+import { RatingSummary } from '../../components/reviews/Stars.jsx';
+import { CourseReviews } from '../../components/reviews/CourseReviews.jsx';
 
 export function CourseLandingPage() {
   const { slug } = useParams();
@@ -55,6 +57,7 @@ export function CourseLandingPage() {
                 <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{c.title}</h1>
                 {c.shortDescription && <p className="mt-3 text-lg text-fg-2">{c.shortDescription}</p>}
                 <div className="mt-5 flex flex-wrap gap-4 text-sm text-muted">
+                  {c.rating?.count > 0 && <a href="#reviews-h"><RatingSummary average={c.rating.average} count={c.rating.count} /></a>}
                   <span className="flex items-center gap-1.5"><BookOpen className="size-4" />{lessons.length} lessons</span>
                   {c.durationMinutes && <span className="flex items-center gap-1.5"><Clock className="size-4" />{Math.round(c.durationMinutes / 60 * 10) / 10} hours</span>}
                   <span className="flex items-center gap-1.5"><Users className="size-4" />{c.studentCount} students</span>
@@ -105,6 +108,7 @@ export function CourseLandingPage() {
               </section>
               {c.description && <section><h2 className="mb-4 text-xl font-semibold">About this course</h2><RichTextView value={c.description} /></section>}
               {c.prerequisites.length > 0 && <section><h2 className="mb-3 text-xl font-semibold">Requirements</h2><ul className="list-disc space-y-1 pl-5 text-sm">{c.prerequisites.map((p) => <li key={p}>{p}</li>)}</ul></section>}
+              <CourseReviews slug={slug} />
             </div>
           </main>
           <Modal open={Boolean(preview)} onClose={() => setPreview(null)} title={pv.data?.title ?? 'Preview'} size="lg">

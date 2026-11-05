@@ -1635,6 +1635,35 @@ model OrderItem {
   @@index([tenantId, bundleId])
 }
 
+enum ReviewStatus {
+  PUBLISHED
+  HIDDEN
+}
+
+/// A student's rating (1–5) and optional review of a course; one per student per course.
+model CourseReview {
+  id          String       @id @default(cuid()) @db.Char(25)
+  tenantId    String       @db.Char(25)
+  courseId    String       @db.Char(25)
+  userId      String       @db.Char(25)
+  rating      Int          @db.TinyInt
+  title       String?      @db.VarChar(120)
+  body        String?      @db.VarChar(2000)
+  status      ReviewStatus @default(PUBLISHED)
+  /// Why the academy hid it (shown to the author).
+  hiddenReason String?     @db.VarChar(200)
+  reply       String?      @db.VarChar(2000)
+  repliedAt   DateTime?    @db.DateTime(3)
+  repliedById String?      @db.Char(25)
+  createdAt   DateTime     @default(now()) @db.DateTime(3)
+  updatedAt   DateTime     @updatedAt @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, courseId, userId])
+  @@index([tenantId, courseId, status, createdAt])
+  @@index([tenantId, status, createdAt])
+}
+
 enum BundleStatus {
   DRAFT
   PUBLISHED

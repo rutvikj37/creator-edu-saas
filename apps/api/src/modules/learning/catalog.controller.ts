@@ -9,6 +9,7 @@ import type { TenantPrismaClient } from '../../core/tenancy/tenant-prisma.js';
 import type { AppRequest } from '../../core/tenancy/request-context.js';
 import { FilesService } from '../files/files.service.js';
 import { apiOrigin } from '../files/files.controller.js';
+import { ReviewsService } from './reviews.service.js';
 
 /** Public course catalogue of the academy on the current host. */
 @ApiTags('Academy (public) · Catalog')
@@ -20,6 +21,7 @@ export class CatalogController {
     @Inject(TENANT_PRISMA) private readonly db: TenantPrismaClient,
     private readonly prisma: PrismaService,
     private readonly files: FilesService,
+    private readonly reviews: ReviewsService,
   ) {}
 
   @Get()
@@ -31,7 +33,9 @@ export class CatalogController {
       take: 100,
       include: { _count: { select: { lessons: { where: { isPublished: true } }, enrollments: true } } },
     });
+    const ratings = await this.reviews.summaries(rows.map((c) => c.id));
     return Promise.all(rows.map(async (c) => ({
+      ratingAverage: ratings.get(c.id)?.average ?? null, ratingCount: ratings.get(c.id)?.count ?? 0,
       id: c.id, slug: c.slug, title: c.title, shortDescription: c.shortDescription, level: c.level, language: c.language, categorySlug: c.categorySlug,
       isFree: c.isFree, priceAmount: c.priceAmount?.toString() ?? null, compareAtAmount: c.compareAtAmount?.toString() ?? null, currency: c.currency,
       lessonCount: c._count.lessons, studentCount: c._count.enrollments, durationMinutes: c.durationMinutes,
@@ -58,6 +62,7 @@ export class CatalogController {
       thumbnailUrl: await this.files.urlFor(c.thumbnailFileId, apiOrigin(req), 86_400), bannerUrl: await this.files.urlFor(c.bannerFileId, apiOrigin(req), 86_400),
       instructors: instructors.map((i) => people.find((p) => p.id === i.userId)?.fullName).filter(Boolean),
       studentCount: students,
+      rating: (await this.reviews.summaries([c.id])).get(c.id),
       sections: sections.filter((s) => s.lessons.length).map((s) => ({ id: s.id, title: s.title, lessons: s.lessons })),
     };
   }

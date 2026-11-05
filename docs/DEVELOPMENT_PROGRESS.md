@@ -79,7 +79,9 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 
 **Fixed during verification**: sign-up/sign-in now return to the `?next=` page (guest guard no longer overrides it) · creator attempt detail endpoint for grading.
 
-**Deferred**: standalone question bank (questions live per quiz) · course reviews/ratings (Phase 10 with communities).
+**Deferred**: standalone question bank (questions live per quiz).
+
+**Course reviews and ratings (added 2026-11-05)**: students with access rate a course 1–5 with an optional headline and review from the player ("Rate course"); one review each, editable and deletable; access lost → no new reviews · public course page shows the average, count and star distribution (filter by stars), reviews with first name + last initial (no emails) and the academy's reply; course cards show the rating · creators see all reviews (filter by course, not replied, hidden), reply publicly, and hide abusive reviews with a reason the author sees (hidden reviews do not count; editing does not re-publish; the academy cannot change what students wrote). Verified by API e2e 119 ✅ (reviews suite incl. isolation), web 118 ✅, browser: student rated from the player, creator replied, rating on the course page and card.
 
 ## Phase 6 — Video (✅ complete, no DRM)
 
@@ -204,3 +206,4 @@ Bunny Stream as primary video host (direct TUS uploads, webhook + API-verified p
 - 2026-11-05 — plugNmeet integration for live classes and webinars.
 - 2026-11-05 — Cart and course bundles.
 - 2026-11-05 — Paid webinars.
+- 2026-11-05 — Course reviews and ratings.

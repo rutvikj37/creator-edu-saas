@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Award, Bookmark, BookmarkCheck, Check, ChevronLeft, ChevronRight, CircleCheck, Download, ExternalLink, Lock, Menu, MessageSquare, NotebookPen, Sparkles, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Award, Star, Bookmark, BookmarkCheck, Check, ChevronLeft, ChevronRight, CircleCheck, Download, ExternalLink, Lock, Menu, MessageSquare, NotebookPen, Sparkles, Trash2, X } from 'lucide-react';
 import { Alert } from '../../components/auth/Alert.jsx';
 import { Badge, Button, ErrorState, Skeleton, Tabs, Textarea, toast } from '../../components/ui/index.js';
 import { RichTextView } from '../../components/forms/RichTextView.jsx';
@@ -13,6 +13,7 @@ import { AssignmentPanel } from './AssignmentPanel.jsx';
 import { VideoPlayer } from '../../components/video/VideoPlayer.jsx';
 import { TutorPanel } from '../../components/ai/AiTools.jsx';
 import { aiApi } from '../../services/api/ai.js';
+import { ReviewDialog } from '../../components/reviews/ReviewDialog.jsx';
 
 function flatLessons(sections) {
   return sections.flatMap((s) => s.lessons.flatMap((l) => [l, ...(l.children ?? [])]));
@@ -86,6 +87,7 @@ export function PlayerPage() {
   const qc = useQueryClient();
   const player = useQuery({ queryKey: ['player', courseId], queryFn: () => learnApi.player(courseId), retry: false });
   const [sidebar, setSidebar] = useState(false);
+  const [rating, setRating] = useState(false);
   const [tab, setTab] = useState('notes');
   const tutor = useQuery({ queryKey: ['learn', 'ai-tutor'], queryFn: aiApi.tutorStatus, staleTime: 60_000, retry: false });
   const lessons = useMemo(() => (player.data ? flatLessons(player.data.sections) : []), [player.data]);
@@ -133,8 +135,10 @@ export function PlayerPage() {
         <Link to="/learn" className="flex items-center gap-1 text-sm text-muted hover:text-fg"><ArrowLeft className="size-4" /><span className="hidden sm:inline">My learning</span></Link>
         <p className="min-w-0 flex-1 truncate font-semibold">{p.course.title}</p>
         <div className="hidden items-center gap-2 sm:flex"><div className="h-1.5 w-32 rounded-full bg-surface-2"><div className="h-1.5 rounded-full bg-green-600" style={{ width: `${p.enrollment.progressPercent}%` }} /></div><span className="text-xs text-muted">{p.enrollment.progressPercent}%</span></div>
+        <Button size="sm" variant="ghost" leftIcon={Star} onClick={() => setRating(true)}><span className="hidden sm:inline">Rate course</span></Button>
         {p.enrollment.completedAt && p.course.certificateEnabled && <Link to="/learn/certificates" className="inline-flex items-center gap-1 text-sm font-medium text-primary-600"><Award className="size-4" />Certificate</Link>}
       </header>
+      <ReviewDialog courseId={p.course.id} open={rating} onClose={() => setRating(false)} />
       <div className="flex min-h-0 flex-1">
         <aside className="hidden w-72 shrink-0 overflow-y-auto border-r border-line bg-surface lg:block">{curriculum}</aside>
         {sidebar && <div className="fixed inset-0 z-40 lg:hidden"><div className="absolute inset-0 bg-slate-900/50" onClick={() => setSidebar(false)} /><aside className="absolute inset-y-0 left-0 w-80 overflow-y-auto bg-surface"><div className="flex justify-end p-2"><Button variant="ghost" size="icon-sm" aria-label="Close" onClick={() => setSidebar(false)}><X className="size-4" /></Button></div>{curriculum}</aside></div>}
