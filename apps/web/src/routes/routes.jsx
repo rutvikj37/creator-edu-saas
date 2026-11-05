@@ -61,6 +61,7 @@ const DiscussionsPage = lazyNamed(() => import('../pages/creator/DiscussionsPage
 const CertificatesAdminPage = lazyNamed(() => import('../pages/creator/CertificatesAdminPage.jsx'), 'CertificatesAdminPage');
 const VideosPage = lazyNamed(() => import('../pages/creator/VideosPage.jsx'), 'VideosPage');
 const WebsitePage = lazyNamed(() => import('../pages/creator/WebsitePage.jsx'), 'WebsitePage');
+const PageBuilderPage = lazyNamed(() => import('../pages/creator/PageBuilderPage.jsx'), 'PageBuilderPage');
 const PaymentsPage = lazyNamed(() => import('../pages/creator/PaymentsPage.jsx'), 'PaymentsPage');
 const CouponsPage = lazyNamed(() => import('../pages/creator/CouponsPage.jsx'), 'CouponsPage');
 const OrdersPage = lazyNamed(() => import('../pages/creator/OrdersPage.jsx'), 'OrdersPage');
@@ -203,6 +204,7 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/creator/discussions', element: page(DiscussionsPage) },
             { path: '/creator/certificates', element: page(CertificatesAdminPage) },
             { path: '/creator/website', element: page(WebsitePage) },
+            { path: '/creator/website/pages/:id', element: page(PageBuilderPage) },
             { path: '/creator/domains', element: page(DomainsPage) },
             { path: '/creator/billing', element: page(BillingPage) },
             { path: '/creator/support', element: page(CreatorSupportPage) },

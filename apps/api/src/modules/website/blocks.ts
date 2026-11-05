@@ -69,7 +69,11 @@ export function parseBlocks(input: unknown): { blocks: Block[]; errors: BlockErr
     if (!schema) return errors.push({ field: `${at}.type`, message: `Unknown block type "${String(raw.type)}"` });
     const r = schema.safeParse(raw.props ?? {});
     if (!r.success) {
-      for (const issue of r.error.issues) errors.push({ field: [at, 'props', ...issue.path.map(String)].join('.'), message: issue.message });
+      for (const issue of r.error.issues) {
+        // Replace zod's generic "Too small" wording for empty required values; keep custom messages.
+        const required = issue.code === 'too_small' && Number((issue as { minimum?: number | bigint }).minimum) === 1 && /^Too small/.test(issue.message);
+        errors.push({ field: [at, 'props', ...issue.path.map(String)].join('.'), message: required ? (issue.path.length > 1 ? 'Fill in every item, or remove the empty ones' : 'This field is required') : issue.message });
+      }
       return;
     }
     blocks.push({ id, type: raw.type, hidden: raw.hidden === true, props: r.data as Record<string, unknown> });

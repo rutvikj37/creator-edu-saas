@@ -12,7 +12,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 | 5 Student platform | student auth on academy host, catalog, free enrollment, player, progress, notes, bookmarks, discussions, quizzes, assignments, certificates (PDF + QR verify) | student completes free course and gets certificate | ✅ 2026-11-05 |
 | 6 Video (no DRM — scope set by owner 2026-11-05) | video library, direct + multipart uploads, signed playback sessions, resume, auto-complete, concurrent-stream limit, revocation | student plays an attached video; unauthorized playback denied | ✅ 2026-11-05 |
 | 7 Commerce (Razorpay only — owner decision 2026-11-05) | Razorpay gateway per academy, checkout, coupons, GST, orders, webhooks, reconciliation, refunds, invoices, ledger, commission recording, finance views | paid checkout → access → invoice → refund, verified against Razorpay's API contract | ✅ 2026-11-05 |
-| 8 Website | **owner decision 2026-11-05: two options per academy — connect an existing external website, or an AI-generated landing page** (from profile, courses, industry); block pages, versions, previews, SEO title/description; **domains: free branded subdomain and/or own domain** + TLS | creator publishes a landing page or links an own website | 🟨 landing page + external website + domains done; full drag-and-drop builder, blog UI and TLS pending |
+| 8 Website | **owner decision 2026-11-05: two options per academy — connect an existing external website, or an AI-generated landing page** (from profile, courses, industry); block pages, versions, previews, SEO title/description; **domains: free branded subdomain and/or own domain** + TLS | creator publishes a landing page or links an own website | 🟨 landing page + external website + drag-and-drop page builder + domains done; blog UI and TLS pending |
 | 9 Live learning | LiveKit built-in classroom (primary) + meeting-link classes (Zoom/Meet/Teams URL), scheduling, weekly recurrence, waiting room, chat (LiveKit), polls/Q&A, attendance, recordings, webinars, batches | live class with attendance recorded | ✅ 2026-11-05 (live A/V not verifiable here) |
 | 10 Growth & advanced | notifications (email/SMS/WhatsApp/web-push), campaigns, automations, leads, consent, affiliates, communities, memberships, advanced analytics + exports, AI features with credits | module tests + e2e | ⬜ |
 | 11 Quality & production | security audit, load tests, query optimisation, backups/restore drill, Nginx/PM2/AWS config, runbooks | release checklist signed off | ⬜ |
@@ -162,7 +162,15 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 
 **Verification**: API e2e 111 ✅ · API unit 103 ✅ · web 101 ✅. Suites: API e2e (website modes suite: URL validation and loop prevention, layout, AI landing from real facts with invented course ids dropped, draft-only, previous draft versioned, publish → public render, Hindi, validation, credit limit; isolation covers the new route) · web tests (own website flow, generate → edit → publish, public redirect/render/fallback) · browser: generate without an AI key shows "AI features are not set up", template-based home page edited and published, public page renders, own-website redirect works while `/courses` stays on the platform. **Not verified**: a live Claude generation (no `ANTHROPIC_API_KEY` here).
 
-**Still pending**: full drag-and-drop builder for extra pages, blog editor UI, automatic TLS for custom domains (deployment).
+**Still pending**: blog editor UI, automatic TLS for custom domains (deployment).
+
+## Website: drag-and-drop page builder (✅ 2026-11-05)
+
+**Delivered (Web)**: full-screen builder at `/creator/website/pages/:id` for the home page and any extra page · block palette (drag onto the canvas at the drop point, or click to add) · canvas renders the real public blocks; reorder by drag handle (keyboard accessible) · per-block hide/show, duplicate, delete · inspector for every block field (text, rich text, images, course picks, lists) — side panel on desktop, sheet on mobile · undo/redo (Ctrl+Z / Ctrl+Shift+Z, typing grouped) and Ctrl+S save · desktop/mobile canvas preview · page settings (title, address, show in menu, SEO title/description) · save draft, preview on the academy site, publish, unpublish, version restore · unsaved-changes guard when leaving the builder or closing the tab · server validation errors shown on the exact block and field. **Website page**: list of other pages with status, "In menu" toggle, drag-to-reorder menu order, use as home page, delete; new-page dialog with automatic address (academy-reserved addresses refused) and starting layouts (blank, about, courses, contact, FAQ — starter content is generic and editable, no invented facts); AI landing generation opens the builder.
+
+**Delivered (API)**: block validation messages in plain language ("This field is required", "Fill in every item, or remove the empty ones"); custom messages kept.
+
+**Verification**: web 106 ✅ (builder: palette add, inspector edit, undo/redo, duplicate/hide/delete, save, publish, server errors on the right block, settings; website page: new page with starter layout, reserved addresses, AI → builder) · API e2e 111 ✅ (adds validation-message checks) · API unit 103 ✅ · real Chromium with mouse: palette drag inserts at the drop point, handle reorder, undo/redo, mobile view, publish → public `/p/weekend-workshops` renders, leave guard blocks navigation with unsaved changes; no console errors.
 
 ## Video management & processing module (✅ 2026-11-05)
 
@@ -182,3 +190,4 @@ Bunny Stream as primary video host (direct TUS uploads, webhook + API-verified p
 - 2026-11-05 — Phase 10 growth & advanced completed (notifications, marketing, affiliates, communities, memberships, analytics/GST, AI credits).
 - 2026-11-05 — Video management module (Bunny Stream, Google Drive backups, usage) completed.
 - 2026-11-05 — Academy website: own external website or AI landing page.
+- 2026-11-05 — Website drag-and-drop page builder.

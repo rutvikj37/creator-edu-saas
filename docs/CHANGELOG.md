@@ -2,6 +2,13 @@
 
 Format: Keep a Changelog. Versions follow SemVer once Phase 1 ships.
 
+## [0.13.0] — 2026-11-05 — Website drag-and-drop page builder
+### Added
+- Full-screen page builder for the home page and extra pages: drag blocks from a palette, reorder, hide, duplicate, delete, edit every field in an inspector, undo/redo, desktop/mobile preview, page settings and SEO, save, preview, publish, unpublish and version restore, with an unsaved-changes guard.
+- Website page lists all pages with menu toggle and drag-to-reorder menu order, use as home page and delete; new pages start from a blank or ready-made layout.
+### Changed
+- Block validation errors use plain language and are shown on the exact block and field.
+
 ## [0.12.0] — 2026-11-05 — Academy website: own website or AI landing page
 ### Added
 - Website mode per academy: connect an existing website (academy home redirects; courses, checkout and learning stay on the platform; link kit with buy buttons) or an AI-generated landing page from the academy profile, courses and industry (English, Hindi, Gujarati), saved as an editable draft with live preview, history and publish.

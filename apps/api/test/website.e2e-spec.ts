@@ -58,6 +58,12 @@ describe('Website builder (e2e)', () => {
     // Invalid blocks are rejected with addressable errors; images must belong to this academy.
     const bad = await authed(app, cs).patch(`/api/v1/creator/website/pages/${homeId}`).send({ draftBlocks: [{ id: 'x', type: 'cta', props: { heading: 'Hi', buttonLabel: 'Go', buttonHref: 'javascript:alert(1)' } }] }).expect(422);
     expect(bad.body.error.details[0].field).toBe('blocks.0.props.buttonHref');
+    // Empty required fields get plain-language messages the builder shows on the field.
+    const empty = await authed(app, cs).patch(`/api/v1/creator/website/pages/${homeId}`).send({ draftBlocks: [{ id: 'f', type: 'faq', props: { heading: '', items: [{ q: '', a: 'x' }] } }, { id: 's', type: 'stats', props: { items: [] } }, { id: 'i', type: 'image', props: { fileId: null, alt: '' } }] }).expect(422);
+    const msg = Object.fromEntries(empty.body.error.details.map((e: any) => [e.field, e.message]));
+    expect(msg['blocks.0.props.items.0.q']).toBe('Fill in every item, or remove the empty ones');
+    expect(msg['blocks.1.props.items']).toBe('This field is required');
+    expect(msg['blocks.2.props.alt']).toBe('Describe the image for screen readers');
     const other = await academy();
     const foreign = (await uploadFile(app, other.session, 'IMAGE', 'x.png', 'image/png', PNG)).body.data;
     await authed(app, cs).patch(`/api/v1/creator/website/pages/${homeId}`).send({ draftBlocks: [{ id: 'img', type: 'image', props: { fileId: foreign.id, alt: 'x' } }] }).expect(422);

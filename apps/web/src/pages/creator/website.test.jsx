@@ -7,7 +7,7 @@ import { WebsitePage } from './WebsitePage.jsx';
 import { AcademySitePage } from '../public/AcademySitePage.jsx';
 import { websiteApi } from '../../services/api/website.js';
 
-vi.mock('../../services/api/website.js', () => ({ websiteApi: { overview: vi.fn(), saveSettings: vi.fn(), aiLanding: vi.fn(), page: vi.fn(), savePage: vi.fn(), publish: vi.fn(), versions: vi.fn(async () => []), restore: vi.fn(), previewToken: vi.fn(), layout: vi.fn(), publicPage: vi.fn() } }));
+vi.mock('../../services/api/website.js', () => ({ websiteApi: { createPage: vi.fn(), deletePage: vi.fn(), setHome: vi.fn(), unpublish: vi.fn(), overview: vi.fn(), saveSettings: vi.fn(), aiLanding: vi.fn(), page: vi.fn(), savePage: vi.fn(), publish: vi.fn(), versions: vi.fn(async () => []), restore: vi.fn(), previewToken: vi.fn(), layout: vi.fn(), publicPage: vi.fn() } }));
 vi.mock('../../services/api/auth.js', () => ({ workspaceApi: { workspace: vi.fn(async () => ({ primaryHostname: 'meera.lvh.me' })) }, academyApi: { site: vi.fn(async () => ({ name: 'Meera Academy', theme: { primaryColor: '#0f766e' } })) } }));
 vi.mock('../../services/api/creator.js', () => ({
   academyApi2: { get: vi.fn(async () => ({ primaryColor: '#0f766e' })) },
@@ -41,28 +41,40 @@ it('own website: saves the address, shows validation and gives course links', as
   expect(screen.queryByText(/draft/)).toBeNull(); // unpublished courses are not offered
 });
 
-it('AI landing page: generates from the answers, then edit, preview and publish', async () => {
-  websiteApi.overview.mockResolvedValueOnce({ settings: { mode: 'PLATFORM' }, pages: [] }).mockResolvedValue({ settings: { mode: 'PLATFORM' }, pages: [{ id: 'p1', isHome: true }] });
+it('AI landing page: generates from the answers and opens the builder', async () => {
+  websiteApi.overview.mockResolvedValue({ settings: { mode: 'PLATFORM' }, pages: [] });
   websiteApi.aiLanding.mockResolvedValue({ page: { id: 'p1' }, credits: 12 });
-  websiteApi.page.mockResolvedValue({ id: 'p1', isHome: true, draftBlocks: blocks, seoTitle: 'Meera', seoDescription: '', files: {}, publishedAt: null, hasUnpublishedChanges: true });
-  websiteApi.savePage.mockImplementation(async (id, body) => ({ id, draftBlocks: body.draftBlocks, files: {}, seoTitle: body.seoTitle, seoDescription: body.seoDescription }));
-  websiteApi.publish.mockResolvedValue({ id: 'p1', draftBlocks: blocks, files: {}, publishedAt: '2026-11-05T10:00:00Z' });
-  wrap(<WebsitePage />);
+  const router = createMemoryRouter([{ path: '/creator/website', element: <WebsitePage /> }, { path: '/creator/website/pages/:id', element: <p>builder for page</p> }], { initialEntries: ['/creator/website'] });
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><RouterProvider router={router} /></QueryClientProvider>);
   await userEvent.selectOptions(await screen.findByLabelText(/Industry/), 'Personal finance');
   await userEvent.type(screen.getByLabelText(/Who is it for/), 'Salaried professionals');
   await userEvent.selectOptions(screen.getByLabelText('Language'), 'hi');
   await userEvent.click(screen.getByRole('button', { name: 'Generate my landing page' }));
   await waitFor(() => expect(websiteApi.aiLanding).toHaveBeenCalledWith({ industry: 'Personal finance', audience: 'Salaried professionals', tone: 'friendly', language: 'hi', highlights: undefined }));
-  // Editor + live preview of the generated draft.
-  expect((await screen.findAllByText('Make your salary work for you'))[0]).toBeInTheDocument();
-  const heading = screen.getByDisplayValue('Make your salary work for you');
-  await userEvent.clear(heading);
-  await userEvent.type(heading, 'Grow your money');
-  expect(screen.getAllByText('Grow your money').length).toBeGreaterThan(0);
-  await userEvent.click(screen.getAllByRole('button', { name: 'Remove block' })[0]);
-  await userEvent.click(screen.getByRole('button', { name: 'Publish' }));
-  await waitFor(() => expect(websiteApi.publish).toHaveBeenCalledWith('p1', expect.any(String)));
-  expect(websiteApi.savePage.mock.calls.at(-1)[1].draftBlocks.map((b) => b.type)).toEqual(['faq']);
+  expect(await screen.findByText('builder for page')).toBeInTheDocument();
+  expect(router.state.location.pathname).toBe('/creator/website/pages/p1');
+});
+
+it('pages: new page with a starting layout, reserved addresses refused, opens the builder', async () => {
+  websiteApi.overview.mockResolvedValue({ settings: { mode: 'PLATFORM' }, pages: [{ id: 'h', isHome: true, title: 'Home', publishedAt: null }, { id: 'a', isHome: false, title: 'About', path: '/p/about', showInNav: true, navOrder: 1, publishedAt: '2026-11-05T10:00:00Z', hasUnpublishedChanges: false }] });
+  websiteApi.createPage.mockResolvedValue({ id: 'new1' });
+  const router = createMemoryRouter([{ path: '/creator/website', element: <WebsitePage /> }, { path: '/creator/website/pages/:id', element: <p>builder</p> }], { initialEntries: ['/creator/website'] });
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><RouterProvider router={router} /></QueryClientProvider>);
+  expect((await screen.findAllByText('About'))[0]).toBeInTheDocument();
+  expect(screen.getByText('Published')).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'New page' }));
+  await userEvent.type(screen.getByLabelText(/^Page title/), 'Courses');
+  expect(screen.getByText('This address is used by the academy itself')).toBeInTheDocument();
+  await userEvent.clear(screen.getByLabelText(/^Page title/));
+  await userEvent.type(screen.getByLabelText(/^Page title/), 'Weekend Workshops!');
+  expect(screen.getByLabelText('Address')).toHaveValue('weekend-workshops');
+  await userEvent.click(screen.getByRole('button', { name: 'Contact' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Create and open builder' }));
+  await waitFor(() => expect(websiteApi.createPage).toHaveBeenCalled());
+  const body = websiteApi.createPage.mock.calls[0][0];
+  expect(body).toMatchObject({ title: 'Weekend Workshops!', slug: 'weekend-workshops' });
+  expect(body.draftBlocks.map((b) => b.type)).toEqual(['hero', 'contact', 'faq']);
+  expect(await screen.findByText('builder')).toBeInTheDocument();
 });
 
 const site = (path, routes = [{ path: '/', element: <AcademySitePage /> }, { path: '/p/:slug', element: <AcademySitePage /> }]) => {

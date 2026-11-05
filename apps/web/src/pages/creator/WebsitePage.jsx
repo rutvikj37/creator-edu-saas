@@ -1,16 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router';
+import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDown, ArrowUp, Copy, ExternalLink, Eye, EyeOff, Globe, History, Sparkles, Trash2, Wand2 } from 'lucide-react';
+import { Copy, ExternalLink, Globe, GripVertical, Home, MoreHorizontal, PenSquare, Plus, Sparkles, Trash2, Wand2 } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
 import { Alert } from '../../components/auth/Alert.jsx';
-import { Badge, Button, Card, CardBody, CardHeader, Checkbox, Dropdown, DropdownItem, Input, Modal, Select, Skeleton, Textarea, toast } from '../../components/ui/index.js';
-import { RichTextEditor } from '../../components/forms/RichTextEditor.jsx';
-import { FileUpload } from '../../components/forms/FileUpload.jsx';
-import { BLOCK_DEFS, SiteBlocks } from '../../components/site/blocks.jsx';
+import { Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, Dropdown, DropdownItem, Input, Modal, Select, Skeleton, Switch, Textarea, toast } from '../../components/ui/index.js';
+import { BLOCK_DEFS, newBlockId } from '../../components/site/blocks.jsx';
 import { websiteApi } from '../../services/api/website.js';
 import { workspaceApi } from '../../services/api/auth.js';
-import { academyApi2, coursesApi } from '../../services/api/creator.js';
+import { coursesApi } from '../../services/api/creator.js';
 import { formatDate } from '../../utils/format.js';
 
 const INDUSTRIES = ['Personal finance', 'Stock market & trading', 'Exam preparation', 'Programming & tech', 'Design', 'Digital marketing', 'Business & entrepreneurship', 'Language learning', 'Health & fitness', 'Yoga & wellness', 'Music', 'Art & crafts', 'Cooking', 'Photography', 'School tutoring', 'Spirituality'];
@@ -124,138 +125,130 @@ function Generator({ hasPage, onGenerated }) {
   );
 }
 
-function Field({ f, value, onChange, courses, files }) {
-  if (f.type === 'textarea') return <Textarea label={f.label} rows={3} maxLength={f.max} value={value ?? ''} onChange={(e) => onChange(e.target.value)} />;
-  if (f.type === 'select') return <Select label={f.label} value={value ?? ''} onChange={(e) => onChange(e.target.value)} options={f.options.map(([v, l]) => ({ value: v, label: l }))} />;
-  if (f.type === 'number') return <Input label={f.label} type="number" min={f.min} max={f.max} value={value ?? ''} onChange={(e) => onChange(Number(e.target.value))} />;
-  if (f.type === 'richtext') return <RichTextEditor label={f.label} value={value} onChange={onChange} minHeight={140} />;
-  if (f.type === 'image') return <FileUpload purpose="IMAGE" accept="image/png,image/jpeg,image/webp" label={f.label} value={value ? { id: value, url: files?.[value] } : null} onUploaded={(file) => onChange(file.id, file.url)} onClear={() => onChange(null)} />;
-  if (f.type === 'courses') {
-    const ids = value ?? [];
-    return (
-      <fieldset><legend className="mb-1 text-sm font-medium">{f.label}</legend>
-        <div className="max-h-48 space-y-1.5 overflow-y-auto rounded-md border border-line p-3">
-          {courses.map((c) => <Checkbox key={c.id} label={c.title} checked={ids.includes(c.id)} onChange={() => onChange(ids.includes(c.id) ? ids.filter((x) => x !== c.id) : [...ids, c.id])} />)}
-        </div>
-      </fieldset>
-    );
-  }
-  if (f.type === 'list') {
-    const items = value ?? [];
-    const set = (i, patch) => onChange(items.map((it, j) => (j === i ? { ...it, ...patch } : it)));
-    return (
-      <fieldset className="space-y-2"><legend className="text-sm font-medium">{f.label}</legend>
-        {items.map((it, i) => (
-          <div key={i} className="space-y-2 rounded-md border border-line p-3">
-            {f.item.map((sub) => <Field key={sub.key} f={sub} value={it[sub.key]} onChange={(val) => set(i, { [sub.key]: val })} courses={courses} />)}
-            <div className="text-right"><Button size="sm" variant="ghost" leftIcon={Trash2} onClick={() => onChange(items.filter((_, j) => j !== i))}>Remove</Button></div>
-          </div>
-        ))}
-        {items.length < f.max && <Button size="sm" variant="secondary" onClick={() => onChange([...items, { ...f.blank }])}>Add</Button>}
-      </fieldset>
-    );
-  }
-  return <Input label={f.label} maxLength={f.max ?? 500} value={value ?? ''} onChange={(e) => onChange(e.target.value)} placeholder={f.type === 'href' ? '/courses or https://…' : undefined} />;
-}
 
-function BlockEditor({ block, index, total, courses, files, onChange, onMove, onRemove }) {
-  const def = BLOCK_DEFS[block.type];
-  const [open, setOpen] = useState(index === 0);
-  if (!def) return null;
-  const Icon = def.icon;
+// ── Pages ────────────────────────────────────────────────────
+
+const slugify = (t) => t.toLowerCase().normalize('NFKD').replace(/[^\w\s-]/g, '').trim().replace(/[\s_]+/g, '-').replace(/-+/g, '-').slice(0, 80);
+const RESERVED = new Set(['courses', 'learn', 'login', 'register', 'checkout', 'blog', 'verify', 'api', 'reset-password', 'forgot-password', 'verify-email', 'p']);
+const block = (type, props) => ({ id: newBlockId(), type, hidden: false, props: { ...JSON.parse(JSON.stringify(BLOCK_DEFS[type].defaults)), ...props } });
+/** Generic, true-for-every-academy answers so starter pages are valid immediately (edit freely). */
+const STARTER_FAQ = { heading: 'Frequently asked questions', items: [
+  { q: 'How do I access a course after enrolling?', a: 'Sign in and open My learning. Your courses are there on phone or computer.' },
+  { q: 'How can I pay?', a: 'UPI, cards, net banking and wallets through Razorpay.' },
+] };
+/** Starting layouts for a new page (all editable in the builder). */
+const STARTERS = {
+  blank: { label: 'Blank page', blocks: () => [] },
+  about: { label: 'About', blocks: (t) => [block('hero', { heading: t, subheading: '', ctaLabel: '', ctaHref: '' }), block('richText', {}), block('cta', {})] },
+  courses: { label: 'Course spotlight', blocks: (t) => [block('hero', { heading: t }), block('courseGrid', { heading: 'Courses', mode: 'all', limit: 6 }), block('features', {}), block('faq', STARTER_FAQ), block('cta', {})] },
+  contact: { label: 'Contact', blocks: (t) => [block('hero', { heading: t, subheading: 'We usually reply within a day.', ctaLabel: '', ctaHref: '' }), block('contact', { heading: 'Get in touch' }), block('faq', STARTER_FAQ)] },
+  faq: { label: 'FAQ', blocks: (t) => [block('hero', { heading: t, ctaLabel: '', ctaHref: '' }), block('faq', STARTER_FAQ), block('cta', {})] },
+};
+
+function NewPageDialog({ open, onClose }) {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const [v, setV] = useState({ title: '', slug: '', starter: 'blank', touched: false });
+  const [error, setError] = useState(null);
+  useEffect(() => { if (open) { setV({ title: '', slug: '', starter: 'blank', touched: false }); setError(null); } }, [open]);
+  const create = useMutation({
+    mutationFn: () => websiteApi.createPage({ title: v.title.trim(), slug: v.slug, draftBlocks: STARTERS[v.starter].blocks(v.title.trim()) }),
+    onSuccess: (p) => { qc.invalidateQueries({ queryKey: ['website'] }); onClose(); navigate(`/creator/website/pages/${p.id}`); },
+    onError: (e) => setError(e.details?.map((d) => d.message).join(' · ') ?? e.message),
+  });
+  const slugProblem = !v.slug ? null : RESERVED.has(v.slug) ? 'This address is used by the academy itself' : !/^[a-z0-9](?:[a-z0-9-]{0,78}[a-z0-9])?$/.test(v.slug) ? 'Use lowercase letters, numbers and dashes' : null;
   return (
-    <div className={`rounded-lg border border-line ${block.hidden ? 'opacity-60' : ''}`}>
-      <div className="flex items-center gap-2 px-3 py-2">
-        <button type="button" className="flex flex-1 items-center gap-2 text-left text-sm font-medium" onClick={() => setOpen(!open)} aria-expanded={open}>
-          <Icon className="size-4 text-muted" aria-hidden />{def.label}{block.hidden && <Badge>Hidden</Badge>}
-        </button>
-        <Button size="icon-sm" variant="ghost" aria-label="Move up" disabled={index === 0} onClick={() => onMove(-1)}><ArrowUp className="size-4" /></Button>
-        <Button size="icon-sm" variant="ghost" aria-label="Move down" disabled={index === total - 1} onClick={() => onMove(1)}><ArrowDown className="size-4" /></Button>
-        <Button size="icon-sm" variant="ghost" aria-label={block.hidden ? 'Show block' : 'Hide block'} onClick={() => onChange({ hidden: !block.hidden })}>{block.hidden ? <EyeOff className="size-4" /> : <Eye className="size-4" />}</Button>
-        <Button size="icon-sm" variant="ghost" aria-label="Remove block" onClick={onRemove}><Trash2 className="size-4" /></Button>
-      </div>
-      {open && (
-        <div className="space-y-3 border-t border-line p-3">
-          {def.fields.filter((f) => !f.when || f.when(block.props)).map((f) => (
-            <Field key={f.key} f={f} value={block.props[f.key]} courses={courses} files={files}
-              onChange={(val, url) => onChange({ props: { ...block.props, [f.key]: val } }, url ? { [val]: url } : undefined)} />
-          ))}
-        </div>
-      )}
-    </div>
+    <Modal open={open} onClose={onClose} title="New page">
+      <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); create.mutate(); }}>
+        <Input label="Page title" value={v.title} maxLength={120} required onChange={(e) => setV({ ...v, title: e.target.value, slug: v.touched ? v.slug : slugify(e.target.value) })} />
+        <Input label="Address" value={v.slug} maxLength={80} hint={`/p/${v.slug || '…'}`} error={slugProblem} onChange={(e) => setV({ ...v, touched: true, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })} />
+        <fieldset>
+          <legend className="mb-2 text-sm font-medium">Start from</legend>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {Object.entries(STARTERS).map(([k, st]) => (
+              <button key={k} type="button" aria-pressed={v.starter === k} onClick={() => setV({ ...v, starter: k })}
+                className={`rounded-md border-2 px-3 py-2 text-left text-sm ${v.starter === k ? 'border-primary-600 bg-primary-50 dark:bg-primary-950' : 'border-line hover:border-line-strong'}`}>{st.label}</button>
+            ))}
+          </div>
+        </fieldset>
+        {error && <Alert tone="error">{error}</Alert>}
+        <div className="flex justify-end gap-2"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" loading={create.isPending} disabled={!v.title.trim() || !v.slug || Boolean(slugProblem)}>Create and open builder</Button></div>
+      </form>
+    </Modal>
   );
 }
 
-function LandingEditor({ pageId, academyUrl, site }) {
+function PageRow({ page, onToggleMenu, onSetHome, onDelete }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: page.id });
+  const status = !page.publishedAt ? ['Draft', 'neutral'] : page.hasUnpublishedChanges ? ['Unpublished changes', 'warning'] : ['Published', 'success'];
+  return (
+    <li ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className={`flex flex-wrap items-center gap-3 px-4 py-3 ${isDragging ? 'relative z-10 bg-surface shadow-md' : ''}`}>
+      <button type="button" className="cursor-grab text-muted hover:text-fg" aria-label={`Drag ${page.title} to reorder the menu`} {...listeners} {...attributes}><GripVertical className="size-4" /></button>
+      <div className="min-w-0 flex-1">
+        <Link to={`/creator/website/pages/${page.id}`} className="font-medium hover:underline">{page.title}</Link>
+        <p className="text-xs text-muted">{page.path}</p>
+      </div>
+      <Badge tone={status[1]}>{status[0]}</Badge>
+      <Switch label="In menu" checked={page.showInNav} onChange={(v) => onToggleMenu(page, v)} />
+      <Link to={`/creator/website/pages/${page.id}`}><Button size="sm" variant="secondary" leftIcon={PenSquare}>Edit</Button></Link>
+      <Dropdown trigger={(t) => <Button size="icon-sm" variant="ghost" aria-label={`More actions for ${page.title}`} {...t}><MoreHorizontal className="size-4" /></Button>}>
+        <DropdownItem icon={Home} onClick={() => onSetHome(page)}>Use as home page</DropdownItem>
+        <DropdownItem icon={Trash2} danger onClick={() => onDelete(page)}>Delete page</DropdownItem>
+      </Dropdown>
+    </li>
+  );
+}
+
+function PagesCard({ pages }) {
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: ['website', 'page', pageId], queryFn: () => websiteApi.page(pageId) });
-  const versions = useQuery({ queryKey: ['website', 'versions', pageId], queryFn: () => websiteApi.versions(pageId) });
-  const courses = useQuery({ queryKey: ['creator', 'courses', 'all'], queryFn: () => coursesApi.list({ pageSize: 100 }) });
-  const [draft, setDraft] = useState(null);
-  const [files, setFiles] = useState({});
-  const [errors, setErrors] = useState([]);
-  useEffect(() => { if (q.data) { setDraft({ blocks: q.data.draftBlocks, seoTitle: q.data.seoTitle ?? '', seoDescription: q.data.seoDescription ?? '' }); setFiles(q.data.files ?? {}); } }, [q.data]);
-  const refresh = () => { qc.invalidateQueries({ queryKey: ['website'] }); };
-  const save = useMutation({
-    mutationFn: () => websiteApi.savePage(pageId, { draftBlocks: draft.blocks, seoTitle: draft.seoTitle || null, seoDescription: draft.seoDescription || null }),
-    onSuccess: (p) => { setErrors([]); qc.setQueryData(['website', 'page', pageId], p); toast.success('Draft saved'); },
-    onError: (e) => { setErrors(e.details ?? []); toast.error(e.message); },
+  const [open, setOpen] = useState(false);
+  const [deleting, setDeleting] = useState(null);
+  const [order, setOrder] = useState(null);
+  const others = pages.filter((p) => !p.isHome);
+  const list = order ? order.map((id) => others.find((p) => p.id === id)).filter(Boolean) : others;
+  const refresh = () => qc.invalidateQueries({ queryKey: ['website'] });
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
+  const reorder = useMutation({
+    mutationFn: async (ids) => { for (const [i, pid] of ids.entries()) { const p = others.find((x) => x.id === pid); if (p && p.navOrder !== i + 1) await websiteApi.savePage(pid, { navOrder: i + 1 }); } },
+    onSuccess: () => { setOrder(null); refresh(); }, onError: (e) => { setOrder(null); toast.error(e.message); },
   });
-  const publish = useMutation({
-    mutationFn: async () => { await websiteApi.savePage(pageId, { draftBlocks: draft.blocks, seoTitle: draft.seoTitle || null, seoDescription: draft.seoDescription || null }); return websiteApi.publish(pageId, 'Published from the website page'); },
-    onSuccess: (p) => { setErrors([]); qc.setQueryData(['website', 'page', pageId], p); refresh(); toast.success('Your landing page is live'); },
-    onError: (e) => { setErrors(e.details ?? []); toast.error(e.message); },
-  });
-  const restore = useMutation({ mutationFn: (versionId) => websiteApi.restore(pageId, versionId), onSuccess: (p) => { qc.setQueryData(['website', 'page', pageId], p); toast.success('Version restored to the draft'); }, onError: (e) => toast.error(e.message) });
-  const openPreview = useMutation({ mutationFn: async () => { await websiteApi.savePage(pageId, { draftBlocks: draft.blocks }); return websiteApi.previewToken(); }, onSuccess: ({ token }) => window.open(`${academyUrl}/?preview=${encodeURIComponent(token)}`, '_blank', 'noopener'), onError: (e) => toast.error(e.message) });
-
-  const published = (courses.data?.items ?? []).filter((c) => c.status === 'PUBLISHED');
-  const previewData = useMemo(() => {
-    const cardsFor = (b) => {
-      const list = b.props.mode === 'selected' ? (b.props.courseIds ?? []).map((id) => published.find((c) => c.id === id)).filter(Boolean) : published.slice(0, b.props.limit ?? 6);
-      return list.map((c) => ({ id: c.id, slug: c.slug, title: c.title, shortDescription: c.shortDescription, isFree: c.isFree, priceAmount: c.priceAmount, currency: c.currency, thumbnailUrl: c.thumbnailUrl ?? null }));
-    };
-    return { files, courses: Object.fromEntries((draft?.blocks ?? []).filter((b) => b.type === 'courseGrid').map((b) => [b.id, cardsFor(b)])) };
-  }, [draft, files, published]);
-
-  if (!draft) return <Skeleton className="h-96" />;
-  const setBlock = (i, patch, newFiles) => { if (newFiles) setFiles((f) => ({ ...f, ...newFiles })); setDraft({ ...draft, blocks: draft.blocks.map((b, j) => (j === i ? { ...b, ...patch } : b)) }); };
-  const move = (i, dir) => { const b = [...draft.blocks]; [b[i], b[i + dir]] = [b[i + dir], b[i]]; setDraft({ ...draft, blocks: b }); };
-  const p = q.data;
+  const toggle = useMutation({ mutationFn: ({ page, v }) => websiteApi.savePage(page.id, { showInNav: v }), onSuccess: refresh, onError: (e) => toast.error(e.message) });
+  const setHome = useMutation({ mutationFn: (page) => websiteApi.setHome(page.id), onSuccess: () => { refresh(); toast.success('Home page changed'); }, onError: (e) => toast.error(e.message) });
+  const remove = useMutation({ mutationFn: (page) => websiteApi.deletePage(page.id), onSuccess: () => { setDeleting(null); refresh(); toast.success('Page deleted'); }, onError: (e) => { setDeleting(null); toast.error(e.message); } });
+  const onDragEnd = ({ active, over }) => {
+    if (!over || active.id === over.id) return;
+    const ids = list.map((p) => p.id);
+    const next = arrayMove(ids, ids.indexOf(active.id), ids.indexOf(over.id));
+    setOrder(next);
+    reorder.mutate(next);
+  };
   return (
     <Card>
-      <CardHeader title="Home page" description={p.publishedAt ? `Published ${formatDate(p.publishedAt, { withTime: true })}${p.hasUnpublishedChanges ? ' · draft has unpublished changes' : ''}` : 'Not published yet'}
-        actions={(
-          <div className="flex flex-wrap gap-2">
-            {versions.data?.length > 0 && (
-              <Dropdown trigger={(t) => <Button size="sm" variant="ghost" leftIcon={History} {...t}>History</Button>}>
-                {versions.data.slice(0, 10).map((v) => <DropdownItem key={v.id} onClick={() => restore.mutate(v.id)}>{v.note ?? 'Published version'} · {formatDate(v.createdAt, { withTime: true })}</DropdownItem>)}
-              </Dropdown>
-            )}
-            {academyUrl && <Button size="sm" variant="secondary" leftIcon={ExternalLink} loading={openPreview.isPending} onClick={() => openPreview.mutate()}>Preview on site</Button>}
-            <Button size="sm" variant="secondary" loading={save.isPending} onClick={() => save.mutate()}>Save draft</Button>
-            <Button size="sm" loading={publish.isPending} onClick={() => publish.mutate()}>Publish</Button>
-          </div>
-        )} />
-      <CardBody className="grid gap-6 xl:grid-cols-[420px_1fr]">
-        <div className="space-y-3">
-          {errors.length > 0 && <Alert tone="error" title="Fix these before saving">{errors.slice(0, 5).map((e) => <div key={e.field}>{e.message}</div>)}</Alert>}
-          {draft.blocks.map((b, i) => (
-            <BlockEditor key={b.id} block={b} index={i} total={draft.blocks.length} courses={published} files={files}
-              onChange={(patch, newFiles) => setBlock(i, patch, newFiles)} onMove={(dir) => move(i, dir)} onRemove={() => setDraft({ ...draft, blocks: draft.blocks.filter((_, j) => j !== i) })} />
-          ))}
-          <div className="space-y-3 rounded-lg border border-line p-3">
-            <p className="text-sm font-medium">Search engines</p>
-            <Input label="Page title" maxLength={70} value={draft.seoTitle} onChange={(e) => setDraft({ ...draft, seoTitle: e.target.value })} hint={`${draft.seoTitle.length}/70`} />
-            <Textarea label="Description" rows={2} maxLength={170} value={draft.seoDescription} onChange={(e) => setDraft({ ...draft, seoDescription: e.target.value })} hint={`${draft.seoDescription.length}/170`} />
-          </div>
-        </div>
-        <div className="min-w-0 overflow-hidden rounded-lg border border-line" aria-label="Page preview">
-          <div className="border-b border-line bg-surface-2 px-3 py-1.5 text-xs text-muted">Preview</div>
-          <div className="max-h-[80vh] overflow-y-auto bg-surface" style={{ fontFamily: site?.theme?.fontBody }}>
-            <SiteBlocks blocks={draft.blocks.filter((b) => !b.hidden)} data={previewData} theme={site?.theme} template="classic" />
-          </div>
-        </div>
+      <CardHeader title="Other pages" description="About, contact, workshops… Drag to change their order in the site menu." actions={<Button size="sm" leftIcon={Plus} onClick={() => setOpen(true)}>New page</Button>} />
+      {list.length === 0 ? <CardBody><p className="text-sm text-muted">No other pages yet. Add an About or Contact page, or anything else you need.</p></CardBody> : (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={list.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+            <ul className="divide-y divide-line" aria-label="Pages">
+              {list.map((p) => <PageRow key={p.id} page={p} onToggleMenu={(page, v) => toggle.mutate({ page, v })} onSetHome={(page) => setHome.mutate(page)} onDelete={setDeleting} />)}
+            </ul>
+          </SortableContext>
+        </DndContext>
+      )}
+      <NewPageDialog open={open} onClose={() => setOpen(false)} />
+      <ConfirmDialog open={Boolean(deleting)} onClose={() => setDeleting(null)} onConfirm={() => remove.mutate(deleting)} loading={remove.isPending} title={`Delete “${deleting?.title}”?`} description="The page and its history are removed. Links to it will stop working." confirmLabel="Delete page" />
+    </Card>
+  );
+}
+
+function HomeCard({ home }) {
+  const status = !home.publishedAt ? ['Not published yet', 'neutral'] : home.hasUnpublishedChanges ? ['Unpublished changes', 'warning'] : ['Published', 'success'];
+  return (
+    <Card>
+      <CardBody className="flex flex-wrap items-center gap-3">
+        <Home className="size-5 text-primary-600" aria-hidden />
+        <div className="min-w-0 flex-1"><p className="font-semibold">Home page</p><p className="text-sm text-muted">{home.title} · {home.publishedAt ? `published ${formatDate(home.publishedAt, { withTime: true })}` : 'draft'}</p></div>
+        <Badge tone={status[1]}>{status[0]}</Badge>
+        <Link to={`/creator/website/pages/${home.id}`}><Button leftIcon={PenSquare}>Open in builder</Button></Link>
       </CardBody>
     </Card>
   );
@@ -265,37 +258,35 @@ function LandingEditor({ pageId, academyUrl, site }) {
 
 export function WebsitePage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const academyUrl = useAcademyUrl();
   const q = useQuery({ queryKey: ['website', 'overview'], queryFn: websiteApi.overview });
-  const brand = useQuery({ queryKey: ['creator', 'academy'], queryFn: academyApi2.get, staleTime: 5 * 60_000 });
   const [choice, setChoice] = useState(null);
   const usePlatform = useMutation({ mutationFn: () => websiteApi.saveSettings({ mode: 'PLATFORM' }), onSuccess: () => { qc.invalidateQueries({ queryKey: ['website'] }); toast.success('Your academy home is served by us again'); }, onError: (e) => toast.error(e.message) });
   const settings = q.data?.settings;
   const mode = choice ?? settings?.mode ?? 'PLATFORM';
-  const home = q.data?.pages?.find((p) => p.isHome);
-  const a = brand.data?.academy ?? brand.data ?? {};
-  const site = { theme: { primaryColor: a.primaryColor ?? '#4f46e5', fontHeading: a.fontHeading, fontBody: a.fontBody } };
+  const pages = q.data?.pages ?? [];
+  const home = pages.find((p) => p.isHome);
   return (
     <>
-      <PageHeader title="Website" description="Your academy’s public home page." breadcrumbs={[{ label: 'Website' }]}
+      <PageHeader title="Website" description="Your academy’s public pages." breadcrumbs={[{ label: 'Website' }]}
         actions={academyUrl && <a href={academyUrl} target="_blank" rel="noreferrer noopener"><Button variant="secondary" leftIcon={ExternalLink}>Open my academy</Button></a>} />
       {!settings ? <Skeleton className="h-40" /> : (
         <div className="space-y-6">
           <div className="flex flex-col gap-3 sm:flex-row">
-            <ModeCard active={mode === 'PLATFORM'} icon={Sparkles} title="AI landing page" description="We build your home page from your profile, courses and industry. Edit anything, then publish." onClick={() => setChoice('PLATFORM')} />
+            <ModeCard active={mode === 'PLATFORM'} icon={Sparkles} title="Website on this platform" description="An AI landing page from your profile and courses, plus any pages you build with drag and drop." onClick={() => setChoice('PLATFORM')} />
             <ModeCard active={mode === 'EXTERNAL'} icon={Globe} title="My own website" description="Already have a website? Send visitors there and link to your courses from it." onClick={() => setChoice('EXTERNAL')} />
           </div>
           {mode === 'PLATFORM' && settings.mode === 'EXTERNAL' && (
             <Alert tone="info" title="Your academy home currently redirects to your website">
-              <div className="mt-2"><Button size="sm" loading={usePlatform.isPending} onClick={() => usePlatform.mutate()}>Use the landing page instead</Button></div>
+              <div className="mt-2"><Button size="sm" loading={usePlatform.isPending} onClick={() => usePlatform.mutate()}>Use pages on this platform instead</Button></div>
             </Alert>
           )}
           {mode === 'EXTERNAL' ? <ExternalWebsite settings={settings} academyUrl={academyUrl} /> : (
             <>
-              <Generator hasPage={Boolean(home)} onGenerated={() => qc.invalidateQueries({ queryKey: ['website'] })} />
-              {home ? <LandingEditor key={home.id} pageId={home.id} academyUrl={academyUrl} site={site} /> : (
-                <Card><CardBody><p className="text-sm text-muted">Until you publish a landing page, your academy home shows your logo, tagline and course catalogue automatically.</p></CardBody></Card>
-              )}
+              <Generator hasPage={Boolean(home)} onGenerated={(page) => { qc.invalidateQueries({ queryKey: ['website'] }); if (page?.id) navigate(`/creator/website/pages/${page.id}`); }} />
+              {home ? <HomeCard home={home} /> : <Card><CardBody><p className="text-sm text-muted">Until you publish a home page, your academy home shows your logo, tagline and course catalogue automatically.</p></CardBody></Card>}
+              <PagesCard pages={pages} />
             </>
           )}
         </div>
@@ -303,4 +294,3 @@ export function WebsitePage() {
     </>
   );
 }
-
