@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router';
 import { captureReferral } from '../../services/api/affiliates.js';
 import { useQuery } from '@tanstack/react-query';
 import { BookOpen, Layers, ShoppingCart, Users } from 'lucide-react';
-import { bundlesApi, cartApi } from '../../services/api/commerce.js';
+import { bundlesApi, cartApi, productsApi } from '../../services/api/commerce.js';
 import { academyApi } from '../../services/api/auth.js';
 import { catalogApi } from '../../services/api/learn.js';
 import { Card, EmptyState, ErrorState, Skeleton } from '../../components/ui/index.js';
@@ -94,6 +94,7 @@ export function AcademyLandingPage({ catalogOnly = false }) {
   const site = useQuery({ queryKey: ['brand', 'academy'], queryFn: academyApi.site, staleTime: 5 * 60_000, retry: false });
   const courses = useQuery({ queryKey: ['catalog'], queryFn: () => catalogApi.courses(), enabled: Boolean(site.data) });
   const bundles = useQuery({ queryKey: ['public', 'bundles'], queryFn: bundlesApi.publicList, enabled: Boolean(site.data), retry: false });
+  const products = useQuery({ queryKey: ['public', 'products'], queryFn: productsApi.publicList, enabled: Boolean(site.data), retry: false });
   if (site.isError) return <div className="grid min-h-dvh place-items-center"><ErrorState title="Academy not found" error={{ message: 'There is no academy at this address.' }} /></div>;
   const s = site.data;
   const color = s?.theme?.primaryColor;
@@ -114,6 +115,23 @@ export function AcademyLandingPage({ catalogOnly = false }) {
           <section className="mb-10">
             <h2 className="mb-6 text-xl font-semibold">Bundles</h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{bundles.data.map((b) => <BundleCard key={b.id} b={b} color={color} />)}</div>
+          </section>
+        )}
+        {products.data?.length > 0 && (
+          <section className="mb-10">
+            <h2 className="mb-6 text-xl font-semibold">Downloads</h2>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{products.data.map((p) => (
+              <Link key={p.id} to={`/products/${p.slug}`} className="group">
+                <Card className="h-full overflow-hidden transition-shadow group-hover:shadow-md">
+                  <div className="aspect-video bg-surface-2">{p.coverUrl ? <img src={p.coverUrl} alt="" className="size-full object-cover" loading="lazy" /> : <div className="grid size-full place-items-center"><BookOpen className="size-8 text-line-strong" /></div>}</div>
+                  <div className="space-y-2 p-4">
+                    <p className="text-xs font-medium tracking-wide text-muted uppercase">Download · {p.files.length} file{p.files.length === 1 ? '' : 's'}</p>
+                    <p className="line-clamp-2 font-semibold">{p.title}</p>
+                    <p className="text-sm font-semibold" style={{ color }}>{p.isFree ? 'Free' : formatMoney(p.priceAmount, p.currency)}</p>
+                  </div>
+                </Card>
+              </Link>
+            ))}</div>
           </section>
         )}
         <h2 className="mb-6 text-xl font-semibold">{catalogOnly ? 'All courses' : 'Courses'}</h2>

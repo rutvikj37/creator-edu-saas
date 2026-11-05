@@ -662,6 +662,7 @@ enum FilePurpose {
   COURSE_THUMBNAIL
   COURSE_BANNER
   LESSON_FILE
+  PRODUCT_FILE
   VIDEO_SOURCE
   SUBMISSION
   CERTIFICATE
@@ -1647,6 +1648,8 @@ model OrderItem {
   bundleId         String?  @db.Char(25)
   /// Paid webinar ticket.
   liveClassId      String?  @db.Char(25)
+  /// Digital product (download).
+  digitalProductId String?  @db.Char(25)
   /// Courses this line grants, fixed at purchase (a bundle's courses; the course itself otherwise).
   grantCourseIds   Json?
   title            String   @db.VarChar(200)
@@ -1719,6 +1722,77 @@ model Bundle {
   @@index([tenantId, status])
 }
 
+/// A downloadable product sold on its own: e-book, PDF, template, worksheet pack…
+model DigitalProduct {
+  id            String       @id @default(cuid()) @db.Char(25)
+  tenantId      String       @db.Char(25)
+  title         String       @db.VarChar(200)
+  slug          String       @db.VarChar(120)
+  description   String?      @db.VarChar(5000)
+  /// 0 = free (claimed without checkout).
+  priceAmount   Decimal      @db.Decimal(19, 4)
+  compareAtAmount Decimal?   @db.Decimal(19, 4)
+  currency      String       @db.Char(3)
+  coverFileId   String?      @db.Char(25)
+  status        BundleStatus @default(DRAFT)
+  /// Downloads allowed per buyer per file; null = unlimited.
+  downloadLimit Int?
+  publishedAt   DateTime?    @db.DateTime(3)
+  createdById   String       @db.Char(25)
+  createdAt     DateTime     @default(now()) @db.DateTime(3)
+  updatedAt     DateTime     @updatedAt @db.DateTime(3)
+  files         DigitalProductFile[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, slug])
+  @@index([tenantId, status])
+}
+
+model DigitalProductFile {
+  id          String         @id @default(cuid()) @db.Char(25)
+  tenantId    String         @db.Char(25)
+  productId   String         @db.Char(25)
+  fileAssetId String         @db.Char(25)
+  title       String         @db.VarChar(200)
+  position    Int
+  createdAt   DateTime       @default(now()) @db.DateTime(3)
+  product     DigitalProduct @relation(fields: [tenantId, productId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, productId, position])
+}
+
+/// A buyer's right to download a product (free claim, purchase or granted by the academy).
+model DigitalProductAccess {
+  id        String    @id @default(cuid()) @db.Char(25)
+  tenantId  String    @db.Char(25)
+  productId String    @db.Char(25)
+  userId    String    @db.Char(25)
+  source    String    @db.VarChar(16)
+  orderId   String?   @db.Char(25)
+  revokedAt DateTime? @db.DateTime(3)
+  createdAt DateTime  @default(now()) @db.DateTime(3)
+  updatedAt DateTime  @updatedAt @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, productId, userId])
+  @@index([tenantId, userId])
+}
+
+/// One download (enforces per-file limits; shows activity to the academy).
+model DigitalProductDownload {
+  id        String   @id @default(cuid()) @db.Char(25)
+  tenantId  String   @db.Char(25)
+  productId String   @db.Char(25)
+  fileId    String   @db.Char(25)
+  userId    String   @db.Char(25)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, fileId, userId])
+  @@index([tenantId, productId, createdAt])
+}
+
 /// A student's cart on one academy (server-side so it follows them across devices).
 model CartItem {
   id        String   @id @default(cuid()) @db.Char(25)
@@ -1726,11 +1800,13 @@ model CartItem {
   userId    String   @db.Char(25)
   courseId  String?  @db.Char(25)
   bundleId  String?  @db.Char(25)
+  digitalProductId String? @db.Char(25)
   createdAt DateTime @default(now()) @db.DateTime(3)
 
   @@unique([tenantId, id])
   @@unique([tenantId, userId, courseId])
   @@unique([tenantId, userId, bundleId])
+  @@unique([tenantId, userId, digitalProductId])
   @@index([tenantId, userId, createdAt])
 }
 

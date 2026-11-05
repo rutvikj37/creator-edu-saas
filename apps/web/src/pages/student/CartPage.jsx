@@ -31,8 +31,8 @@ export function CartPage() {
                   <div key={i.id} className="flex items-center gap-3 px-5 py-4">
                     {i.kind === 'bundle' ? <Layers className="size-5 shrink-0 text-muted" /> : <BookOpen className="size-5 shrink-0 text-muted" />}
                     <div className="min-w-0 flex-1">
-                      {i.slug && !i.problem ? <Link to={i.kind === 'bundle' ? `/bundles/${i.slug}` : `/courses/${i.slug}`} className="font-medium hover:underline">{i.title}</Link> : <p className="font-medium">{i.title}</p>}
-                      <p className="text-xs text-muted">{i.kind === 'bundle' ? `Bundle · ${i.courseCount} courses` : 'Course'}</p>
+                      {i.slug && !i.problem ? <Link to={i.kind === 'bundle' ? `/bundles/${i.slug}` : i.kind === 'product' ? `/products/${i.slug}` : `/courses/${i.slug}`} className="font-medium hover:underline">{i.title}</Link> : <p className="font-medium">{i.title}</p>}
+                      <p className="text-xs text-muted">{i.kind === 'bundle' ? `Bundle · ${i.courseCount} courses` : i.kind === 'product' ? 'Digital download' : 'Course'}</p>
                       {i.problem && <p className="text-xs text-red-600">{i.problem}</p>}
                     </div>
                     {i.priceAmount !== null && <p className="tabular-nums">{formatMoney(i.priceAmount, i.currency)}</p>}

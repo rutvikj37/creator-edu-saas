@@ -67,6 +67,9 @@ const CouponsPage = lazyNamed(() => import('../pages/creator/CouponsPage.jsx'), 
 const OrdersPage = lazyNamed(() => import('../pages/creator/OrdersPage.jsx'), 'OrdersPage');
 const TransactionsPage = lazyNamed(() => import('../pages/creator/OrdersPage.jsx'), 'TransactionsPage');
 const OrderDetailPage = lazyNamed(() => import('../pages/creator/OrderDetailPage.jsx'), 'OrderDetailPage');
+const ProductsPage = lazyNamed(() => import('../pages/creator/ProductsPage.jsx'), 'ProductsPage');
+const ProductPage = lazyNamed(() => import('../pages/public/ProductPage.jsx'), 'ProductPage');
+const DownloadsPage = lazyNamed(() => import('../pages/student/DownloadsPage.jsx'), 'DownloadsPage');
 const LiveIntegrationsPage = lazyNamed(() => import('../pages/creator/LiveIntegrationsPage.jsx'), 'LiveIntegrationsPage');
 const QuestionBankPage = lazyNamed(() => import('../pages/creator/QuestionBankPage.jsx'), 'QuestionBankPage');
 const ReviewsPage = lazyNamed(() => import('../pages/creator/ReviewsPage.jsx'), 'ReviewsPage');
@@ -197,6 +200,7 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/creator/reviews', element: page(ReviewsPage) },
             { path: '/creator/question-bank', element: page(QuestionBankPage) },
             { path: '/creator/integrations', element: page(LiveIntegrationsPage) },
+            { path: '/creator/products', element: page(ProductsPage) },
             { path: '/creator/orders', element: page(OrdersPage) },
             { path: '/creator/orders/:id', element: page(OrderDetailPage) },
             { path: '/creator/transactions', element: page(TransactionsPage) },
@@ -235,6 +239,7 @@ export function buildRoutes(surface = getSurface()) {
     { path: '/courses', element: page(AcademyCatalog) },
     { path: '/courses/:slug', element: page(CourseLandingPage) },
     { path: '/bundles/:slug', element: page(BundlePage) },
+    { path: '/products/:slug', element: page(ProductPage) },
     { path: '/memberships', element: page(PublicMembershipsPage) },
     { path: '/webinars/:slug', element: page(WebinarPage) },
     { path: '/live/ticket/:code', element: page(TicketPage) },
@@ -251,6 +256,7 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/learn/account/notifications', element: page(NotificationSettingsPage, { breadcrumbs: [{ label: 'Account' }] }) },
             { path: '/learn/certificates', element: page(StudentCertificatesPage) },
             { path: '/learn/orders', element: page(StudentOrdersPage) },
+            { path: '/learn/downloads', element: page(DownloadsPage) },
             { path: '/learn/orders/:id', element: page(OrderStatusPage) },
             { path: '/learn/live', element: page(StudentLivePage) },
             { path: '/learn/affiliate', element: page(StudentAffiliatePage) },
@@ -264,6 +270,7 @@ export function buildRoutes(surface = getSurface()) {
         { path: '/checkout/membership/:planId', element: page(CheckoutPage) },
         { path: '/checkout/bundle/:bundleSlug', element: page(CheckoutPage) },
         { path: '/checkout/webinar/:webinarSlug', element: page(CheckoutPage) },
+        { path: '/checkout/product/:productSlug', element: page(CheckoutPage) },
         { path: '/cart/checkout', element: page(CheckoutPage) },
         { path: '/cart', element: page(CartPage) },
         { path: '/learn/live/:id', element: page(StudentRoomPage) },

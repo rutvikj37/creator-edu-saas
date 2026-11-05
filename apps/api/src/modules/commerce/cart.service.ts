@@ -25,7 +25,12 @@ export class CartService {
     const owned = new Set((await this.db.enrollment.findMany({ where: { userId } })).filter((e) => isEnrollmentUsable(e)).map((e) => e.courseId));
     const items = [];
     for (const r of rows) {
-      if (r.bundleId) {
+      if (r.digitalProductId) {
+        const p = await this.db.digitalProduct.findFirst({ where: { id: r.digitalProductId } });
+        const ownedP = p ? Boolean(await this.db.digitalProductAccess.findFirst({ where: { productId: p.id, userId, revokedAt: null } })) : false;
+        const problem = !p || p.status !== 'PUBLISHED' || Number(p.priceAmount) <= 0 ? 'No longer available' : ownedP ? 'You already have this product' : null;
+        items.push({ id: r.id, kind: 'product' as const, refId: r.digitalProductId, title: p?.title ?? 'Removed product', slug: p?.slug ?? null, priceAmount: p ? String(p.priceAmount) : null, currency: p?.currency ?? null, courseCount: 0, problem });
+      } else if (r.bundleId) {
         const b = await this.db.bundle.findFirst({ where: { id: r.bundleId } });
         const ids = (b?.courseIds as string[] | undefined) ?? [];
         const live = b ? await this.db.course.count({ where: { id: { in: ids }, status: 'PUBLISHED', deletedAt: null } }) : 0;
@@ -44,19 +49,19 @@ export class CartService {
     return { items, count: items.length, currency, subtotal, ready: items.length > 0 && items.every((i) => !i.problem) };
   }
 
-  async add(userId: string, ref: { courseId?: string; bundleId?: string }) {
-    if (Boolean(ref.courseId) === Boolean(ref.bundleId)) throw AppException.validation([{ field: 'courseId', message: 'Add a course or a bundle' }]);
+  async add(userId: string, ref: { courseId?: string; bundleId?: string; digitalProductId?: string }) {
+    if ([ref.courseId, ref.bundleId, ref.digitalProductId].filter(Boolean).length !== 1) throw AppException.validation([{ field: 'courseId', message: 'Add a course, a bundle or a product' }]);
     if ((await this.db.cartItem.count({ where: { userId } })) >= MAX_ITEMS) throw AppException.conflict(`A cart holds up to ${MAX_ITEMS} items.`);
-    const existing = await this.db.cartItem.findFirst({ where: { userId, ...(ref.courseId ? { courseId: ref.courseId } : { bundleId: ref.bundleId }) } });
+    const existing = await this.db.cartItem.findFirst({ where: { userId, ...(ref.courseId ? { courseId: ref.courseId } : ref.bundleId ? { bundleId: ref.bundleId } : { digitalProductId: ref.digitalProductId }) } });
     if (existing) return this.get(userId);
     // Same rules as checkout: sellable, not owned, no overlap between courses and bundles, one currency.
-    const line = ref.bundleId ? await this.orders.sellableBundle(ref.bundleId) : await this.orders.sellableLine(ref.courseId!);
+    const line = ref.bundleId ? await this.orders.sellableBundle(ref.bundleId) : ref.digitalProductId ? await this.orders.sellableProduct(ref.digitalProductId) : await this.orders.sellableLine(ref.courseId!);
     const current = (await this.get(userId)).items.filter((i) => !i.problem);
     const others = [];
-    for (const i of current) others.push(i.kind === 'bundle' ? await this.orders.sellableBundle(i.refId) : await this.orders.sellableLine(i.refId));
+    for (const i of current) others.push(i.kind === 'bundle' ? await this.orders.sellableBundle(i.refId) : i.kind === 'product' ? await this.orders.sellableProduct(i.refId) : await this.orders.sellableLine(i.refId));
     if (others.length && others[0].currency !== line.currency) throw AppException.conflict('This item is priced in a different currency from your cart. Buy it separately.');
     await this.orders.assertBuyable(userId, [...others, line]);
-    await this.db.cartItem.create({ data: { userId, courseId: ref.courseId ?? null, bundleId: ref.bundleId ?? null } as never });
+    await this.db.cartItem.create({ data: { userId, courseId: ref.courseId ?? null, bundleId: ref.bundleId ?? null, digitalProductId: ref.digitalProductId ?? null } as never });
     return this.get(userId);
   }
 

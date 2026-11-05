@@ -74,3 +74,17 @@ export const cartApi = {
   remove: (id) => http.delete(`/learn/cart/items/${id}`).then(d),
   clear: () => http.delete('/learn/cart').then(d),
 };
+
+export const productsApi = {
+  list: () => http.get('/creator/products').then(d),
+  get: (id) => http.get(`/creator/products/${id}`).then(d),
+  buyers: (id) => http.get(`/creator/products/${id}/buyers`).then(d),
+  create: (body) => http.post('/creator/products', body).then(d),
+  update: (id, body) => http.patch(`/creator/products/${id}`, body).then(d),
+  setStatus: (id, status) => http.post(`/creator/products/${id}/status`, { status }).then(d),
+  publicList: () => http.get('/public/products').then(d),
+  publicGet: (slug) => http.get(`/public/products/${encodeURIComponent(slug)}`).then(d),
+  mine: () => http.get('/learn/products').then(d),
+  claim: (id) => http.post(`/learn/products/${id}/claim`).then(d),
+  download: (id, fileId) => http.post(`/learn/products/${id}/files/${fileId}/download`).then(d),
+};

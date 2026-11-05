@@ -29,6 +29,7 @@ class BundleStatusDto {
   @ApiProperty({ enum: ['PUBLISHED', 'DRAFT', 'ARCHIVED'] }) @IsIn(['PUBLISHED', 'DRAFT', 'ARCHIVED']) status: 'PUBLISHED' | 'DRAFT' | 'ARCHIVED';
 }
 class CartAddDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() @Length(25, 25) digitalProductId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @Length(25, 25) courseId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @Length(25, 25) bundleId?: string;
 }

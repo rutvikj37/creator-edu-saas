@@ -24,6 +24,8 @@ export const FILE_RULES: Record<string, { mime: string[]; maxBytes: number; publ
   COURSE_THUMBNAIL: { mime: IMAGES, maxBytes: 5 * MB, public: true },
   COURSE_BANNER: { mime: IMAGES, maxBytes: 10 * MB, public: true },
   LESSON_FILE: { mime: [...DOCS, ...IMAGES, ...AUDIO], maxBytes: 500 * MB, public: false },
+  /** Digital products (e-books, templates, packs). EPUB is a ZIP container. */
+  PRODUCT_FILE: { mime: [...DOCS, 'application/epub+zip', ...IMAGES, ...AUDIO], maxBytes: 2 * 1024 * MB, public: false },
   VIDEO_SOURCE: { mime: VIDEO, maxBytes: 20 * 1024 * MB, public: false },
   SUBMISSION: { mime: [...DOCS, ...IMAGES], maxBytes: 50 * MB, public: false },
   OTHER: { mime: [...DOCS, ...IMAGES], maxBytes: 50 * MB, public: false },
@@ -39,6 +41,7 @@ const SIGNATURES: Array<{ mime: string[]; test: (b: Buffer) => boolean }> = [
   {
     mime: [
       'application/zip',
+      'application/epub+zip',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
