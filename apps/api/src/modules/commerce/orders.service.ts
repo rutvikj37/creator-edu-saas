@@ -15,6 +15,7 @@ import { EntitlementsService } from '../subscriptions/entitlements.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { AppEvents } from '../../core/events/app-events.service.js';
 import { AffiliatesService } from '../affiliates/affiliates.service.js';
+import { MembershipsService } from '../memberships/memberships.service.js';
 import { enrollmentExpiry, isEnrollmentUsable } from '../learning/access.js';
 import { CouponsService } from './coupons.service.js';
 import { GatewayService } from './gateway.service.js';
@@ -39,7 +40,9 @@ export interface BillingInput {
 }
 
 export interface CheckoutInput {
-  courseId: string;
+  /** Exactly one of courseId / membershipPlanId. */
+  courseId?: string;
+  membershipPlanId?: string;
   couponCode?: string | null;
   /** Referral code from an affiliate link (?ref=). Invalid or self-referral codes are ignored. */
   affiliateCode?: string | null;
@@ -90,6 +93,7 @@ export class OrdersService {
     private readonly notifications: NotificationsService,
     private readonly events: AppEvents,
     private readonly affiliates: AffiliatesService,
+    private readonly memberships: MembershipsService,
   ) {}
 
   // ── views ─────────────────────────────────────────────────
@@ -132,16 +136,28 @@ export class OrdersService {
     return c;
   }
 
-  async quote(userId: string, courseId: string, couponCode?: string | null) {
-    const course = await this.sellableCourse(courseId);
+  /** What is being bought: a course or a membership plan. */
+  private async product(ref: { courseId?: string; membershipPlanId?: string }) {
+    if (ref.membershipPlanId) {
+      const p = await this.memberships.sellable(ref.membershipPlanId);
+      return { kind: 'membership' as const, id: p.id, title: `${p.name} membership (${p.interval === 'YEAR' ? 'yearly' : 'monthly'})`, slug: null as string | null, unitMinor: toMinor(p.priceAmount, p.currency), currency: p.currency };
+    }
+    if (!ref.courseId) throw AppException.validation([{ field: 'courseId', message: 'Choose what to buy' }]);
+    const c = await this.sellableCourse(ref.courseId);
+    return { kind: 'course' as const, id: c.id, title: c.title, slug: c.slug as string | null, unitMinor: toMinor(c.priceAmount!, c.currency), currency: c.currency };
+  }
+
+  async quote(userId: string, courseId: string | undefined, couponCode?: string | null, membershipPlanId?: string) {
+    const prod = await this.product({ courseId, membershipPlanId });
+    const course = { id: prod.id, title: prod.title, slug: prod.slug, currency: prod.currency };
     const tenantId = this.ctx.requireTenantId();
-    const unit = toMinor(course.priceAmount!, course.currency);
-    const coupon = couponCode ? await this.coupons.evaluate(couponCode, course.id, userId, unit, course.currency) : null;
+    const unit = prod.unitMinor;
+    const coupon = couponCode ? await this.coupons.evaluate(couponCode, prod.id, userId, unit, prod.currency) : null;
     const tax = await this.taxRule(tenantId);
     const q = computeQuote(unit, coupon?.rule ?? null, tax);
     const selling = (await this.entitlements.get(tenantId)).active ? await this.gateways.sellingAccount() : null;
     return {
-      course: { id: course.id, title: course.title, slug: course.slug }, currency: course.currency, couponCode: coupon?.code ?? null,
+      kind: prod.kind, course: { id: course.id, title: course.title, slug: course.slug }, currency: course.currency, couponCode: coupon?.code ?? null,
       subtotal: fromMinor(q.subtotal, course.currency), discount: fromMinor(q.discount, course.currency), tax: fromMinor(q.tax, course.currency), total: fromMinor(q.total, course.currency),
       taxRate: tax?.rate ?? null, taxInclusive: tax?.inclusive ?? true, paymentsEnabled: Boolean(selling) || (q.total === 0 && (await this.entitlements.get(tenantId)).active),
     };
@@ -152,17 +168,20 @@ export class OrdersService {
     if (idempotencyKey) {
       const prior = await this.db.order.findFirst({ where: { userId, idempotencyKey }, include: { items: true } });
       if (prior) {
-        if (prior.items[0]?.courseId !== input.courseId) throw new AppException(ERROR_CODES.CONFLICT, 'Idempotency-Key was already used for a different order', HttpStatus.CONFLICT);
+        if ((prior.items[0]?.courseId ?? prior.items[0]?.membershipPlanId) !== (input.courseId ?? input.membershipPlanId)) throw new AppException(ERROR_CODES.CONFLICT, 'Idempotency-Key was already used for a different order', HttpStatus.CONFLICT);
         return this.view(prior);
       }
     }
-    const course = await this.sellableCourse(input.courseId);
-    const enrollment = await this.db.enrollment.findFirst({ where: { userId, courseId: course.id } });
-    if (isEnrollmentUsable(enrollment)) throw AppException.conflict('You already have access to this course.');
+    const prod = await this.product(input);
+    const course = { id: prod.id, title: prod.title, currency: prod.currency };
+    if (prod.kind === 'course') {
+      const enrollment = await this.db.enrollment.findFirst({ where: { userId, courseId: prod.id } });
+      if (isEnrollmentUsable(enrollment)) throw AppException.conflict('You already have access to this course.');
+    }
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
 
-    const unit = toMinor(course.priceAmount!, course.currency);
-    const coupon = input.couponCode ? await this.coupons.evaluate(input.couponCode, course.id, userId, unit, course.currency) : null;
+    const unit = prod.unitMinor;
+    const coupon = input.couponCode ? await this.coupons.evaluate(input.couponCode, prod.id, userId, unit, prod.currency) : null;
     const tax = await this.taxRule(tenantId);
     const q = computeQuote(unit, coupon?.rule ?? null, tax);
     if (!(await this.entitlements.get(tenantId)).active) throw AppException.conflict('This academy is not accepting new purchases right now.');
@@ -177,7 +196,7 @@ export class OrdersService {
     const affiliateId = await this.affiliates.attribute(input.affiliateCode, userId);
     const order = await this.db.$transaction(async (tx) => {
       // A new checkout supersedes this buyer's earlier unpaid orders for the same course.
-      const open = await tx.order.findMany({ where: { userId, status: { in: ['PENDING', 'PAYMENT_INITIATED'] }, items: { some: { courseId: course.id } } }, select: { id: true } });
+      const open = await tx.order.findMany({ where: { userId, status: { in: ['PENDING', 'PAYMENT_INITIATED'] }, items: { some: prod.kind === 'course' ? { courseId: prod.id } : { membershipPlanId: prod.id } } }, select: { id: true } });
       if (open.length) await tx.order.updateMany({ where: { id: { in: open.map((o) => o.id) } }, data: { status: 'CANCELLED', failureReason: 'Superseded by a newer checkout' } });
       const n = await nextSequence(tx, tenantId, 'order');
       const o = await tx.order.create({
@@ -188,7 +207,7 @@ export class OrdersService {
           billing, idempotencyKey: idempotencyKey ?? null, expiresAt: new Date(Date.now() + ORDER_TTL_MS), affiliateId,
         } as never,
       });
-      await tx.orderItem.create({ data: { orderId: o.id, courseId: course.id, title: course.title, unitAmount: fromMinor(q.subtotal, cur), discountAmount: fromMinor(q.discount, cur), totalAmount: fromMinor(q.total, cur) } as never });
+      await tx.orderItem.create({ data: { orderId: o.id, ...(prod.kind === 'course' ? { courseId: prod.id } : { membershipPlanId: prod.id }), title: course.title, unitAmount: fromMinor(q.subtotal, cur), discountAmount: fromMinor(q.discount, cur), totalAmount: fromMinor(q.total, cur) } as never });
       return o;
     });
     await this.audit.record({ action: 'order.create', tenantId, actorUserId: userId, actorRealm: 'TENANT', targetType: 'Order', targetId: order.id, after: { number: order.number, total: order.totalAmount.toString(), coupon: coupon?.code ?? null } });
@@ -202,10 +221,10 @@ export class OrdersService {
     if (!o) throw AppException.notFound('Order not found');
     const [invoice, slugs] = await Promise.all([
       this.db.invoice.findFirst({ where: { orderId: o.id }, select: { number: true } }),
-      this.courseSlugs(o.items.map((i) => i.courseId)),
+      this.courseSlugs(o.items.map((i) => i.courseId).filter((x): x is string => Boolean(x))),
     ]);
     const v = this.view(o);
-    return { ...v, items: v.items!.map((i: { courseId: string }) => ({ ...i, courseSlug: slugs.get(i.courseId) ?? null })), invoiceNumber: invoice?.number ?? null };
+    return { ...v, items: v.items!.map((i: { courseId: string | null }) => ({ ...i, courseSlug: i.courseId ? slugs.get(i.courseId) ?? null : null })), invoiceNumber: invoice?.number ?? null };
   }
 
   private async courseSlugs(ids: string[]) {
@@ -346,7 +365,10 @@ export class OrdersService {
           data: { status: 'CAPTURED', providerPaymentId: paid.result.providerPaymentId ?? null, method: paid.result.method ?? null, feeAmount: fee === null ? null : fromMinor(fee, cur), capturedAt: now, failureReason: null, raw: paid.result.raw as never },
         });
       }
-      for (const item of order.items) await this.grantInTx(tx, order.userId, item.courseId);
+      for (const item of order.items) {
+        if (item.courseId) await this.grantInTx(tx, order.userId, item.courseId);
+        if (item.membershipPlanId) await this.memberships.applyPurchase(tx, order.userId, item.membershipPlanId, order.id, now);
+      }
       if (order.couponId) {
         await tx.couponRedemption.create({ data: { couponId: order.couponId, orderId: order.id, userId: order.userId, amount: order.discountAmount } as never });
         await tx.coupon.update({ where: { id: order.couponId }, data: { redemptionCount: { increment: 1 } } });
@@ -384,7 +406,7 @@ export class OrdersService {
     const { order } = done;
     const billing = order.billing as Record<string, string | null>;
     await this.audit.record({ action: 'order.paid', tenantId, actorRealm: 'SYSTEM', targetType: 'Order', targetId: order.id, after: { number: order.number, total: order.totalAmount.toString(), paymentId: paid?.result.providerPaymentId ?? null } });
-    await this.events.emit('order.paid', { tenantId, userId: order.userId, orderId: order.id, courseIds: order.items.map((i) => i.courseId), total: order.totalAmount.toString(), currency: order.currency });
+    await this.events.emit('order.paid', { tenantId, userId: order.userId, orderId: order.id, courseIds: order.items.map((i) => i.courseId).filter((x): x is string => Boolean(x)), total: order.totalAmount.toString(), currency: order.currency });
     await this.notifications.notify({ userId: order.userId, tenantId, category: 'orders', title: 'Purchase confirmed', body: `You now have access to ${order.items.map((i) => i.title).join(', ')}.`, link: '/learn', brand: tenant.name, skipEmail: true }).catch(() => undefined);
     if (billing.email) {
       await this.mail.send({
@@ -550,7 +572,8 @@ export class OrdersService {
         if (before - now2 > 0) await tx.ledgerEntry.create({ data: { orderId: o.id, refundId: r.id, type: 'AFFILIATE_REVERSAL', amount: fromMinor(before - now2, cur), currency: cur, description: 'Affiliate commission on refunded amount' } as never });
       }
       if (r.revokeAccess && full) {
-        await tx.enrollment.updateMany({ where: { userId: o.userId, courseId: { in: o.items.map((i) => i.courseId) }, source: 'PURCHASE' }, data: { status: 'REVOKED' } });
+        await tx.enrollment.updateMany({ where: { userId: o.userId, courseId: { in: o.items.map((i) => i.courseId).filter((x): x is string => Boolean(x)) }, source: 'PURCHASE' }, data: { status: 'REVOKED' } });
+        for (const i of o.items) if (i.membershipPlanId) await this.memberships.revokeForRefund(tx, o.userId, i.membershipPlanId);
       }
       return { r, o, amount };
     });

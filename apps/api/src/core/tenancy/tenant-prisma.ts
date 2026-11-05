@@ -17,6 +17,7 @@ export const TENANT_MODELS = new Set<string>(['TenantMember', 'TenantSetting', '
   'SiteSettings', 'SitePage', 'SitePageVersion', 'BlogPost',
   'Lead', 'ConsentEvent', 'Campaign', 'CampaignRecipient', 'Automation', 'AutomationRun',
   'AffiliateProgram', 'Affiliate', 'AffiliateClick', 'AffiliateConversion',
+  'Community', 'CommunityPost', 'CommunityComment', 'CommunityReport', 'MembershipPlan', 'Membership',
   'Batch', 'BatchMember', 'LiveClass', 'LiveSession', 'LiveAttendance', 'LiveAdmission', 'LivePoll', 'LivePollVote', 'LiveQuestion', 'WebinarRegistration',
 ]);
 

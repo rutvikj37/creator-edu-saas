@@ -26,6 +26,8 @@ import { LiveModule } from './modules/live/live.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
 import { MarketingModule } from './modules/marketing/marketing.module.js';
 import { AffiliatesModule } from './modules/affiliates/affiliates.module.js';
+import { CommunitiesModule } from './modules/communities/communities.module.js';
+import { MembershipsModule } from './modules/memberships/memberships.module.js';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard.js';
 import { TenantGuard } from './modules/auth/guards/tenant.guard.js';
 import { PermissionsGuard } from './modules/auth/guards/permissions.guard.js';
@@ -57,6 +59,8 @@ import { PermissionsGuard } from './modules/auth/guards/permissions.guard.js';
     NotificationsModule,
     MarketingModule,
     AffiliatesModule,
+    CommunitiesModule,
+    MembershipsModule,
     HealthModule,
     SystemModule,
   ],

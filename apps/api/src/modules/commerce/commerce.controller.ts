@@ -55,7 +55,8 @@ class BillingDto {
   @ApiPropertyOptional() @IsOptional() @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value)) @Matches(/^([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z])?$/, { message: 'Invalid GSTIN format' }) gstin?: string | null;
 }
 class QuoteDto {
-  @ApiProperty() @IsString() @Length(25, 25) courseId: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @Length(25, 25) courseId?: string;
+  @ApiPropertyOptional({ description: 'Buy a membership plan instead of a course' }) @IsOptional() @IsString() @Length(25, 25) membershipPlanId?: string;
   @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(40) couponCode?: string | null;
 }
 class CheckoutDto extends QuoteDto {
@@ -190,7 +191,7 @@ export class LearnCommerceController {
 
   @Post('checkout/quote') @HttpCode(200)
   @ApiOperation({ summary: 'Price breakdown with coupon and GST, without creating an order' })
-  quote(@Body() dto: QuoteDto, @CurrentAuth() auth: AuthContext) { return this.orders.quote(auth.userId, dto.courseId, dto.couponCode); }
+  quote(@Body() dto: QuoteDto, @CurrentAuth() auth: AuthContext) { return this.orders.quote(auth.userId, dto.courseId, dto.couponCode, dto.membershipPlanId); }
 
   @Post('checkout')
   @ApiHeader({ name: 'Idempotency-Key', required: false })

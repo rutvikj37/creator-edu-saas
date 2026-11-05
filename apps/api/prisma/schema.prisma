@@ -1401,16 +1401,17 @@ model Order {
 }
 
 model OrderItem {
-  id             String   @id @default(cuid()) @db.Char(25)
-  tenantId       String   @db.Char(25)
-  orderId        String   @db.Char(25)
-  courseId       String   @db.Char(25)
-  title          String   @db.VarChar(200)
-  unitAmount     Decimal  @db.Decimal(19, 4)
-  discountAmount Decimal  @default(0) @db.Decimal(19, 4)
-  totalAmount    Decimal  @db.Decimal(19, 4)
-  createdAt      DateTime @default(now()) @db.DateTime(3)
-  order          Order    @relation(fields: [tenantId, orderId], references: [tenantId, id], onDelete: Cascade)
+  id               String   @id @default(cuid()) @db.Char(25)
+  tenantId         String   @db.Char(25)
+  orderId          String   @db.Char(25)
+  courseId         String?  @db.Char(25)
+  membershipPlanId String?  @db.Char(25)
+  title            String   @db.VarChar(200)
+  unitAmount       Decimal  @db.Decimal(19, 4)
+  discountAmount   Decimal  @default(0) @db.Decimal(19, 4)
+  totalAmount      Decimal  @db.Decimal(19, 4)
+  createdAt        DateTime @default(now()) @db.DateTime(3)
+  order            Order    @relation(fields: [tenantId, orderId], references: [tenantId, id], onDelete: Cascade)
 
   @@unique([tenantId, id])
   @@index([tenantId, courseId])
@@ -2186,4 +2187,118 @@ model AffiliateConversion {
   @@unique([tenantId, orderId])
   @@index([tenantId, affiliateId, status])
   @@index([status, approvableAt])
+}
+
+// ───────────────────────────── Communities (Phase 10) ─────────────────────────────
+
+model Community {
+  id               String          @id @default(cuid()) @db.Char(25)
+  tenantId         String          @db.Char(25)
+  name             String          @db.VarChar(120)
+  description      String?         @db.VarChar(1000)
+  access           String          @db.VarChar(16)
+  courseId         String?         @db.Char(25)
+  membershipPlanId String?         @db.Char(25)
+  staffOnlyPosts   Boolean         @default(false)
+  status           String          @default("ACTIVE") @db.VarChar(16)
+  createdById      String          @db.Char(25)
+  createdAt        DateTime        @default(now()) @db.DateTime(3)
+  updatedAt        DateTime        @updatedAt @db.DateTime(3)
+  posts            CommunityPost[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, status])
+}
+
+model CommunityPost {
+  id           String             @id @default(cuid()) @db.Char(25)
+  tenantId     String             @db.Char(25)
+  communityId  String             @db.Char(25)
+  authorId     String             @db.Char(25)
+  authorRole   String             @db.VarChar(16)
+  title        String?            @db.VarChar(200)
+  body         String             @db.Text
+  pinned       Boolean            @default(false)
+  locked       Boolean            @default(false)
+  hiddenAt     DateTime?          @db.DateTime(3)
+  likes        Json
+  commentCount Int                @default(0)
+  createdAt    DateTime           @default(now()) @db.DateTime(3)
+  updatedAt    DateTime           @updatedAt @db.DateTime(3)
+  community    Community          @relation(fields: [tenantId, communityId], references: [tenantId, id], onDelete: Cascade)
+  comments     CommunityComment[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, communityId, pinned, createdAt])
+}
+
+model CommunityComment {
+  id         String        @id @default(cuid()) @db.Char(25)
+  tenantId   String        @db.Char(25)
+  postId     String        @db.Char(25)
+  authorId   String        @db.Char(25)
+  authorRole String        @db.VarChar(16)
+  body       String        @db.VarChar(2000)
+  hiddenAt   DateTime?     @db.DateTime(3)
+  createdAt  DateTime      @default(now()) @db.DateTime(3)
+  post       CommunityPost @relation(fields: [tenantId, postId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, postId, createdAt])
+}
+
+model CommunityReport {
+  id         String    @id @default(cuid()) @db.Char(25)
+  tenantId   String    @db.Char(25)
+  postId     String?   @db.Char(25)
+  commentId  String?   @db.Char(25)
+  reporterId String    @db.Char(25)
+  reason     String    @db.VarChar(300)
+  status     String    @default("OPEN") @db.VarChar(16)
+  createdAt  DateTime  @default(now()) @db.DateTime(3)
+  resolvedAt DateTime? @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, status])
+}
+
+// ───────────────────────────── Memberships (Phase 10) ─────────────────────────────
+
+/// Paid access to a set of courses (and member communities) for a period; renewed by paying again.
+model MembershipPlan {
+  id          String          @id @default(cuid()) @db.Char(25)
+  tenantId    String          @db.Char(25)
+  name        String          @db.VarChar(120)
+  description String?         @db.VarChar(1000)
+  priceAmount Decimal         @db.Decimal(19, 4)
+  currency    String          @db.Char(3)
+  interval    BillingInterval
+  courseIds   Json
+  status      String          @default("ACTIVE") @db.VarChar(16)
+  createdById String          @db.Char(25)
+  createdAt   DateTime        @default(now()) @db.DateTime(3)
+  updatedAt   DateTime        @updatedAt @db.DateTime(3)
+  memberships Membership[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, status])
+}
+
+model Membership {
+  id               String         @id @default(cuid()) @db.Char(25)
+  tenantId         String         @db.Char(25)
+  userId           String         @db.Char(25)
+  planId           String         @db.Char(25)
+  status           String         @default("ACTIVE") @db.VarChar(16)
+  startedAt        DateTime       @db.DateTime(3)
+  currentPeriodEnd DateTime       @db.DateTime(3)
+  lastOrderId      String?        @db.Char(25)
+  reminderSentFor  DateTime?      @db.DateTime(3)
+  createdAt        DateTime       @default(now()) @db.DateTime(3)
+  updatedAt        DateTime       @updatedAt @db.DateTime(3)
+  plan             MembershipPlan @relation(fields: [tenantId, planId], references: [tenantId, id], onDelete: Restrict)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, userId, planId])
+  @@index([status, currentPeriodEnd])
 }
