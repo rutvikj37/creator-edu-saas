@@ -31,6 +31,7 @@ import { MembershipsModule } from './modules/memberships/memberships.module.js';
 import { AnalyticsModule } from './modules/analytics/analytics.module.js';
 import { AiModule } from './modules/ai/ai.module.js';
 import { VideosModule } from './modules/videos/videos.module.js';
+import { BackupsModule } from './modules/backups/backups.module.js';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard.js';
 import { TenantGuard } from './modules/auth/guards/tenant.guard.js';
 import { PermissionsGuard } from './modules/auth/guards/permissions.guard.js';
@@ -67,6 +68,7 @@ import { PermissionsGuard } from './modules/auth/guards/permissions.guard.js';
     AnalyticsModule,
     AiModule,
     VideosModule,
+    BackupsModule,
     HealthModule,
     SystemModule,
   ],

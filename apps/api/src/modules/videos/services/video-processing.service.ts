@@ -90,10 +90,13 @@ export class VideoProcessingService {
     return updated;
   }
 
+  /** Queues the original's backup once (when backups are configured). Never blocks processing. */
   async enqueueBackup(tenantId: string, videoId: string) {
+    if (!this.config.get('GOOGLE_DRIVE_CLIENT_ID') || !this.config.get('BACKUP_ENCRYPTION_KEY')) return;
     const flag = `video:backup-queued:${videoId}`;
     if (!(await this.redis.set(flag, '1', 'EX', 7 * 86_400, 'NX'))) return;
-    await this.backups.add(BACKUP_JOBS.VIDEO, { tenantId, videoId }, { jobId: `backup-video-${videoId}`, attempts: 1, removeOnComplete: true, removeOnFail: 100 });
+    await this.prisma.videoBackup.upsert({ where: { tenantId_videoAssetId: { tenantId, videoAssetId: videoId } }, create: { tenantId, videoAssetId: videoId, provider: 'GOOGLE_DRIVE', backupFilename: `${videoId}.enc` }, update: {} });
+    await this.backups.add(BACKUP_JOBS.VIDEO, { tenantId, videoId }, { jobId: `backup-video-${videoId}`, attempts: 5, backoff: { type: 'exponential', delay: 60_000 }, removeOnComplete: true, removeOnFail: 200 });
   }
 
   /** Status for the UI. Provider-hosted videos still in flight are re-read (at most every 10 s). */
@@ -135,7 +138,7 @@ export class VideoProcessingService {
       this.repo.history(v.id),
       v.sourceFileId ? this.db.fileAsset.findFirst({ where: { id: v.sourceFileId }, select: { fileName: true, sizeBytes: true, mimeType: true } }) : null,
     ]);
-    return serializeVideo(v, { usedIn: lessons, backup, course, uploadSessions: sessions, history, file });
+    return serializeVideo(v, { usedIn: lessons, backup: backup && { ...backup, backupSize: backup.backupSize !== null ? Number(backup.backupSize) : null }, course, uploadSessions: sessions, history, file: file && { ...file, sizeBytes: Number(file.sizeBytes) } });
   }
 
   /**

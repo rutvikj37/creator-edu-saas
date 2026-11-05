@@ -1,3 +1,4 @@
+import type { Readable } from 'node:stream';
 import { Injectable, Logger } from '@nestjs/common';
 import { createHmac } from 'node:crypto';
 import { mkdir, open, rm, stat, writeFile } from 'node:fs/promises';
@@ -165,6 +166,13 @@ export class StorageService {
       this.logger.warn({ key: ref.key, err: (e as Error).message }, 'object not found');
       return null;
     }
+  }
+
+  /** Streams a stored object (backups read originals this way). */
+  async readStream(ref: ObjectRef): Promise<Readable> {
+    if (ref.driver === 'local') return this.localReadStream(ref.key);
+    const obj = await this.s3!.send(new GetObjectCommand({ Bucket: ref.bucket, Key: ref.key }));
+    return obj.Body as Readable;
   }
 
   async remove(ref: ObjectRef) {
