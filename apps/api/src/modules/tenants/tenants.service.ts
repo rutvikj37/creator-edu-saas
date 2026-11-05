@@ -21,7 +21,8 @@ export class TenantsService {
       const candidate = i === 0 ? base : `${base.slice(0, 36)}-${i + 1}`;
       if (RESERVED_SLUGS.has(candidate)) continue;
       const taken = await tx.tenant.findUnique({ where: { slug: candidate }, select: { id: true } });
-      if (!taken) return candidate;
+      const hostTaken = await tx.tenantDomain.findUnique({ where: { hostname: `${candidate}.${this.config.get('PLATFORM_ROOT_DOMAIN')}` }, select: { id: true } });
+      if (!taken && !hostTaken) return candidate;
     }
     return `${base.slice(0, 30)}-${randomBytes(4).toString('hex')}`;
   }

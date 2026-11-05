@@ -12,7 +12,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 | 5 Student platform | student auth on academy host, catalog, free enrollment, player, progress, notes, bookmarks, discussions, quizzes, assignments, certificates (PDF + QR verify) | student completes free course and gets certificate | ✅ 2026-11-05 |
 | 6 Video (no DRM — scope set by owner 2026-11-05) | video library, direct + multipart uploads, signed playback sessions, resume, auto-complete, concurrent-stream limit, revocation | student plays an attached video; unauthorized playback denied | ✅ 2026-11-05 |
 | 7 Commerce (Razorpay only — owner decision 2026-11-05) | Razorpay gateway per academy, checkout, coupons, GST, orders, webhooks, reconciliation, refunds, invoices, ledger, commission recording, finance views | paid checkout → access → invoice → refund, verified against Razorpay's API contract | ✅ 2026-11-05 |
-| 8 Website builder | themes, templates, block page builder, versions, undo/redo, previews, blog, SEO meta injection, custom domains + TLS | creator publishes branded site on custom domain | ⬜ |
+| 8 Website builder | themes, templates, block page builder, versions, undo/redo, previews, blog, SEO meta injection, **domains: free branded subdomain on the platform domain and/or own domain** + TLS | creator publishes branded site on a subdomain or custom domain | 🟨 in progress (domains done) |
 | 9 Live learning | LiveKit (primary), Zoom, Google Meet adapters, scheduling, recurring, waiting room, chat/polls/Q&A, attendance, recordings, webinars, batches/cohorts | real A/V session with attendance recorded | ⬜ |
 | 10 Growth & advanced | notifications (email/SMS/WhatsApp/web-push), campaigns, automations, leads, consent, affiliates, communities, memberships, advanced analytics + exports, AI features with credits | module tests + e2e | ⬜ |
 | 11 Quality & production | security audit, load tests, query optimisation, backups/restore drill, Nginx/PM2/AWS config, runbooks | release checklist signed off | ⬜ |
@@ -111,6 +111,14 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 
 **Pending / not in this phase**: multi-course cart and bundles · GST reports/exports (Phase 10) · Content-Security-Policy, if one is added, must allow `checkout.razorpay.com` (script/frame) and `api.razorpay.com` (connect).
 
+## Phase 8 — Website builder (🟨 in progress)
+
+**Decisions (2026-11-05)**: owner asked for both domain options — a free branded subdomain on the platform domain or the creator's own domain (or both). TLS for own domains via Nginx + Let's Encrypt; SEO via server-side meta injection first (the recommended defaults, D-7/D-8).
+
+**Done — domains**: creators add up to 3 branded subdomains `<name>.<platform domain>` (including the one created at sign-up) with a live availability check (format, reserved names, taken by any academy's slug or subdomain); they work instantly (wildcard DNS/TLS) and any verified address can be primary · own domains keep the DNS-verification flow; plan limits apply and the dialog explains when the plan does not include one · host resolution checks registered subdomains before slugs; new academies never get a slug that is someone's subdomain; the sign-up subdomain cannot be removed and removing the primary falls back to it · receipt/email links use the primary address. Verified: API e2e 77 ✅ (domains suite + isolation coverage), web 66 ✅, browser: reserved name rejected, subdomain added and made primary, own domain blocked on the trial plan then added with DNS records, academy served on the new subdomain and still on the original.
+
+**Next**: themes/templates, block page builder with versions and preview, header/footer/navigation, blog, SEO meta + sitemap, automated TLS for verified own domains.
+
 ## Change log of this file
 - 2026-11-04 — Phase 0 documents drafted and approved.
 - 2026-11-04 — Phase 1 foundation completed.
@@ -120,3 +128,4 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 - 2026-11-05 — Phase 5 student platform completed.
 - 2026-11-05 — Phase 6 video (no DRM) completed.
 - 2026-11-05 — Phase 7 commerce (Razorpay) completed; SaaS plan billing pending.
+- 2026-11-05 — Phase 8 started: both domain options (branded subdomain, own domain).

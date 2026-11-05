@@ -104,8 +104,9 @@ export class OrdersService {
   private async academy(tenantId: string) {
     const t = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, include: { business: true, domains: { where: { status: 'VERIFIED', isPrimary: true }, take: 1 } } });
     const web = new URL(this.config.get('WEB_PUBLIC_URL'));
-    const custom = t.domains[0]?.hostname;
-    const origin = custom ? `https://${custom}` : `${web.protocol}//${t.slug}.${this.config.get('PLATFORM_ROOT_DOMAIN')}${web.port ? `:${web.port}` : ''}`;
+    const root = this.config.get('PLATFORM_ROOT_DOMAIN');
+    const primary = t.domains[0]?.hostname ?? `${t.slug}.${root}`;
+    const origin = primary.endsWith(`.${root}`) ? `${web.protocol}//${primary}${web.port ? `:${web.port}` : ''}` : `https://${primary}`;
     return { tenant: t, origin, business: t.business };
   }
 

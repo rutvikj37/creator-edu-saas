@@ -17,7 +17,7 @@ export const RESERVED_SLUGS = new Set([
 /**
  * Maps a request hostname to the platform or to a tenant:
  *   app.<root>, api.<root>, <root>, www.<root>, localhost → platform
- *   <slug>.<root>                                           → tenant by slug
+ *   <name>.<root>                                           → tenant by branded subdomain, else by slug
  *   any other host                                          → tenant by VERIFIED custom domain
  * Results (including misses) are cached in Redis and invalidated on domain/tenant changes.
  */
@@ -68,6 +68,10 @@ export class HostResolverService {
     if (hostname.endsWith(suffix)) {
       const slug = hostname.slice(0, -suffix.length);
       if (slug.includes('.') || RESERVED_SLUGS.has(slug)) return null;
+      const sub = await this.prisma.tenantDomain.findUnique({ where: { hostname }, select: { type: true, status: true, tenant: { select: { id: true, slug: true, status: true } } } });
+      if (sub && sub.type === 'SUBDOMAIN' && sub.status === 'VERIFIED') {
+        return sub.tenant.status !== 'DELETED' ? { kind: 'tenant', tenantId: sub.tenant.id, slug: sub.tenant.slug, status: sub.tenant.status, hostname } : null;
+      }
       const t = await this.prisma.tenant.findUnique({ where: { slug }, select: { id: true, slug: true, status: true } });
       return t && t.status !== 'DELETED' ? { kind: 'tenant', tenantId: t.id, slug: t.slug, status: t.status, hostname } : null;
     }

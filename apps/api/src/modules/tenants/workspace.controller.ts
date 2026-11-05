@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Inject, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PERMISSIONS } from '@ce/shared';
 import { CurrentAuth, RequirePermissions, TenantScoped } from '../../common/decorators/auth.decorators.js';
@@ -8,7 +8,7 @@ import { TenantContext } from '../../core/tenancy/tenant-context.service.js';
 import { PrismaService } from '../../core/prisma/prisma.service.js';
 import type { AuthContext } from '../../core/tenancy/request-context.js';
 import { DomainsService } from './domains.service.js';
-import { AddDomainDto } from './dto/domain.dto.js';
+import { AddDomainDto, AddSubdomainDto, SubdomainQueryDto } from './dto/domain.dto.js';
 
 @ApiTags('Creator workspace')
 @ApiBearerAuth()
@@ -56,6 +56,20 @@ export class WorkspaceController {
   @ApiOperation({ summary: 'Connect a custom domain (pending until DNS is verified)' })
   addDomain(@Body() dto: AddDomainDto, @CurrentAuth() auth: AuthContext) {
     return this.domains.add(dto.hostname, auth.userId);
+  }
+
+  @Get('domains/subdomains/availability')
+  @RequirePermissions(PERMISSIONS.DOMAINS_MANAGE)
+  @ApiOperation({ summary: 'Check whether a branded subdomain on the platform domain is free' })
+  subdomainAvailability(@Query() q: SubdomainQueryDto) {
+    return this.domains.subdomainAvailability(q.name);
+  }
+
+  @Post('domains/subdomains')
+  @RequirePermissions(PERMISSIONS.DOMAINS_MANAGE)
+  @ApiOperation({ summary: 'Add a branded subdomain on the platform domain (live immediately)' })
+  addSubdomain(@Body() dto: AddSubdomainDto, @CurrentAuth() auth: AuthContext) {
+    return this.domains.addSubdomain(dto.name, auth.userId);
   }
 
   @Post('domains/:id/verify')

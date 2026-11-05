@@ -9,11 +9,18 @@ import type { TenantPrismaClient } from '../../core/tenancy/tenant-prisma.js';
 import { TenantContext } from '../../core/tenancy/tenant-context.service.js';
 import { PrismaService } from '../../core/prisma/prisma.service.js';
 import { DnsVerifier, VERIFY_PREFIX } from './dns-verifier.js';
+import { isValidSlug } from './slug.js';
+
+/** Branded subdomains per academy on the platform domain, including the one created at sign-up. */
+export const MAX_SUBDOMAINS = 3;
 import { EntitlementsService } from '../subscriptions/entitlements.service.js';
 import { FEATURES } from '@ce/shared';
 
 /**
- * Custom domain management for the current tenant. All reads/writes go through the
+ * Domains of the current tenant, two kinds:
+ *  - SUBDOMAIN: `<name>.<platform root>` — live instantly (covered by wildcard DNS/TLS), up to MAX_SUBDOMAINS.
+ *  - CUSTOM: the creator's own domain — live after DNS ownership verification.
+ * Domain management for the current tenant. All reads/writes go through the
  * tenant-scoped client, so a domain id from another tenant simply does not exist here.
  */
 @Injectable()
@@ -46,7 +53,52 @@ export class DomainsService {
 
   async list() {
     const rows = await this.db.tenantDomain.findMany({ orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] });
-    return rows.map((d) => this.present(d));
+    const original = await this.originalHostname();
+    return rows.map((d) => ({ ...this.present(d), isDefault: d.hostname === original }));
+  }
+
+  private async originalHostname() {
+    const t = await this.prisma.tenant.findUniqueOrThrow({ where: { id: this.ctx.requireTenantId() }, select: { slug: true } });
+    return `${t.slug}.${this.config.get('PLATFORM_ROOT_DOMAIN')}`;
+  }
+
+  /** Why a subdomain name cannot be used, or null when it is free. Never reveals which academy holds it. */
+  private async subdomainProblem(name: string): Promise<string | null> {
+    if (!isValidSlug(name)) return '3–40 lowercase letters, digits or single hyphens; some names are reserved';
+    const hostname = `${name}.${this.config.get('PLATFORM_ROOT_DOMAIN')}`;
+    const [slugTaken, hostTaken] = await Promise.all([
+      this.prisma.tenant.findUnique({ where: { slug: name }, select: { id: true } }),
+      this.prisma.tenantDomain.findUnique({ where: { hostname }, select: { id: true } }),
+    ]);
+    return slugTaken || hostTaken ? 'This subdomain is already taken' : null;
+  }
+
+  async subdomainAvailability(rawName: string) {
+    const name = rawName.trim().toLowerCase();
+    const problem = await this.subdomainProblem(name);
+    return { name, hostname: `${name}.${this.config.get('PLATFORM_ROOT_DOMAIN')}`, available: !problem, reason: problem };
+  }
+
+  async addSubdomain(rawName: string, actorUserId: string) {
+    const name = rawName.trim().toLowerCase();
+    const problem = await this.subdomainProblem(name);
+    if (problem) throw AppException.validation([{ field: 'name', message: problem }]);
+    if ((await this.db.tenantDomain.count({ where: { type: 'SUBDOMAIN' } })) >= MAX_SUBDOMAINS) {
+      throw AppException.validation([{ field: 'name', message: `You can have up to ${MAX_SUBDOMAINS} subdomains. Remove one first.` }]);
+    }
+    const hostname = `${name}.${this.config.get('PLATFORM_ROOT_DOMAIN')}`;
+    let domain;
+    try {
+      domain = await this.db.tenantDomain.create({
+        data: { hostname, type: 'SUBDOMAIN', status: 'VERIFIED', verifiedAt: new Date(), verificationToken: randomBytes(16).toString('hex') } as never,
+      });
+    } catch (e: any) {
+      if (e?.code === 'P2002') throw AppException.validation([{ field: 'name', message: 'This subdomain is already taken' }]);
+      throw e;
+    }
+    await this.hosts.invalidate(hostname);
+    await this.audit.record({ action: 'domain.subdomain_add', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'TenantDomain', targetId: domain.id, after: { hostname } });
+    return { ...this.present(domain), isDefault: false };
   }
 
   async add(hostname: string, actorUserId: string) {
@@ -97,9 +149,10 @@ export class DomainsService {
 
   async remove(id: string, actorUserId: string) {
     const d = await this.get(id);
-    if (d.type === 'SUBDOMAIN') throw AppException.validation([{ field: 'id', message: 'The default subdomain cannot be removed' }]);
+    const original = await this.originalHostname();
+    if (d.hostname === original) throw AppException.validation([{ field: 'id', message: 'The subdomain created with your academy cannot be removed' }]);
     await this.db.tenantDomain.delete({ where: { id } });
-    if (d.isPrimary) await this.db.tenantDomain.updateMany({ where: { type: 'SUBDOMAIN' }, data: { isPrimary: true } });
+    if (d.isPrimary) await this.db.tenantDomain.updateMany({ where: { hostname: original }, data: { isPrimary: true } });
     await this.hosts.invalidate(d.hostname);
     await this.audit.record({ action: 'domain.remove', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'TenantDomain', targetId: id, before: { hostname: d.hostname } });
     return { removed: true };

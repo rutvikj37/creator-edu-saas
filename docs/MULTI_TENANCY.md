@@ -18,6 +18,7 @@ Shared MySQL database, shared schema, `tenantId` discriminator on every tenant-o
 
 ## Domains
 - Default: `<slug>.<PLATFORM_ROOT_DOMAIN>` (wildcard DNS + wildcard TLS).
+- Branded subdomains (Phase 8): creators may add up to 3 `<name>.<PLATFORM_ROOT_DOMAIN>` addresses (stored as `TenantDomain` type SUBDOMAIN, VERIFIED immediately). Resolution checks these before slugs; names are unique across slugs and subdomains.
 - Custom: creator adds `learn.creator.com` → we show `CNAME learn → tenants.<root>` and `TXT _ce-verify.learn → <token>`; `domains` queue polls DNS; on success status `VERIFIED`, TLS issued (see SYSTEM_ARCHITECTURE D-8), then the domain becomes routable. Unverified hosts get a neutral 404 page.
 - Plan entitlement `domains.custom` limits the number of custom domains.
 

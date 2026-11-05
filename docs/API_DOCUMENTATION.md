@@ -61,3 +61,4 @@ Status: **Phase 0 design**. Live docs will be served by Swagger at `/api/docs` (
 | 7 | `GET /creator/billing/plans` · `POST /creator/billing/quote|checkout` · `GET /creator/billing/invoices[/:id][/pdf]` · `POST /creator/billing/invoices/:id/pay|confirm` · `POST /creator/billing/cancellation` | billing.manage | Plan billing on the platform's Razorpay account |
 | 7 | `GET /platform/billing/gateway` · `GET /platform/billing/subscriptions|invoices` · `GET /platform/billing/invoices/:id/pdf` · `POST /platform/billing/invoices/:id/record-payment|void` | platform.finance.read / manage | Subscriptions, invoices, bank-transfer recording |
 | 7 | `POST /webhooks/razorpay/platform` | public (X-Razorpay-Signature) | Platform Razorpay webhook (plan billing) |
+| 8 | `GET /creator/domains/subdomains/availability?name=` · `POST /creator/domains/subdomains` | domains.manage | Branded subdomains on the platform domain (live instantly, max 3) |

@@ -47,6 +47,8 @@ const WORKSPACE_ROUTES_COVERED = [
   'POST /api/v1/creator/certificates/:id/revoke', 'POST /api/v1/creator/certificates/:id/reinstate',
   // Phase 6 routes: isolation covered in video.e2e-spec.ts
   'POST /api/v1/creator/files/:id/parts', 'GET /api/v1/creator/videos', 'POST /api/v1/creator/videos', 'PATCH /api/v1/creator/videos/:id', 'GET /api/v1/creator/videos/:id/preview', 'DELETE /api/v1/creator/videos/:id',
+  // Phase 8 — branded subdomains (domains.e2e-spec.ts)
+  'GET /api/v1/creator/domains/subdomains/availability', 'POST /api/v1/creator/domains/subdomains',
   // Phase 7 — commerce (cross-tenant behaviour is also exercised in commerce.e2e-spec.ts)
   'GET /api/v1/creator/payments/razorpay', 'PUT /api/v1/creator/payments/razorpay', 'POST /api/v1/creator/payments/razorpay/verify', 'PATCH /api/v1/creator/payments/razorpay', 'DELETE /api/v1/creator/payments/razorpay',
   'GET /api/v1/creator/coupons', 'POST /api/v1/creator/coupons', 'PATCH /api/v1/creator/coupons/:id', 'DELETE /api/v1/creator/coupons/:id',
