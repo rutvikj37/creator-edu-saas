@@ -18,6 +18,21 @@ Source of truth for the integration: the official `plugnmeet-sdk-js` 2.3.0 and `
 **To verify against a real plugNmeet server before production** (not reachable here): the client URL form `/?access_token=`, the recording download path `/download/recording/<token>`, webhook event names above, and that `isRoomActive` for an unknown room returns `ROOM_NOT_ACTIVE`/`ROOM_NOT_FOUND`. Webhook header signatures are not relied on (the URL secret authenticates).
 
 
+## Zoom and Google Meet (academy's own accounts, OAuth)
+
+Sources: Zoom's official Node SDK `@zoom/rivet` 0.4.0 (OAuth, REST paths and fields, webhook signing) and Google's official `@googleapis/calendar` 20.1.0 (Calendar events with Meet conferences). Zoom's and Google's developer sites are not reachable from the build environment. Code: `zoom.service.ts`, `google-meet.service.ts`, `live-integrations.service.ts`, `live.service.ts` (join/host/webhook).
+
+| | Zoom | Google Meet |
+|---|---|---|
+| Connect | Live → Integrations → Zoom consent (`{ZOOM_OAUTH_BASE_URL}/oauth/authorize`), code exchanged with Basic client credentials; tokens encrypted; refresh-token rotation; Zoom user/account id kept for `app_deauthorized` | Google consent (offline, `calendar.events.owned` + email); refresh token encrypted; revoked on disconnect |
+| Per session | `POST /users/me/meetings` (scheduled, start/duration/timezone, waiting room, `auto_recording: cloud` when recording, registration on); edits `PATCH`, cancel `DELETE`. Free Zoom plans refuse registration → meeting created without it | Calendar event on the primary calendar with `conferenceData.createRequest` (`hangoutsMeet`, `conferenceDataVersion=1`), `sendUpdates: none`; edits `PATCH`, cancel `DELETE` |
+| Students | Access checks, then a personal registrant link (`POST /meetings/{id}/registrants`, created once per student and session); without registration the meeting link | Access checks, then the Meet link; the click is recorded as attendance |
+| Host | Fresh `start_url` read before starting (it expires) | Meet link |
+| Events | `POST /webhooks/zoom`: `x-zm-signature` = `v0=HMAC_SHA256(secret, "v0:{timestamp}:{body}")`; `endpoint.url_validation` answered; started/ended; participant joined/left → attendance (registrant → student, host, email → student, else guest); `recording.completed` → MP4 imported to the video library (Bunny) with the event's `download_token`; `app_deauthorized` → connection revoked | none (Meet attendance and recordings need Google Workspace APIs) |
+| Failures | Meeting errors are stored on the session and retried by the worker every minute; a revoked grant marks the connection "needs attention" | same |
+
+**To verify with real accounts before production**: Zoom — the scopes your Marketplace app needs (meeting write, registrant write, user read, recording read), the `?access_token=` download form for `download_token`, and that `recording.completed` carries `download_token` at the top level; Google — that the OAuth client's consent screen includes `calendar.events.owned` and that Meet links are created for the account type you use.
+
 ## Provider abstraction
 ```ts
 interface LiveProvider {
@@ -47,4 +62,4 @@ No static/fake classroom: if no provider is configured, the "Create live class" 
 - Webinars: public registration form (free) or product checkout (paid) → ticket code → confirmation email → join.
 
 ## Env
-`PLUGNMEET_URL`, `PLUGNMEET_API_KEY`, `PLUGNMEET_API_SECRET` (plugNmeet `config.yaml` → `client.api_key/secret`), `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `ZOOM_ACCOUNT_ID`, `ZOOM_CLIENT_ID`, `ZOOM_CLIENT_SECRET`, `ZOOM_SDK_KEY`, `ZOOM_SDK_SECRET`, `ZOOM_WEBHOOK_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
+`ZOOM_CLIENT_ID`, `ZOOM_CLIENT_SECRET`, `ZOOM_WEBHOOK_SECRET_TOKEN` (redirect `{API_PUBLIC_URL}/api/v1/integrations/zoom/callback`, events `{API_PUBLIC_URL}/api/v1/webhooks/zoom`), `GOOGLE_MEET_CLIENT_ID`, `GOOGLE_MEET_CLIENT_SECRET` (redirect `{API_PUBLIC_URL}/api/v1/integrations/google-meet/callback`), `PLUGNMEET_URL`, `PLUGNMEET_API_KEY`, `PLUGNMEET_API_SECRET` (plugNmeet `config.yaml` → `client.api_key/secret`), `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `ZOOM_ACCOUNT_ID`, `ZOOM_CLIENT_ID`, `ZOOM_CLIENT_SECRET`, `ZOOM_SDK_KEY`, `ZOOM_SDK_SECRET`, `ZOOM_WEBHOOK_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.

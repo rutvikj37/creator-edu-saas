@@ -1,6 +1,9 @@
 import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import type { Redis } from 'ioredis';
+import { InjectQueue } from '@nestjs/bullmq';
+import type { Queue } from 'bullmq';
+import { QUEUES } from '../../core/queue/queue.constants.js';
 import { ERROR_CODES } from '@ce/shared';
 import { AppException } from '../../common/errors/app-exception.js';
 import { AppConfig } from '../../config/app-config.service.js';
@@ -15,6 +18,8 @@ import { isEnrollmentUsable } from '../learning/access.js';
 import { isValidTimeZone } from '../../common/time/timezone.js';
 import { type LiveGrant, LiveKitService } from './livekit.service.js';
 import { PlugNmeetError, PlugNmeetService } from './plugnmeet.service.js';
+import { LiveIntegrationsService } from './live-integrations.service.js';
+import { ZoomError, ZoomService } from './zoom.service.js';
 import { VIDEO_PROVIDER, type VideoProvider } from '../videos/providers/video-provider.interface.js';
 import { academyOrigin } from '../tenants/academy-origin.js';
 import { MATERIALIZE_DAYS, mergedSeconds, occurrences, type Recurrence, validRecurrence } from './recurrence.js';
@@ -31,7 +36,7 @@ export interface ClassInput {
   kind?: 'CLASS' | 'WEBINAR';
   title?: string;
   description?: string | null;
-  provider?: 'LIVEKIT' | 'EXTERNAL' | 'PLUGNMEET';
+  provider?: 'LIVEKIT' | 'EXTERNAL' | 'PLUGNMEET' | 'ZOOM' | 'GOOGLE_MEET';
   externalUrl?: string | null;
   audience?: 'COURSE' | 'BATCH' | 'ALL_STUDENTS' | 'REGISTRANTS';
   courseId?: string | null;
@@ -68,12 +73,19 @@ export class LiveService {
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly pnm: PlugNmeetService,
     @Inject(VIDEO_PROVIDER) private readonly videos: VideoProvider,
+    private readonly integrations: LiveIntegrationsService,
+    private readonly zoom: ZoomService,
+    @InjectQueue(QUEUES.LIVE) private readonly queue: Queue,
   ) {}
 
-  providers() {
+  async providers() {
     const livekitRecording = this.livekit.isConfigured() && this.storage.driver === 's3';
     const plugnmeet = this.pnm.isConfigured();
-    return { livekit: this.livekit.isConfigured(), plugnmeet, external: true, recording: livekitRecording || plugnmeet, livekitRecording, plugnmeetRecording: plugnmeet };
+    const st = await this.integrations.status();
+    return {
+      livekit: this.livekit.isConfigured(), plugnmeet, external: true, recording: livekitRecording || plugnmeet, livekitRecording, plugnmeetRecording: plugnmeet,
+      zoom: st.zoom.connected, zoomAvailable: st.zoom.available, googleMeet: st.googleMeet.connected, googleMeetAvailable: st.googleMeet.available,
+    };
   }
 
   // ── classes ───────────────────────────────────────────────
@@ -84,6 +96,10 @@ export class LiveService {
     const audience = input.audience ?? current?.audience ?? (kind === 'WEBINAR' ? 'REGISTRANTS' : undefined);
     if (input.title !== undefined && (!input.title.trim() || input.title.trim().length > 200)) errors.push({ field: 'title', message: '1–200 characters' });
     if (provider === 'LIVEKIT' && !this.livekit.isConfigured()) errors.push({ field: 'provider', message: 'The built-in classroom is not set up on this platform yet. Use a meeting link instead.' });
+    if (provider === 'ZOOM' && !(await this.integrations.isConnected('ZOOM'))) errors.push({ field: 'provider', message: 'Connect your Zoom account first (Live → Integrations).' });
+    if (provider === 'GOOGLE_MEET' && !(await this.integrations.isConnected('GOOGLE_MEET'))) errors.push({ field: 'provider', message: 'Connect your Google account first (Live → Integrations).' });
+    if (input.recordSessions && provider === 'GOOGLE_MEET') errors.push({ field: 'recordSessions', message: 'Google Meet recordings are saved to the organiser’s Google Drive by Meet itself' });
+    if (input.waitingRoom && provider === 'GOOGLE_MEET') errors.push({ field: 'waitingRoom', message: 'Google Meet asks the organiser to admit people from outside the organisation' });
     if (provider === 'PLUGNMEET' && !this.pnm.isConfigured()) errors.push({ field: 'provider', message: 'The plugNmeet classroom is not set up on this platform yet. Use a meeting link instead.' });
     if (provider === 'EXTERNAL' && input.externalUrl !== undefined && !EXTERNAL_URL.test(input.externalUrl ?? '')) errors.push({ field: 'externalUrl', message: 'Paste your Zoom, Google Meet or Teams link (https://…)' });
     if (kind === 'WEBINAR' && audience !== 'REGISTRANTS') errors.push({ field: 'audience', message: 'Webinars are for registered attendees' });
@@ -97,7 +113,7 @@ export class LiveService {
     if (input.startsAt !== undefined && Number.isNaN(Date.parse(input.startsAt))) errors.push({ field: 'startsAt', message: 'Choose a start time' });
     if (input.timezone !== undefined && !isValidTimeZone(input.timezone)) errors.push({ field: 'timezone', message: 'Unknown time zone' });
     if (input.recurrence !== undefined && !validRecurrence(input.recurrence)) errors.push({ field: 'recurrence', message: 'Pick weekdays and an end (date or number of sessions)' });
-    if (input.recordSessions && provider === 'LIVEKIT' && !this.providers().livekitRecording) errors.push({ field: 'recordSessions', message: 'Recording needs the built-in classroom with S3 storage configured' });
+    if (input.recordSessions && provider === 'LIVEKIT' && !(await this.providers()).livekitRecording) errors.push({ field: 'recordSessions', message: 'Recording needs the built-in classroom with S3 storage configured' });
     if (input.recordSessions && provider === 'EXTERNAL') errors.push({ field: 'recordSessions', message: 'Meeting-link classes are recorded in Zoom/Meet itself' });
     if (input.waitingRoom && provider === 'EXTERNAL') errors.push({ field: 'waitingRoom', message: 'Use the waiting room in Zoom/Meet for meeting-link classes' });
     if (input.priceAmount && kind !== 'WEBINAR') errors.push({ field: 'priceAmount', message: 'Only webinars can be sold as tickets; classes follow their audience' });
@@ -136,6 +152,10 @@ export class LiveService {
       } as never,
     });
     await this.materialize(c.id, first);
+    if (c.provider === 'ZOOM' || c.provider === 'GOOGLE_MEET') {
+      const sessions = await this.db.liveSession.findMany({ where: { liveClassId: c.id }, select: { id: true }, orderBy: { startsAt: 'asc' } });
+      for (const s of sessions) await this.integrations.ensureMeeting(s.id);
+    }
     await this.audit.record({ action: 'live.create', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'LiveClass', targetId: c.id, after: { title: c.title, kind, provider: c.provider } });
     return this.get(c.id);
   }
@@ -203,6 +223,7 @@ export class LiveService {
         ...(input.hostUserId !== undefined ? { hostUserId: input.hostUserId } : {}),
       },
     });
+    if (c.provider === 'ZOOM' || c.provider === 'GOOGLE_MEET') await this.integrations.updateMeetings(c.id);
     await this.audit.record({ action: 'live.update', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'LiveClass', targetId: id, after: input as never });
     return this.get(id);
   }
@@ -211,15 +232,17 @@ export class LiveService {
     const c = await this.db.liveClass.findFirst({ where: { id } });
     if (!c) throw AppException.notFound('Live class not found');
     await this.db.liveClass.update({ where: { id }, data: { status: 'CANCELLED' } });
+    for (const s of await this.db.liveSession.findMany({ where: { liveClassId: id, status: 'SCHEDULED' } })) await this.integrations.removeMeeting(s, c.provider);
     await this.db.liveSession.updateMany({ where: { liveClassId: id, status: 'SCHEDULED' }, data: { status: 'CANCELLED' } });
     await this.audit.record({ action: 'live.cancel', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'LiveClass', targetId: id });
     return this.get(id);
   }
 
   async cancelSession(sessionId: string, actorUserId: string) {
-    const s = await this.db.liveSession.findFirst({ where: { id: sessionId } });
+    const s = await this.db.liveSession.findFirst({ where: { id: sessionId }, include: { liveClass: { select: { provider: true } } } });
     if (!s) throw AppException.notFound('Session not found');
     if (s.status !== 'SCHEDULED') throw AppException.conflict('Only upcoming sessions can be cancelled.');
+    await this.integrations.removeMeeting(s, s.liveClass.provider);
     await this.db.liveSession.update({ where: { id: s.id }, data: { status: 'CANCELLED' } });
     await this.audit.record({ action: 'live.session_cancel', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'LiveSession', targetId: s.id });
     return this.get(s.liveClassId);
@@ -267,6 +290,22 @@ export class LiveService {
     this.windowCheck(s, false);
     const identity = who.registrationId ? `reg_${who.registrationId}` : `usr_${who.userId}`;
     if (c.provider === 'PLUGNMEET') return this.pnmJoin(s, { identity, name: who.name, admin: false, waitForApproval: c.waitingRoom });
+    if (c.provider === 'ZOOM' || c.provider === 'GOOGLE_MEET') {
+      const link = await this.meetingLink(s);
+      if (c.provider === 'GOOGLE_MEET') {
+        // No attendance API for Meet without Google Workspace: record the click, like meeting links.
+        await this.db.liveAttendance.create({ data: { sessionId: s.id, identity, userId: who.userId, registrationId: who.registrationId, displayName: who.name.slice(0, 120), role: 'attendee', source: 'click', joinedAt: new Date(), leftAt: new Date() } as never });
+        return { provider: 'GOOGLE_MEET' as const, joinUrl: link.joinUrl };
+      }
+      const email = who.userId ? (await this.prisma.user.findUnique({ where: { id: who.userId }, select: { email: true } }))?.email ?? null : who.registrationId ? (await this.db.webinarRegistration.findFirst({ where: { id: who.registrationId }, select: { email: true } }))?.email ?? null : null;
+      try {
+        const joinUrl = await this.integrations.zoomJoinUrl({ id: s.id, providerMeetingId: link.meetingId, providerJoinUrl: link.joinUrl }, { identity, name: who.name, email });
+        return { provider: 'ZOOM' as const, joinUrl: joinUrl ?? link.joinUrl };
+      } catch (e) {
+        if (e instanceof ZoomError) this.unavailable(e);
+        throw e;
+      }
+    }
     if (c.provider === 'EXTERNAL') {
       await this.db.liveAttendance.create({ data: { sessionId: s.id, identity, userId: who.userId, registrationId: who.registrationId, displayName: who.name.slice(0, 120), role: 'attendee', source: 'click', joinedAt: new Date(), leftAt: new Date() } as never });
       return { provider: 'EXTERNAL' as const, joinUrl: c.externalUrl! };
@@ -308,6 +347,20 @@ export class LiveService {
     const c = s.liveClass;
     this.windowCheck(s, true);
     if (c.provider === 'EXTERNAL') return { provider: 'EXTERNAL' as const, joinUrl: c.externalUrl! };
+    if (c.provider === 'ZOOM' || c.provider === 'GOOGLE_MEET') {
+      const link = await this.meetingLink(s);
+      let joinUrl = link.joinUrl;
+      if (c.provider === 'ZOOM') {
+        try {
+          joinUrl = (await this.integrations.zoomStartUrl(link.meetingId)) ?? link.joinUrl;
+        } catch (e) {
+          if (e instanceof ZoomError) this.unavailable(e);
+          throw e;
+        }
+      }
+      if (s.status === 'SCHEDULED') await this.db.liveSession.update({ where: { id: s.id }, data: { status: 'LIVE', startedAt: new Date(), ...(c.recordSessions && c.provider === 'ZOOM' ? { recordingStatus: 'RECORDING' } : {}) } });
+      return { provider: c.provider as 'ZOOM' | 'GOOGLE_MEET', joinUrl, role: 'host' as const };
+    }
     if (c.provider === 'PLUGNMEET') {
       const out = await this.pnmJoin(s, { identity: `host_${actor.userId}`, name: actor.name, admin: true, waitForApproval: false });
       if (s.status === 'SCHEDULED') await this.db.liveSession.update({ where: { id: s.id }, data: { status: 'LIVE', startedAt: new Date(), ...(c.recordSessions ? { recordingStatus: 'RECORDING' } : {}) } });
@@ -498,9 +551,99 @@ export class LiveService {
     await this.db.liveSession.update({ where: { id: s.id }, data: { recordingStatus: 'READY', videoAssetId: video.id } });
   }
 
+  /** The session's Zoom/Meet link, creating the meeting now if an earlier attempt failed. */
+  private async meetingLink(s: { id: string; providerMeetingId: string | null; providerJoinUrl: string | null }) {
+    if (!s.providerMeetingId || !s.providerJoinUrl) {
+      await this.integrations.ensureMeeting(s.id);
+      const again = await this.db.liveSession.findFirst({ where: { id: s.id } });
+      if (!again?.providerMeetingId || !again.providerJoinUrl) throw new AppException(ERROR_CODES.INTEGRATION_NOT_CONFIGURED, 'The meeting for this session could not be created. The academy has been told; please try again shortly.', HttpStatus.SERVICE_UNAVAILABLE);
+      return { meetingId: again.providerMeetingId, joinUrl: again.providerJoinUrl };
+    }
+    return { meetingId: s.providerMeetingId, joinUrl: s.providerJoinUrl };
+  }
+
+  // ── Zoom webhooks ─────────────────────────────────────────
+  /**
+   * Zoom event subscription. Signature checked (x-zm-signature); `endpoint.url_validation`
+   * answered; events deduplicated. Attendance maps registrants to students; others by email.
+   */
+  async handleZoomWebhook(rawBody: string, signature: string | undefined, timestamp: string | undefined) {
+    if (!this.zoom.isConfigured()) throw AppException.notFound('Not configured');
+    if (!this.zoom.verifyWebhook(rawBody, signature, timestamp)) throw new AppException(ERROR_CODES.UNAUTHENTICATED, 'Invalid webhook signature', HttpStatus.UNAUTHORIZED);
+    let e: { event?: string; event_ts?: number; payload?: any };
+    try {
+      e = JSON.parse(rawBody);
+    } catch {
+      throw AppException.validation([{ field: 'body', message: 'Invalid JSON' }]);
+    }
+    if (e.event === 'endpoint.url_validation' && typeof e.payload?.plainToken === 'string') return this.zoom.urlValidation(e.payload.plainToken);
+    const dedup = createHash('sha256').update(rawBody).digest('hex');
+    if (!(await this.redis.set(`live:zoom:evt:${dedup}`, '1', 'EX', 7 * 86_400, 'NX'))) return { received: true, duplicate: true };
+    if (e.event === 'app_deauthorized') {
+      const n = await this.integrations.deauthorizeZoom(String(e.payload?.user_id ?? ''), e.payload?.account_id ? String(e.payload.account_id) : null);
+      return { received: true, deauthorized: n };
+    }
+    const obj = e.payload?.object ?? {};
+    const meetingId = obj.id !== undefined ? String(obj.id) : null;
+    if (!meetingId) return { received: true, ignored: true };
+    const s = await this.prisma.liveSession.findFirst({ where: { providerMeetingId: meetingId, liveClass: { provider: 'ZOOM' } }, include: { liveClass: { select: { recordSessions: true, hostUserId: true } } } });
+    if (!s) return { received: true, ignored: true };
+    const at = (v: unknown) => (typeof v === 'string' && !Number.isNaN(Date.parse(v)) ? new Date(v) : new Date());
+    await this.ctx.run(s.tenantId, async () => {
+      switch (e.event) {
+        case 'meeting.started':
+          if (s.status === 'SCHEDULED') await this.db.liveSession.update({ where: { id: s.id }, data: { status: 'LIVE', startedAt: at(obj.start_time) } });
+          return;
+        case 'meeting.ended':
+          await this.finishSession(s.id, at(obj.end_time));
+          return;
+        case 'meeting.participant_joined':
+        case 'meeting.participant_left': {
+          const p = obj.participant ?? {};
+          const who = await this.zoomIdentity(s, obj.host_id, p);
+          if (e.event === 'meeting.participant_joined') await this.openAttendance(s.id, who.identity, at(p.join_time), who.name);
+          else await this.closeAttendance(s.id, who.identity, at(p.leave_time));
+          return;
+        }
+        case 'recording.completed':
+          await this.queueZoomRecordings(s, obj, e.payload?.download_token ?? (e as { download_token?: string }).download_token);
+          return;
+        default:
+      }
+    });
+    return { received: true };
+  }
+
+  /** Who a Zoom participant is: registrant → student/registrant; host; tenant user by email; else a guest. */
+  private async zoomIdentity(s: { id: string; tenantId: string; liveClass: { hostUserId: string } }, hostZoomId: unknown, p: { id?: string; user_id?: string; user_name?: string; email?: string; registrant_id?: string; participant_uuid?: string }) {
+    if (p.registrant_id) {
+      const r = await this.db.liveSessionRegistrant.findFirst({ where: { sessionId: s.id, registrantId: String(p.registrant_id) } });
+      if (r) return { identity: r.identity, name: undefined };
+    }
+    if (p.id && hostZoomId && String(p.id) === String(hostZoomId)) return { identity: `host_${s.liveClass.hostUserId}`, name: undefined };
+    if (p.email) {
+      const u = await this.prisma.user.findFirst({ where: { tenantId: s.tenantId, email: p.email.toLowerCase(), deletedAt: null }, select: { id: true } });
+      if (u) return { identity: `usr_${u.id}`, name: undefined };
+    }
+    return { identity: `zoom_${String(p.participant_uuid ?? p.user_id ?? p.user_name ?? 'guest').slice(0, 58)}`, name: (p.user_name ?? 'Guest').slice(0, 120) };
+  }
+
+  /** Registers each finished MP4 of a Zoom cloud recording for import into the video library. */
+  private async queueZoomRecordings(s: { id: string; tenantId: string; liveClass: { recordSessions: boolean } }, obj: { recording_files?: { id: string; file_type: string; status: string; download_url: string; recording_start?: string }[] }, downloadToken: string | undefined) {
+    const files = (obj.recording_files ?? []).filter((f) => f.file_type === 'MP4' && f.status === 'completed' && f.download_url);
+    if (!files.length || !downloadToken) return;
+    for (const f of files) {
+      const existing = await this.prisma.liveRecording.findUnique({ where: { providerRecordingId: `zoom:${f.id}` } });
+      if (existing) continue;
+      const row = await this.prisma.liveRecording.create({ data: { tenantId: s.tenantId, sessionId: s.id, providerRecordingId: `zoom:${f.id}`, recordedAt: f.recording_start ? new Date(f.recording_start) : null } });
+      await this.queue.add('live-zoom-import', { id: row.id, url: f.download_url, token: downloadToken }, { jobId: `zoom-import-${row.id}`, attempts: 5, backoff: { type: 'exponential', delay: 60_000 }, removeOnComplete: 1000, removeOnFail: 1000 });
+    }
+    await this.db.liveSession.update({ where: { id: s.id }, data: { recordingStatus: 'PROCESSING' } });
+  }
+
   // ── plugNmeet ─────────────────────────────────────────────
   private unavailable(e: unknown): never {
-    this.logger.error({ err: (e as Error).message }, 'plugNmeet call failed');
+    this.logger.error({ err: (e as Error).message }, 'live provider call failed');
     throw new AppException(ERROR_CODES.INTEGRATION_NOT_CONFIGURED, 'The live classroom is unavailable right now. Please try again shortly.', HttpStatus.SERVICE_UNAVAILABLE);
   }
 
@@ -596,11 +739,12 @@ export class LiveService {
     return { received: true };
   }
 
-  private async openAttendance(sessionId: string, identity: string, joinedAt: Date) {
+  private async openAttendance(sessionId: string, identity: string, joinedAt: Date, nameHint?: string) {
     if (await this.db.liveAttendance.findFirst({ where: { sessionId, identity, leftAt: null } })) return;
     const { userId, registrationId, role } = this.parseIdentity(identity);
-    const name = await this.displayName(userId, registrationId);
-    await this.db.liveAttendance.create({ data: { sessionId, identity, userId, registrationId, displayName: name, role, source: 'plugnmeet', joinedAt } as never });
+    const name = nameHint ?? (await this.displayName(userId, registrationId));
+    const source = identity.startsWith('zoom_') || (await this.db.liveSession.findFirst({ where: { id: sessionId }, select: { liveClass: { select: { provider: true } } } }))?.liveClass.provider === 'ZOOM' ? 'zoom' : 'plugnmeet';
+    await this.db.liveAttendance.create({ data: { sessionId, identity, userId, registrationId, displayName: name, role, source, joinedAt } as never });
   }
 
   private async closeAttendance(sessionId: string, identity: string, at: Date) {

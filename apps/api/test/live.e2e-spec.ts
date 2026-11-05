@@ -73,7 +73,7 @@ describe('Live learning (e2e)', () => {
     const c = await academy();
     const cs = c.session;
     const course = await freeCourse(cs);
-    expect((await authed(app, cs).get('/api/v1/creator/live/providers').expect(200)).body.data).toEqual({ livekit: true, plugnmeet: false, external: true, recording: false, livekitRecording: false, plugnmeetRecording: false });
+    expect((await authed(app, cs).get('/api/v1/creator/live/providers').expect(200)).body.data).toEqual({ livekit: true, plugnmeet: false, external: true, recording: false, livekitRecording: false, plugnmeetRecording: false, zoom: false, zoomAvailable: false, googleMeet: false, googleMeetAvailable: false });
 
     const start = new Date(Date.now() + 10 * 60_000);
     const bad = await authed(app, cs).post('/api/v1/creator/live/classes').send({ title: 'x', provider: 'LIVEKIT', startsAt: start.toISOString(), durationMinutes: 60, audience: 'COURSE', courseId: course.id, recordSessions: true, recurrence: { freq: 'WEEKLY', byDay: ['MO'] } }).expect(422);

@@ -52,6 +52,18 @@ export const envSchema = z.object({
   LIVEKIT_URL: z.string().optional(),
   LIVEKIT_API_KEY: z.string().optional(),
   LIVEKIT_API_SECRET: z.string().optional(),
+  // Zoom (optional): one OAuth app (Zoom App Marketplace, "General app", user-managed) that each academy
+  // authorises for its own Zoom account. Redirect URI: {API_PUBLIC_URL}/api/v1/integrations/zoom/callback
+  ZOOM_CLIENT_ID: z.string().optional(),
+  ZOOM_CLIENT_SECRET: z.string().optional(),
+  /** "Secret Token" of the app's event subscription; signs webhooks (x-zm-signature). */
+  ZOOM_WEBHOOK_SECRET_TOKEN: z.string().optional(),
+  ZOOM_OAUTH_BASE_URL: z.url().default('https://zoom.us'),
+  ZOOM_API_BASE_URL: z.url().default('https://api.zoom.us/v2'),
+  // Google Meet (optional): Google OAuth client with the Calendar API enabled; each academy connects its
+  // Google account. Redirect URI: {API_PUBLIC_URL}/api/v1/integrations/google-meet/callback
+  GOOGLE_MEET_CLIENT_ID: z.string().optional(),
+  GOOGLE_MEET_CLIENT_SECRET: z.string().optional(),
   // plugNmeet (optional; self-hosted plugNmeet server for live classes and webinars)
   /** Server base URL, e.g. https://meet.example.com (the plugNmeet client is served from it). */
   PLUGNMEET_URL: z.url().optional().or(z.literal('')),

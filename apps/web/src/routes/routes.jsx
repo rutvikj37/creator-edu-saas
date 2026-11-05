@@ -67,6 +67,7 @@ const CouponsPage = lazyNamed(() => import('../pages/creator/CouponsPage.jsx'), 
 const OrdersPage = lazyNamed(() => import('../pages/creator/OrdersPage.jsx'), 'OrdersPage');
 const TransactionsPage = lazyNamed(() => import('../pages/creator/OrdersPage.jsx'), 'TransactionsPage');
 const OrderDetailPage = lazyNamed(() => import('../pages/creator/OrderDetailPage.jsx'), 'OrderDetailPage');
+const LiveIntegrationsPage = lazyNamed(() => import('../pages/creator/LiveIntegrationsPage.jsx'), 'LiveIntegrationsPage');
 const QuestionBankPage = lazyNamed(() => import('../pages/creator/QuestionBankPage.jsx'), 'QuestionBankPage');
 const ReviewsPage = lazyNamed(() => import('../pages/creator/ReviewsPage.jsx'), 'ReviewsPage');
 const BundlesPage = lazyNamed(() => import('../pages/creator/BundlesPage.jsx'), 'BundlesPage');
@@ -195,6 +196,7 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/creator/bundles', element: page(BundlesPage) },
             { path: '/creator/reviews', element: page(ReviewsPage) },
             { path: '/creator/question-bank', element: page(QuestionBankPage) },
+            { path: '/creator/integrations', element: page(LiveIntegrationsPage) },
             { path: '/creator/orders', element: page(OrdersPage) },
             { path: '/creator/orders/:id', element: page(OrderDetailPage) },
             { path: '/creator/transactions', element: page(TransactionsPage) },

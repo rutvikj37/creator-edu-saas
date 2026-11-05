@@ -11,6 +11,7 @@ import { TenantContext } from '../../core/tenancy/tenant-context.service.js';
 import { VIDEO_PROVIDER, type VideoProvider } from '../videos/providers/video-provider.interface.js';
 import { VideosRepository } from '../videos/videos.repository.js';
 import { PlugNmeetError, PlugNmeetService } from './plugnmeet.service.js';
+import { ZoomError } from './zoom.service.js';
 
 /** Writes a stream to a temporary file to learn its size; returns a fresh stream of the file. */
 async function spool(body: Readable) {
@@ -75,12 +76,12 @@ export class LiveRecordingsService {
       if (!rows && s.endedAt && s.endedAt.getTime() < now.getTime() - NOTHING_RECORDED_MS) await this.prisma.liveSession.update({ where: { id: s.id }, data: { recordingStatus: 'NONE' } });
     }
     // Rows left IMPORTING by a crashed worker are picked up again.
-    const stuck = await this.prisma.liveRecording.findMany({ where: { status: 'IMPORTING', updatedAt: { lt: new Date(now.getTime() - 3 * 3600_000) } }, select: { id: true }, take: 50 });
+    const stuck = await this.prisma.liveRecording.findMany({ where: { status: 'IMPORTING', updatedAt: { lt: new Date(now.getTime() - 3 * 3600_000) }, NOT: { providerRecordingId: { startsWith: 'zoom:' } } }, select: { id: true }, take: 50 });
     return [...toImport, ...stuck.map((r) => r.id)];
   }
 
   /** Downloads one plugNmeet recording into the library. Throws on retryable failures. */
-  async import(rowId: string, finalAttempt: boolean) {
+  async import(rowId: string, finalAttempt: boolean, source?: () => Promise<{ stream: Readable; size: number | null }>) {
     const row = await this.prisma.liveRecording.findUnique({ where: { id: rowId }, include: { session: { include: { liveClass: true } } } });
     if (!row || row.status === 'READY') return { skipped: true };
     await this.prisma.liveRecording.update({ where: { id: row.id }, data: { attempts: { increment: 1 }, status: 'IMPORTING' } });
@@ -89,7 +90,7 @@ export class LiveRecordingsService {
     const title = `${s.liveClass.title} — ${day}`.slice(0, 200);
     try {
       const video = await this.ctx.run(row.tenantId, async () => {
-        const dl = await this.pnm.downloadRecording(row.providerRecordingId);
+        const dl = source ? await source() : await this.pnm.downloadRecording(row.providerRecordingId);
         // Uploads need the exact size. plugNmeet's listing reports an approximate float, so use the
         // download's Content-Length, or spool to a temporary file when the server does not send it.
         const { stream, size, cleanup } = dl.size ? { stream: dl.stream, size: dl.size, cleanup: async () => {} } : await spool(dl.stream);
@@ -106,7 +107,7 @@ export class LiveRecordingsService {
       await this.prisma.liveSession.update({ where: { id: s.id }, data: { recordingStatus: 'READY', ...(first?.videoAssetId ? {} : { videoAssetId: video.id }) } });
       return { imported: true, videoAssetId: video.id };
     } catch (e) {
-      const retry = (e instanceof PlugNmeetError ? e.retryable : true) && !finalAttempt;
+      const retry = (e instanceof PlugNmeetError || e instanceof ZoomError ? e.retryable : true) && !finalAttempt;
       await this.prisma.liveRecording.update({ where: { id: row.id }, data: { status: retry ? 'IMPORTING' : 'FAILED', error: String((e as Error).message).slice(0, 500) } });
       if (retry) throw e;
       const pending = await this.prisma.liveRecording.count({ where: { sessionId: s.id, status: { in: ['IMPORTING', 'READY'] } } });

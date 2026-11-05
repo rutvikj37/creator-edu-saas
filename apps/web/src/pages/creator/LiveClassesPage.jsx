@@ -25,7 +25,7 @@ const schema = z
     kind: z.enum(['CLASS', 'WEBINAR']),
     title: z.string().trim().min(1, 'Give it a title').max(200),
     description: z.string().max(2000).optional(),
-    provider: z.enum(['PLUGNMEET', 'LIVEKIT', 'EXTERNAL']),
+    provider: z.enum(['PLUGNMEET', 'LIVEKIT', 'ZOOM', 'GOOGLE_MEET', 'EXTERNAL']),
     externalUrl: z.string().trim().optional(),
     audience: z.enum(['COURSE', 'BATCH', 'ALL_STUDENTS', 'REGISTRANTS']),
     courseId: z.string().optional(),
@@ -64,9 +64,11 @@ function ScheduleForm({ kind, providers, onDone }) {
   const choices = [
     ...(providers.plugnmeet ? [{ value: 'PLUGNMEET', label: 'plugNmeet classroom', hint: kind === 'WEBINAR' ? 'Video, screen share, chat, polls, Q&A; attendees watch' : 'Video, whiteboard, screen share, chat, polls, breakout rooms' }] : []),
     ...(providers.livekit || !providers.plugnmeet ? [{ value: 'LIVEKIT', label: 'Built-in classroom', hint: providers.livekit ? 'Video, screen share, chat, polls, attendance' : 'Not set up on this platform yet', disabled: !providers.livekit }] : []),
-    { value: 'EXTERNAL', label: 'Meeting link', hint: 'Zoom, Google Meet or Teams' },
+    ...(providers.zoom || providers.zoomAvailable ? [{ value: 'ZOOM', label: 'Zoom', hint: providers.zoom ? 'Meetings created in your Zoom account; attendance and cloud recordings come back here' : 'Connect your Zoom account in Live → Integrations', disabled: !providers.zoom }] : []),
+    ...(providers.googleMeet || providers.googleMeetAvailable ? [{ value: 'GOOGLE_MEET', label: 'Google Meet', hint: providers.googleMeet ? 'A Meet link is created in your Google Calendar for each session' : 'Connect your Google account in Live → Integrations', disabled: !providers.googleMeet }] : []),
+    { value: 'EXTERNAL', label: 'Meeting link', hint: 'Paste any Zoom, Meet or Teams link' },
   ];
-  const canRecord = v.provider === 'PLUGNMEET' ? providers.plugnmeetRecording : providers.livekitRecording ?? providers.recording;
+  const canRecord = v.provider === 'ZOOM' ? true : v.provider === 'PLUGNMEET' ? providers.plugnmeetRecording : providers.livekitRecording ?? providers.recording;
   const submit = form.handleSubmit(async (x) => {
     try {
       const body = {
@@ -74,7 +76,7 @@ function ScheduleForm({ kind, providers, onDone }) {
         audience: x.audience, courseId: x.audience === 'COURSE' ? x.courseId : undefined, batchId: x.audience === 'BATCH' ? x.batchId : undefined,
         startsAt: new Date(x.startsAt).toISOString(), durationMinutes: x.durationMinutes, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         recurrence: x.repeat ? { freq: 'WEEKLY', byDay: x.byDay, ...(x.endMode === 'count' ? { count: x.count } : { until: x.until }) } : null,
-        capacity: x.capacity === '' ? null : x.capacity, ...(x.kind === 'WEBINAR' && x.priceAmount !== '' && Number(x.priceAmount) > 0 ? { priceAmount: Number(x.priceAmount) } : {}), waitingRoom: x.provider !== 'EXTERNAL' && x.waitingRoom, recordSessions: x.provider !== 'EXTERNAL' && x.recordSessions,
+        capacity: x.capacity === '' ? null : x.capacity, ...(x.kind === 'WEBINAR' && x.priceAmount !== '' && Number(x.priceAmount) > 0 ? { priceAmount: Number(x.priceAmount) } : {}), waitingRoom: !['EXTERNAL', 'GOOGLE_MEET'].includes(x.provider) && x.waitingRoom, recordSessions: !['EXTERNAL', 'GOOGLE_MEET'].includes(x.provider) && x.recordSessions,
       };
       const created = await creatorLiveApi.create(body);
       toast.success(kind === 'WEBINAR' ? 'Webinar scheduled' : 'Live class scheduled');
@@ -130,10 +132,11 @@ function ScheduleForm({ kind, providers, onDone }) {
         <Input label={kind === 'WEBINAR' ? 'Seats' : 'Capacity'} type="number" min={1} placeholder="No limit" {...register('capacity')} />
         {kind === 'WEBINAR' && <Input label="Ticket price" type="number" min={0} step="0.01" placeholder="Free" hint="Leave empty for free registration. Paid tickets are sold through your Razorpay account." {...register('priceAmount')} error={errors.priceAmount?.message} />}
       </div>
-      {v.provider !== 'EXTERNAL' && (
+      {v.provider === 'GOOGLE_MEET' && <p className="text-xs text-muted">Google Meet handles admission and recording itself (recordings are saved to your Google Drive). Students join with the link; joins are recorded as clicks.</p>}
+      {!['EXTERNAL', 'GOOGLE_MEET'].includes(v.provider) && (
         <div className="space-y-2">
           <Checkbox label="Waiting room" description={v.provider === 'PLUGNMEET' ? 'You let each participant in from inside the classroom.' : 'You admit each participant before they can see and hear the class.'} {...register('waitingRoom')} />
-          <Checkbox label="Record sessions" description={!canRecord ? 'Needs S3 storage on this platform.' : v.provider === 'PLUGNMEET' ? 'Recorded automatically; the recording is added to your video library after the session.' : 'Recordings are added to your video library.'} disabled={!canRecord} {...register('recordSessions')} />
+          <Checkbox label="Record sessions" description={!canRecord ? 'Needs S3 storage on this platform.' : v.provider === 'ZOOM' ? 'Zoom cloud recording (paid Zoom plans); the recording is added to your video library after the meeting.' : v.provider === 'PLUGNMEET' ? 'Recorded automatically; the recording is added to your video library after the session.' : 'Recordings are added to your video library.'} disabled={!canRecord} {...register('recordSessions')} />
           {errors.recordSessions && <p className="text-xs text-red-600">{errors.recordSessions.message}</p>}
         </div>
       )}

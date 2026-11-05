@@ -29,6 +29,9 @@ importers:
       '@ce/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@googleapis/calendar':
+        specifier: 20.1.0
+        version: 20.1.0
       '@googleapis/drive':
         specifier: ^27.0.0
         version: 27.0.0
@@ -827,6 +830,10 @@ packages:
 
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
+
+  '@googleapis/calendar@20.1.0':
+    resolution: {integrity: sha512-bPO9wts48OAEhJn5UfgPC4FuyW/D6ufUzdXx0JHfeJIqg+O5bHvX/TenaAdbJuGhluhn5FLlyl6HzuhE4rFJqw==}
+    engines: {node: '>=22.0.0'}
 
   '@googleapis/drive@27.0.0':
     resolution: {integrity: sha512-q+K1+T4Kbz3VUOww15lhV+jq+/IzuxzkfiASIXzxVG6X894QUPdhBgU9hKFNSKh+e58o0g6mX/06XoLsS1JE6Q==}
@@ -5166,6 +5173,12 @@ snapshots:
     optional: true
 
   '@floating-ui/utils@0.2.12': {}
+
+  '@googleapis/calendar@20.1.0':
+    dependencies:
+      googleapis-common: 9.3.1
+    transitivePeerDependencies:
+      - supports-color
 
   '@googleapis/drive@27.0.0':
     dependencies:

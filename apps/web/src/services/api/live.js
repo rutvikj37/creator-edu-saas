@@ -4,6 +4,9 @@ const d = (r) => r.data;
 
 export const creatorLiveApi = {
   providers: () => http.get('/creator/live/providers').then(d),
+  integrations: () => http.get('/creator/live/integrations').then(d),
+  connectIntegration: (provider) => http.post(`/creator/live/integrations/${provider}/connect`).then(d),
+  disconnectIntegration: (provider) => http.delete(`/creator/live/integrations/${provider}`).then(d),
   classes: (kind) => http.get('/creator/live/classes', { params: kind ? { kind } : {} }).then(d),
   create: (body) => http.post('/creator/live/classes', body).then(d),
   get: (id) => http.get(`/creator/live/classes/${id}`).then(d),

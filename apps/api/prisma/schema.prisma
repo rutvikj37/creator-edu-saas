@@ -2087,6 +2087,59 @@ enum LiveProvider {
   LIVEKIT
   EXTERNAL
   PLUGNMEET
+  ZOOM
+  GOOGLE_MEET
+}
+
+enum LiveIntegrationProvider {
+  ZOOM
+  GOOGLE_MEET
+}
+
+enum LiveIntegrationStatus {
+  CONNECTED
+  ERROR
+  REVOKED
+}
+
+/// An academy's connection to its own Zoom or Google account (OAuth). Tokens are encrypted.
+model LiveIntegration {
+  id                String                  @id @default(cuid()) @db.Char(25)
+  tenantId          String                  @db.Char(25)
+  provider          LiveIntegrationProvider
+  status            LiveIntegrationStatus   @default(CONNECTED)
+  accountEmail      String?                 @db.VarChar(191)
+  /// Zoom user id / Google subject.
+  externalUserId    String?                 @db.VarChar(191)
+  /// Zoom account id (deauthorisation events name it).
+  externalAccountId String?                 @db.VarChar(191)
+  accessTokenEnc    String?                 @db.Text
+  refreshTokenEnc   String                  @db.Text
+  tokenExpiresAt    DateTime?               @db.DateTime(3)
+  scopes            String?                 @db.VarChar(1000)
+  lastError         String?                 @db.VarChar(500)
+  connectedById     String                  @db.Char(25)
+  createdAt         DateTime                @default(now()) @db.DateTime(3)
+  updatedAt         DateTime                @updatedAt @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, provider])
+  @@index([provider, externalUserId])
+}
+
+/// Zoom registrant per attendee and session: a personal join link that maps attendance back to them.
+model LiveSessionRegistrant {
+  id           String   @id @default(cuid()) @db.Char(25)
+  tenantId     String   @db.Char(25)
+  sessionId    String   @db.Char(25)
+  identity     String   @db.VarChar(64)
+  registrantId String   @db.VarChar(191)
+  joinUrl      String   @db.VarChar(1000)
+  createdAt    DateTime @default(now()) @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, sessionId, identity])
+  @@index([registrantId])
 }
 
 enum LiveKind {
@@ -2168,6 +2221,12 @@ model LiveSession {
   recordingStatus RecordingStatus   @default(NONE)
   egressId        String?           @db.VarChar(100)
   videoAssetId    String?           @db.Char(25)
+  /// Zoom meeting id / Google Calendar event id created for this session.
+  providerMeetingId String?         @db.VarChar(191)
+  providerJoinUrl   String?         @db.VarChar(1000)
+  providerPassword  String?         @db.VarChar(64)
+  /// Last error creating/updating the provider meeting (retried by the worker).
+  providerSyncError String?         @db.VarChar(300)
   createdAt       DateTime          @default(now()) @db.DateTime(3)
   updatedAt       DateTime          @updatedAt @db.DateTime(3)
   liveClass       LiveClass         @relation(fields: [tenantId, liveClassId], references: [tenantId, id], onDelete: Cascade)
@@ -2178,6 +2237,7 @@ model LiveSession {
   @@unique([tenantId, liveClassId, startsAt])
   @@index([status, startsAt])
   @@index([tenantId, startsAt])
+  @@index([providerMeetingId])
 }
 
 enum LiveRecordingStatus {

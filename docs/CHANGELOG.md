@@ -2,6 +2,10 @@
 
 Format: Keep a Changelog. Versions follow SemVer once Phase 1 ships.
 
+## [0.19.0] — 2026-11-05 — Zoom and Google Meet
+### Added
+- Connect the academy's own Zoom and Google accounts. Zoom: meetings created and kept in sync for every session, personal join links, attendance and cloud recordings back in the platform. Google Meet: a Meet link per session in Google Calendar.
+
 ## [0.18.0] — 2026-11-05 — Question bank
 ### Added
 - Academy question bank with tags; add questions to any quiz by picking them or drawing at random from a tag; save quiz questions to the bank. Quizzes keep their own copies.

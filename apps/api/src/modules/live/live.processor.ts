@@ -15,8 +15,10 @@ import { LiveService } from './live.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { LiveRecordingsService } from './live-recordings.service.js';
 import { PlugNmeetService } from './plugnmeet.service.js';
+import { ZoomService } from './zoom.service.js';
+import { LiveIntegrationsService } from './live-integrations.service.js';
 
-export const LIVE_JOBS = { REMINDERS: 'live-reminders', MAINTAIN: 'live-maintain', PNM_SYNC: 'live-plugnmeet-sync', PNM_IMPORT: 'live-plugnmeet-import' } as const;
+export const LIVE_JOBS = { REMINDERS: 'live-reminders', MAINTAIN: 'live-maintain', PNM_SYNC: 'live-plugnmeet-sync', PNM_IMPORT: 'live-plugnmeet-import', ZOOM_IMPORT: 'live-zoom-import' } as const;
 const REMINDERS = [
   { key: '24h', ms: 24 * 3600_000, label: 'tomorrow' },
   { key: '1h', ms: 3600_000, label: 'in 1 hour' },
@@ -98,15 +100,21 @@ export class PlugNmeetJobs {
     private readonly pnm: PlugNmeetService,
     private readonly recordings: LiveRecordingsService,
     @InjectQueue(QUEUES.LIVE) private readonly queue: Queue,
+    private readonly zoom: ZoomService,
+    private readonly integrations: LiveIntegrationsService,
   ) {}
 
   async sync(now = new Date()) {
-    if (!this.pnm.isConfigured()) return { synced: 0, queued: 0 };
+    if (!this.pnm.isConfigured()) {
+      const meetings = await this.integrations.retryMissing(now).catch(() => ({ tried: 0, created: 0 }));
+      return { synced: 0, queued: 0, meetings };
+    }
     const running = await this.prisma.liveSession.findMany({ where: { status: 'LIVE', liveClass: { provider: 'PLUGNMEET' } }, select: { id: true, tenantId: true }, take: 200 });
     let synced = 0;
     for (const s of running) {
       await this.ctx.run(s.tenantId, () => this.live.syncPlugNmeetSession(s.id, now)).then(() => synced++, (e) => this.logger.warn(`plugNmeet sync ${s.id}: ${(e as Error).message}`));
     }
+    await this.integrations.retryMissing(now).catch((e) => this.logger.warn(`meeting retry: ${(e as Error).message}`));
     const rows = await this.recordings.discover(now);
     for (const id of rows) await this.queue.add(LIVE_JOBS.PNM_IMPORT, { id }, { jobId: `pnm-import-${id}`, attempts: 5, backoff: { type: 'exponential', delay: 60_000 }, removeOnComplete: 1000, removeOnFail: 1000 });
     return { synced, queued: rows.length };
@@ -114,6 +122,11 @@ export class PlugNmeetJobs {
 
   importRecording(job: Job<{ id: string }>) {
     return this.recordings.import(job.data.id, job.attemptsMade + 1 >= (job.opts.attempts ?? 1));
+  }
+
+  /** Zoom cloud recording: downloaded with the webhook's download token (kept only in the job). */
+  importZoomRecording(job: Job<{ id: string; url: string; token: string }>) {
+    return this.recordings.import(job.data.id, job.attemptsMade + 1 >= (job.opts.attempts ?? 1), () => this.zoom.downloadRecording(job.data.url, job.data.token));
   }
 }
 
@@ -127,6 +140,7 @@ export class LiveProcessor extends WorkerHost {
     if (job.name === LIVE_JOBS.MAINTAIN) return this.jobs.maintain();
     if (job.name === LIVE_JOBS.PNM_SYNC) return this.pnmJobs.sync();
     if (job.name === LIVE_JOBS.PNM_IMPORT) return this.pnmJobs.importRecording(job as Job<{ id: string }>);
+    if (job.name === LIVE_JOBS.ZOOM_IMPORT) return this.pnmJobs.importZoomRecording(job as Job<{ id: string; url: string; token: string }>);
     throw new Error(`Unknown live job: ${job.name}`);
   }
 }

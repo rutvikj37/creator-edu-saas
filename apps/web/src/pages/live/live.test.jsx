@@ -4,6 +4,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { vi } from 'vitest';
 import { LiveClassesPage } from '../creator/LiveClassesPage.jsx';
+import { LiveIntegrationsPage } from '../creator/LiveIntegrationsPage.jsx';
 import { StudentLivePage, WebinarPage } from './LivePages.jsx';
 import { LiveRoom } from '../../components/live/LiveRoom.jsx';
 import { batchesApi, creatorLiveApi, learnLiveApi, webinarApi } from '../../services/api/live.js';
@@ -19,7 +20,7 @@ vi.mock('../../services/api/live.js', async (orig) => {
   const real = await orig();
   return {
     ...real,
-    creatorLiveApi: { providers: vi.fn(), classes: vi.fn(), create: vi.fn(), admissions: vi.fn(async () => []) },
+    creatorLiveApi: { providers: vi.fn(), classes: vi.fn(), create: vi.fn(), admissions: vi.fn(async () => []), integrations: vi.fn(), connectIntegration: vi.fn(), disconnectIntegration: vi.fn() },
     batchesApi: { list: vi.fn(async () => []) },
     learnLiveApi: { upcoming: vi.fn(), recordings: vi.fn(async () => []), join: vi.fn() },
     webinarApi: { get: vi.fn(), register: vi.fn() },
@@ -158,6 +159,38 @@ describe('Paid webinars', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Schedule' }));
     await waitFor(() => expect(creatorLiveApi.create).toHaveBeenCalled());
     expect(creatorLiveApi.create.mock.calls[0][0]).toMatchObject({ kind: 'WEBINAR', priceAmount: 299 });
+  });
+});
+
+describe('Zoom and Google Meet', () => {
+  it('integrations page connects through the provider consent page and shows problems', async () => {
+    creatorLiveApi.integrations.mockResolvedValue({ zoom: { available: true, connected: false, status: null, accountEmail: null, lastError: null }, googleMeet: { available: true, connected: false, status: 'REVOKED', accountEmail: 'teacher@gmail.example', lastError: 'Google access was revoked or expired. Connect again.' } });
+    creatorLiveApi.connectIntegration.mockResolvedValue({ url: 'https://zoom.example/oauth/authorize?state=x' });
+    const assign = vi.fn();
+    vi.stubGlobal('location', { ...window.location, assign });
+    wrap(<LiveIntegrationsPage />);
+    expect(await screen.findByText('Google access was revoked or expired. Connect again.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reconnect Google Meet' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Connect Zoom' }));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('https://zoom.example/oauth/authorize?state=x'));
+    expect(creatorLiveApi.connectIntegration.mock.calls[0][0]).toBe('zoom');
+    vi.unstubAllGlobals();
+  });
+
+  it('schedule form offers Zoom once connected and sends it with recording', async () => {
+    creatorLiveApi.providers.mockResolvedValue({ livekit: false, plugnmeet: false, external: true, recording: false, zoom: true, zoomAvailable: true, googleMeet: false, googleMeetAvailable: true });
+    creatorLiveApi.classes.mockResolvedValue([]);
+    creatorLiveApi.create.mockResolvedValue({ id: 'z1' });
+    wrap(<LiveClassesPage />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Schedule class' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('radio', { name: /Google Meet/ })).toBeDisabled();
+    await userEvent.click(within(dialog).getByRole('radio', { name: /^Zoom/ }));
+    await userEvent.type(within(dialog).getByLabelText(/^Title/), 'GST Basics');
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: /Record sessions/ }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Schedule' }));
+    await waitFor(() => expect(creatorLiveApi.create).toHaveBeenCalled());
+    expect(creatorLiveApi.create.mock.calls[0][0]).toMatchObject({ provider: 'ZOOM', recordSessions: true });
   });
 });
 

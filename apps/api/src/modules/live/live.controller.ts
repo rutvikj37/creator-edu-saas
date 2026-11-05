@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, HttpCode, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsEmail, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, Length, Max, MaxLength, Min } from 'class-validator';
@@ -6,12 +6,14 @@ import type { Request, Response } from 'express';
 import { FEATURES, PERMISSIONS } from '@ce/shared';
 import { CurrentAuth, RequireFeature, RequirePermissions, RequireRealm, TenantScoped } from '../../common/decorators/auth.decorators.js';
 import { Public } from '../../common/decorators/public.decorator.js';
+import { AppException } from '../../common/errors/app-exception.js';
 import { PrismaService } from '../../core/prisma/prisma.service.js';
 import type { AppRequest, AuthContext } from '../../core/tenancy/request-context.js';
 import { apiOrigin } from '../files/files.controller.js';
 import { BatchesService } from './batches.service.js';
 import { LiveInteractionService } from './interaction.service.js';
 import { LiveService } from './live.service.js';
+import { LiveIntegrationsService } from './live-integrations.service.js';
 import { WebinarsService } from './webinars.service.js';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
@@ -20,7 +22,7 @@ class ClassDto {
   @ApiPropertyOptional({ enum: ['CLASS', 'WEBINAR'] }) @IsOptional() @IsIn(['CLASS', 'WEBINAR']) kind?: 'CLASS' | 'WEBINAR';
   @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(200) title?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(2000) description?: string | null;
-  @ApiPropertyOptional({ enum: ['LIVEKIT', 'EXTERNAL', 'PLUGNMEET'] }) @IsOptional() @IsIn(['LIVEKIT', 'EXTERNAL', 'PLUGNMEET']) provider?: 'LIVEKIT' | 'EXTERNAL' | 'PLUGNMEET';
+  @ApiPropertyOptional({ enum: ['LIVEKIT', 'EXTERNAL', 'PLUGNMEET', 'ZOOM', 'GOOGLE_MEET'] }) @IsOptional() @IsIn(['LIVEKIT', 'EXTERNAL', 'PLUGNMEET', 'ZOOM', 'GOOGLE_MEET']) provider?: 'LIVEKIT' | 'EXTERNAL' | 'PLUGNMEET' | 'ZOOM' | 'GOOGLE_MEET';
   @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(500) externalUrl?: string | null;
   @ApiPropertyOptional({ enum: ['COURSE', 'BATCH', 'ALL_STUDENTS', 'REGISTRANTS'] }) @IsOptional() @IsIn(['COURSE', 'BATCH', 'ALL_STUDENTS', 'REGISTRANTS']) audience?: 'COURSE' | 'BATCH' | 'ALL_STUDENTS' | 'REGISTRANTS';
   @ApiPropertyOptional() @IsOptional() @IsString() @Length(25, 25) courseId?: string | null;
@@ -37,7 +39,7 @@ class ClassDto {
 }
 class CreateClassDto extends ClassDto {
   @ApiProperty() @Transform(trim) @IsString() @Length(1, 200) declare title: string;
-  @ApiProperty({ enum: ['LIVEKIT', 'EXTERNAL', 'PLUGNMEET'] }) @IsIn(['LIVEKIT', 'EXTERNAL', 'PLUGNMEET']) declare provider: 'LIVEKIT' | 'EXTERNAL' | 'PLUGNMEET';
+  @ApiProperty({ enum: ['LIVEKIT', 'EXTERNAL', 'PLUGNMEET', 'ZOOM', 'GOOGLE_MEET'] }) @IsIn(['LIVEKIT', 'EXTERNAL', 'PLUGNMEET', 'ZOOM', 'GOOGLE_MEET']) declare provider: 'LIVEKIT' | 'EXTERNAL' | 'PLUGNMEET' | 'ZOOM' | 'GOOGLE_MEET';
   @ApiProperty() @IsDateString() declare startsAt: string;
   @ApiProperty() @IsInt() @Min(5) @Max(600) declare durationMinutes: number;
 }
@@ -311,5 +313,57 @@ export class PlugNmeetWebhookController {
   @ApiOperation({ summary: 'plugNmeet room webhook (set per room; the URL carries a per-session secret)' })
   receive(@Param('sessionId') sessionId: string, @Param('token') token: string, @Req() req: Request & { rawBody?: Buffer }) {
     return this.live.handlePlugNmeetWebhook(sessionId, token.slice(0, 64), req.rawBody?.toString('utf8') ?? '');
+  }
+}
+
+// ── Zoom / Google Meet connections ──────────────────────────
+const KIND = { zoom: 'ZOOM', 'google-meet': 'GOOGLE_MEET' } as const;
+const kindOf = (p: string) => {
+  const k = KIND[p as keyof typeof KIND];
+  if (!k) throw AppException.notFound('Unknown integration');
+  return k;
+};
+
+@ApiTags('Creator · Live integrations')
+@ApiBearerAuth()
+@TenantScoped('workspace')
+@Controller({ path: 'creator/live/integrations', version: '1' })
+export class LiveIntegrationsController {
+  constructor(private readonly integrations: LiveIntegrationsService) {}
+
+  @Get() @RequirePermissions(PERMISSIONS.LIVE_MANAGE)
+  status() { return this.integrations.status(); }
+
+  @Post(':provider/connect') @HttpCode(200) @RequirePermissions(PERMISSIONS.INTEGRATIONS_MANAGE)
+  @ApiOperation({ summary: 'Start OAuth with the academy’s own Zoom or Google account; returns the consent URL' })
+  connect(@Param('provider') p: string, @CurrentAuth() auth: AuthContext) { return this.integrations.connectUrl(kindOf(p), auth.userId); }
+
+  @Delete(':provider') @RequirePermissions(PERMISSIONS.INTEGRATIONS_MANAGE)
+  disconnect(@Param('provider') p: string, @CurrentAuth() auth: AuthContext) { return this.integrations.disconnect(kindOf(p), auth.userId); }
+}
+
+@ApiTags('Integrations')
+@Public()
+@Controller({ path: 'integrations', version: '1' })
+export class LiveIntegrationsCallbackController {
+  constructor(private readonly integrations: LiveIntegrationsService) {}
+
+  @Get(':provider/callback')
+  @ApiOperation({ summary: 'OAuth redirect from Zoom / Google (state bound to the academy and user)' })
+  async callback(@Param('provider') p: string, @Query('code') code: string | undefined, @Query('state') state: string | undefined, @Query('error') error: string | undefined, @Res() res: Response) {
+    res.redirect(302, await this.integrations.callback(kindOf(p), { code: code?.slice(0, 2048), state, error: error?.slice(0, 100) }));
+  }
+}
+
+@ApiTags('Webhooks')
+@Public()
+@Controller({ path: 'webhooks/zoom', version: '1' })
+export class ZoomWebhookController {
+  constructor(private readonly live: LiveService) {}
+
+  @Post() @HttpCode(200)
+  @ApiOperation({ summary: 'Zoom event subscription (x-zm-signature / x-zm-request-timestamp)' })
+  receive(@Req() req: Request & { rawBody?: Buffer }, @Headers('x-zm-signature') sig?: string, @Headers('x-zm-request-timestamp') ts?: string) {
+    return this.live.handleZoomWebhook(req.rawBody?.toString('utf8') ?? '', sig, ts);
   }
 }

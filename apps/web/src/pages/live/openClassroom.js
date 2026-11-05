@@ -10,6 +10,6 @@ export function openClassroom(r) {
 }
 
 /** True when the join response is opened by URL instead of the built-in LiveKit room. */
-export const opensByUrl = (r) => r?.provider === 'EXTERNAL' || r?.provider === 'PLUGNMEET';
+export const opensByUrl = (r) => ['EXTERNAL', 'PLUGNMEET', 'ZOOM', 'GOOGLE_MEET'].includes(r?.provider);
 
-export const providerLabel = (p) => ({ PLUGNMEET: 'plugNmeet classroom', LIVEKIT: 'Built-in classroom', EXTERNAL: 'Meeting link' })[p] ?? p;
+export const providerLabel = (p) => ({ PLUGNMEET: 'plugNmeet classroom', LIVEKIT: 'Built-in classroom', EXTERNAL: 'Meeting link', ZOOM: 'Zoom', GOOGLE_MEET: 'Google Meet' })[p] ?? p;

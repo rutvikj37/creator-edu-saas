@@ -10,6 +10,8 @@ import { LiveRecordingsService } from '../src/modules/live/live-recordings.servi
 import { LIVE_JOBS, PlugNmeetJobs } from '../src/modules/live/live.processor.js';
 import { LiveService } from '../src/modules/live/live.service.js';
 import { PlugNmeetService } from '../src/modules/live/plugnmeet.service.js';
+import { ZoomService } from '../src/modules/live/zoom.service.js';
+import { LiveIntegrationsService } from '../src/modules/live/live-integrations.service.js';
 import { VIDEO_PROVIDER, type VideoProvider } from '../src/modules/videos/providers/video-provider.interface.js';
 import { VideosRepository } from '../src/modules/videos/videos.repository.js';
 import { bunnySim, type BunnySim } from './bunny-sim.js';
@@ -43,7 +45,7 @@ describe('plugNmeet live classes (e2e)', () => {
     // Worker-side services, built from the same providers the worker module uses.
     const ctx = app.get(TenantContext);
     recordings = new LiveRecordingsService(prisma, ctx, app.get(PlugNmeetService), app.get(StorageService), app.get(VideosRepository), app.get<VideoProvider>(VIDEO_PROVIDER));
-    jobs = new PlugNmeetJobs(prisma, ctx, app.get(LiveService), app.get(PlugNmeetService), recordings, queue);
+    jobs = new PlugNmeetJobs(prisma, ctx, app.get(LiveService), app.get(PlugNmeetService), recordings, queue, app.get(ZoomService), app.get(LiveIntegrationsService));
   });
   afterAll(async () => {
     delete process.env.PLUGNMEET_URL;

@@ -65,7 +65,7 @@ export const NAV = {
         item('Coupons', '/creator/coupons', Tag, 7, { available: true, perm: 'coupons.manage' }),
       ],
     },
-    { label: 'Live', items: [item('Live classes & webinars', '/creator/live', Radio, 9, { available: true, perm: 'live.manage' })] },
+    { label: 'Live', items: [item('Live classes & webinars', '/creator/live', Radio, 9, { available: true, perm: 'live.manage' }), item('Integrations', '/creator/integrations', Plug, 9, { available: true, perm: 'live.manage' })] },
     { label: 'Website', items: [item('Website', '/creator/website', Brush, 8, { available: true, perm: 'website.manage' }), item('Domains', '/creator/domains', Globe, 2, { available: true, perm: 'domains.manage' })] },
     {
       label: 'Growth',
