@@ -8,7 +8,9 @@ Format: Keep a Changelog. Versions follow SemVer once Phase 1 ships.
 ### Fixed
 - Gateway accounts with any payment history can no longer be deleted.
 ### Notes
-- Razorpay only, by owner decision. SaaS plan billing is not yet built. No live Razorpay call was possible from the build environment.
+- Razorpay only, by owner decision. No live Razorpay call was possible from the build environment.
+### Added (plan billing)
+- Plan checkout with proration credit and GST, renewals, reminders, past due → grace → expiry, trial expiry, cancel at period end, monthly commission invoices, platform webhook, admin subscriptions/invoices with offline payment and void.
 
 ## [0.6.0] — 2026-11-05 — Phase 6: Video (no DRM)
 ### Added

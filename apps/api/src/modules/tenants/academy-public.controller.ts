@@ -6,6 +6,7 @@ import { PrismaService } from '../../core/prisma/prisma.service.js';
 import type { AppRequest } from '../../core/tenancy/request-context.js';
 import { FilesService } from '../files/files.service.js';
 import { apiOrigin } from '../files/files.controller.js';
+import { EntitlementsService } from '../subscriptions/entitlements.service.js';
 
 /** Minimal public academy info for the academy host (branding expands in Phase 4/8). */
 @ApiTags('Academy (public)')
@@ -16,6 +17,7 @@ export class AcademyPublicController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly files: FilesService,
+    private readonly entitlements: EntitlementsService,
   ) {}
 
   @Get('site')
@@ -25,7 +27,7 @@ export class AcademyPublicController {
     if (host.kind !== 'tenant') return null;
     const t = await this.prisma.tenant.findUniqueOrThrow({ where: { id: host.tenantId }, select: { name: true, slug: true, status: true, locale: true, defaultCurrency: true, academy: true } });
     const a = t.academy;
-    const gateway = await this.prisma.paymentGatewayAccount.count({ where: { tenantId: host.tenantId, isActive: true, status: 'VERIFIED' } });
+    const gateway = (await this.entitlements.get(host.tenantId)).active ? await this.prisma.paymentGatewayAccount.count({ where: { tenantId: host.tenantId, isActive: true, status: 'VERIFIED' } }) : 0;
     return {
       paymentsEnabled: gateway > 0,
       name: t.name, slug: t.slug, isLive: t.status === 'ACTIVE', acceptingRegistrations: t.status === 'ACTIVE', locale: t.locale, currency: t.defaultCurrency,

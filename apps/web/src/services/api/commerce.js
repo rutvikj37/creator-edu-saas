@@ -37,3 +37,23 @@ export const financeApi = {
   overview: (params) => http.get('/platform/finance/overview', { params }).then(d),
   transactions: (params) => http.get('/platform/finance/transactions', { params }).then(page),
 };
+
+export const planBillingApi = {
+  plans: () => http.get('/creator/billing/plans').then(d),
+  quote: (planPriceId) => http.post('/creator/billing/quote', { planPriceId }).then(d),
+  checkout: (planPriceId) => http.post('/creator/billing/checkout', { planPriceId }).then(d),
+  invoices: () => http.get('/creator/billing/invoices').then(d),
+  pay: (id) => http.post(`/creator/billing/invoices/${id}/pay`).then(d),
+  confirm: (id, body) => http.post(`/creator/billing/invoices/${id}/confirm`, body).then(d),
+  pdf: (id) => http.get(`/creator/billing/invoices/${id}/pdf`, { responseType: 'blob' }).then(blob),
+  setCancel: (cancelAtPeriodEnd) => http.post('/creator/billing/cancellation', { cancelAtPeriodEnd }).then(d),
+};
+
+export const platformBillingApi = {
+  gateway: (verify) => http.get('/platform/billing/gateway', { params: verify ? { verify: true } : {} }).then(d),
+  subscriptions: (params) => http.get('/platform/billing/subscriptions', { params }).then(page),
+  invoices: (params) => http.get('/platform/billing/invoices', { params }).then(page),
+  pdf: (id) => http.get(`/platform/billing/invoices/${id}/pdf`, { responseType: 'blob' }).then(blob),
+  recordPayment: (id, reference) => http.post(`/platform/billing/invoices/${id}/record-payment`, { reference }).then(d),
+  void: (id, reason) => http.post(`/platform/billing/invoices/${id}/void`, { reason }).then(d),
+};

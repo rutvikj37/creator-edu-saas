@@ -4,17 +4,38 @@ import type { Job, Queue } from 'bullmq';
 import { QUEUES } from '../../core/queue/queue.constants.js';
 import { OrdersService } from './orders.service.js';
 import { WEBHOOK_JOB, WebhooksService } from './webhooks.service.js';
+import { BillingService, PLATFORM_WEBHOOK_JOB } from '../billing/billing.service.js';
+
+export const BILLING_CYCLE_JOB = 'billing-cycle';
+
+@Processor(QUEUES.BILLING)
+export class BillingProcessor extends WorkerHost {
+  private readonly logger = new Logger(BillingProcessor.name);
+  constructor(private readonly billing: BillingService) {
+    super();
+  }
+  async process(job: Job) {
+    if (job.name !== BILLING_CYCLE_JOB) throw new Error(`Unknown billing job: ${job.name}`);
+    const stats = await this.billing.runCycle();
+    if (Object.values(stats).some(Boolean)) this.logger.log(stats, 'billing cycle');
+    return stats;
+  }
+}
 
 export const RECONCILE_JOB = 'reconcile-payments';
 
 @Processor(QUEUES.WEBHOOKS_IN)
 export class WebhooksProcessor extends WorkerHost {
-  constructor(private readonly webhooks: WebhooksService) {
+  constructor(
+    private readonly webhooks: WebhooksService,
+    private readonly billing: BillingService,
+  ) {
     super();
   }
-  async process(job: Job<{ id: string }>) {
-    if (job.name !== WEBHOOK_JOB) throw new Error(`Unknown webhook job: ${job.name}`);
-    return this.webhooks.process(job.data.id);
+  async process(job: Job<{ id: string; providerOrderId?: string }>) {
+    if (job.name === WEBHOOK_JOB) return this.webhooks.process(job.data.id);
+    if (job.name === PLATFORM_WEBHOOK_JOB) return this.billing.processWebhook(job.data.id, job.data.providerOrderId!);
+    throw new Error(`Unknown webhook job: ${job.name}`);
   }
 }
 
@@ -34,8 +55,12 @@ export class CommerceProcessor extends WorkerHost {
 
 @Injectable()
 export class CommerceScheduler implements OnApplicationBootstrap {
-  constructor(@InjectQueue(QUEUES.COMMERCE) private readonly queue: Queue) {}
+  constructor(
+    @InjectQueue(QUEUES.COMMERCE) private readonly queue: Queue,
+    @InjectQueue(QUEUES.BILLING) private readonly billingQueue: Queue,
+  ) {}
   async onApplicationBootstrap() {
     await this.queue.upsertJobScheduler(RECONCILE_JOB, { every: 5 * 60_000 }, { name: RECONCILE_JOB });
+    await this.billingQueue.upsertJobScheduler(BILLING_CYCLE_JOB, { every: 15 * 60_000 }, { name: BILLING_CYCLE_JOB });
   }
 }

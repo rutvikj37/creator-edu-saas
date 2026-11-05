@@ -14,6 +14,7 @@ import { CouponsService } from './coupons.service.js';
 import { GatewayService } from './gateway.service.js';
 import { OrdersService } from './orders.service.js';
 import { WebhooksService } from './webhooks.service.js';
+import { BillingService } from '../billing/billing.service.js';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 const ORDER_STATUSES = ['PENDING', 'PAYMENT_INITIATED', 'PAID', 'FAILED', 'CANCELLED', 'EXPIRED', 'REFUNDED', 'PARTIALLY_REFUNDED'];
@@ -223,7 +224,17 @@ export class LearnCommerceController {
 @Public()
 @Controller({ path: 'webhooks/razorpay', version: '1' })
 export class RazorpayWebhookController {
-  constructor(private readonly webhooks: WebhooksService) {}
+  constructor(
+    private readonly webhooks: WebhooksService,
+    private readonly billing: BillingService,
+  ) {}
+
+  // Declared before ':accountId' so it is matched first.
+  @Post('platform') @HttpCode(200)
+  @ApiOperation({ summary: "Razorpay webhook for the platform's own account (plan billing)" })
+  receivePlatform(@Req() req: Request & { rawBody?: Buffer }) {
+    return this.billing.receiveWebhook(req.rawBody, req.headers as Record<string, string | undefined>);
+  }
 
   @Post(':accountId') @HttpCode(200)
   @ApiOperation({ summary: 'Razorpay webhook (X-Razorpay-Signature over the raw body)' })

@@ -58,3 +58,6 @@ Status: **Phase 0 design**. Live docs will be served by Swagger at `/api/docs` (
 | 7 | `POST /learn/checkout/quote` · `POST /learn/checkout` (`Idempotency-Key`) · `GET /learn/orders[/:id]` · `POST /learn/orders/:id/pay|confirm|abandon` · `GET /learn/orders/:id/invoice` | student | Checkout → Razorpay Checkout.js options → signature-verified confirmation |
 | 7 | `POST /webhooks/razorpay/:accountId` | public (X-Razorpay-Signature) | Razorpay webhooks: `payment.*`, `order.paid`, `refund.*` |
 | 7 | `GET /platform/finance/overview` · `GET /platform/finance/transactions` | platform.finance.read | Academy GMV, refunds, commission; payments across academies |
+| 7 | `GET /creator/billing/plans` · `POST /creator/billing/quote|checkout` · `GET /creator/billing/invoices[/:id][/pdf]` · `POST /creator/billing/invoices/:id/pay|confirm` · `POST /creator/billing/cancellation` | billing.manage | Plan billing on the platform's Razorpay account |
+| 7 | `GET /platform/billing/gateway` · `GET /platform/billing/subscriptions|invoices` · `GET /platform/billing/invoices/:id/pdf` · `POST /platform/billing/invoices/:id/record-payment|void` | platform.finance.read / manage | Subscriptions, invoices, bank-transfer recording |
+| 7 | `POST /webhooks/razorpay/platform` | public (X-Razorpay-Signature) | Platform Razorpay webhook (plan billing) |

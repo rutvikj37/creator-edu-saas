@@ -16,7 +16,7 @@ export const NAV = {
   superAdmin: [
     { label: null, items: [item('Dashboard', '/super-admin', LayoutDashboard, 3, { end: true, available: true })] },
     { label: 'Tenants', items: [item('All tenants', '/super-admin/tenants', Building2, 3, { available: true, perm: 'platform.tenants.read' }), item('Domains', '/super-admin/domains', Globe, 8)] },
-    { label: 'Subscriptions', items: [item('Plans', '/super-admin/plans', Crown, 3, { available: true, perm: 'platform.plans.manage' }), item('Subscriptions', '/super-admin/subscriptions', CreditCard, 7)] },
+    { label: 'Subscriptions', items: [item('Plans', '/super-admin/plans', Crown, 3, { available: true, perm: 'platform.plans.manage' }), item('Plan billing', '/super-admin/subscriptions', CreditCard, 7, { available: true, perm: 'platform.finance.read' })] },
     {
       label: 'Finance',
       items: [item('Revenue', '/finance', Wallet, 3, { available: true, perm: 'platform.finance.read' }), item('Transactions', '/finance/transactions', Receipt, 7, { available: true, perm: 'platform.finance.read' })],
@@ -119,6 +119,7 @@ export const NAV = {
       items: [
         item('Dashboard', '/finance', LayoutDashboard, 3, { end: true, available: true }),
         item('Transactions', '/finance/transactions', Receipt, 7, { available: true }),
+        item('Plan billing', '/finance/billing', CreditCard, 7, { available: true }),
         item('Invoices', '/finance/invoices', FileText, 10),
         item('Tax reports', '/finance/tax', Percent, 10),
       ],

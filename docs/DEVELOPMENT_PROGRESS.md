@@ -11,7 +11,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 | 4 Creator platform | onboarding wizard, creator dashboard, academy profile/branding, course builder + drag-and-drop curriculum, uploads (S3 multipart), staff & instructors | creator can build a full draft course | ✅ 2026-11-04 |
 | 5 Student platform | student auth on academy host, catalog, free enrollment, player, progress, notes, bookmarks, discussions, quizzes, assignments, certificates (PDF + QR verify) | student completes free course and gets certificate | ✅ 2026-11-05 |
 | 6 Video (no DRM — scope set by owner 2026-11-05) | video library, direct + multipart uploads, signed playback sessions, resume, auto-complete, concurrent-stream limit, revocation | student plays an attached video; unauthorized playback denied | ✅ 2026-11-05 |
-| 7 Commerce (Razorpay only — owner decision 2026-11-05) | Razorpay gateway per academy, checkout, coupons, GST, orders, webhooks, reconciliation, refunds, invoices, ledger, commission recording, finance views | paid checkout → access → invoice → refund, verified against Razorpay's API contract | ✅ 2026-11-05 (SaaS plan billing pending) |
+| 7 Commerce (Razorpay only — owner decision 2026-11-05) | Razorpay gateway per academy, checkout, coupons, GST, orders, webhooks, reconciliation, refunds, invoices, ledger, commission recording, finance views | paid checkout → access → invoice → refund, verified against Razorpay's API contract | ✅ 2026-11-05 |
 | 8 Website builder | themes, templates, block page builder, versions, undo/redo, previews, blog, SEO meta injection, custom domains + TLS | creator publishes branded site on custom domain | ⬜ |
 | 9 Live learning | LiveKit (primary), Zoom, Google Meet adapters, scheduling, recurring, waiting room, chat/polls/Q&A, attendance, recordings, webinars, batches/cohorts | real A/V session with attendance recorded | ⬜ |
 | 10 Growth & advanced | notifications (email/SMS/WhatsApp/web-push), campaigns, automations, leads, consent, affiliates, communities, memberships, advanced analytics + exports, AI features with credits | module tests + e2e | ⬜ |
@@ -93,7 +93,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 
 **Fixed during verification**: final heartbeat on leaving the lesson was skipped (ref already detached) — now uses the last observed position · small files showed "0 MB".
 
-## Phase 7 — Commerce with Razorpay (✅ complete; SaaS plan billing pending)
+## Phase 7 — Commerce with Razorpay (✅ complete)
 
 **Scope decisions (owner, 2026-11-05)**: Razorpay is the only gateway ("give only razorpay option now"). Cashfree, Stripe and PayPal are not built; the adapter interface remains so they can be added later. Merchant model is **creator-owned**: each academy connects its own Razorpay account and money settles directly to it, so platform settlements/payouts do not apply.
 
@@ -107,7 +107,9 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 
 **Fixed during verification**: gateway deletion was allowed once payments were refunded (now blocked whenever payments exist) · the payments page called an unreachable Razorpay "rejected keys" · ₹0 orders said "Payment successful".
 
-**Pending / not in this phase**: SaaS plan billing and dunning (creators paying the platform for plans and collecting commission) · multi-course cart and bundles · GST reports/exports (Phase 10) · Content-Security-Policy, if one is added, must allow `checkout.razorpay.com` (script/frame) and `api.razorpay.com` (connect).
+**SaaS plan billing (added 2026-11-05)**: academies pay the platform through the platform's own Razorpay account (keys are encrypted platform settings managed by Super Admin) · plan checkout with credit for unused paid time and 18% GST on INR invoices when the platform GSTIN is set · renewal invoice 7 days before period end with reminders (−3 days, due date, +3 days) · unpaid at period end → PAST_DUE for the grace period (default 7 days, features keep working) → EXPIRED (creating courses and taking new course payments pause; students keep access) · paying the renewal restores ACTIVE (from the old period end during grace, from now after expiry) · free trials now end, with a reminder 3 days before · cancel at period end / undo · monthly commission invoices from the ledger per currency, with a minimum (default ₹100) carried over · platform webhook `/webhooks/razorpay/platform` and payment reconciliation in a 15-minute billing cycle · Super Admin / Finance: subscriptions and invoices, record bank transfer, void, invoice PDFs. Verified by API e2e 76 ✅ (billing suite: purchase, forged signature, upgrade credit, renewal, past due, expiry, webhook reactivation, cancellation, trial end, commission with carry-over, offline payment, permissions, isolation), API unit 63 ✅, web 66 ✅. Not verified: a live Razorpay payment (blocked by this environment's network policy) and an in-browser run of the admin pages.
+
+**Pending / not in this phase**: multi-course cart and bundles · GST reports/exports (Phase 10) · Content-Security-Policy, if one is added, must allow `checkout.razorpay.com` (script/frame) and `api.razorpay.com` (connect).
 
 ## Change log of this file
 - 2026-11-04 — Phase 0 documents drafted and approved.

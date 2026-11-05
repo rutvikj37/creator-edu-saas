@@ -39,7 +39,7 @@ export function FinanceDashboardPage() {
         <Card><CardBody className="space-y-2 text-sm text-fg-2">
           <p className="font-medium text-fg">How money flows</p>
           <p>Academies sell with their own Razorpay accounts, so sale proceeds settle directly to them. The platform records every sale in the ledger and computes the commission set on each plan.</p>
-          <p>Collecting commission and paid plan subscriptions from academies is part of SaaS billing, which is not enabled yet.</p>
+          <p>Academies pay plan fees and a monthly commission invoice to the platform's Razorpay account — see Plan billing.</p>
         </CardBody></Card>
       </div>
     </>

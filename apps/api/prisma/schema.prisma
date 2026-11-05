@@ -1558,3 +1558,79 @@ model TenantSequence {
 
   @@id([tenantId, name])
 }
+
+// ───────────────────────────── SaaS plan billing (Phase 7) ─────────────────────────────
+
+enum BillingInvoiceKind {
+  PLAN
+  RENEWAL
+  COMMISSION
+}
+
+enum BillingInvoiceStatus {
+  OPEN
+  PAID
+  VOID
+}
+
+/// Invoices the platform issues to academies (plan fees, renewals, monthly commission).
+/// Paid through the platform's own Razorpay account. Numbered only when paid.
+model BillingInvoice {
+  id             String               @id @default(cuid()) @db.Char(25)
+  tenantId       String               @db.Char(25)
+  number         String?              @unique @db.VarChar(40)
+  kind           BillingInvoiceKind
+  status         BillingInvoiceStatus @default(OPEN)
+  subscriptionId String?              @db.Char(25)
+  planId         String?              @db.Char(25)
+  planPriceId    String?              @db.Char(25)
+  interval       BillingInterval?
+  periodStart    DateTime?            @db.DateTime(3)
+  periodEnd      DateTime?            @db.DateTime(3)
+  currency       String               @db.Char(3)
+  subtotalAmount Decimal              @db.Decimal(19, 4)
+  creditAmount   Decimal              @default(0) @db.Decimal(19, 4)
+  taxAmount      Decimal              @default(0) @db.Decimal(19, 4)
+  totalAmount    Decimal              @db.Decimal(19, 4)
+  taxRate        Decimal?             @db.Decimal(5, 2)
+  commissionFrom DateTime?            @db.DateTime(3)
+  commissionTo   DateTime?            @db.DateTime(3)
+  lines          Json
+  dueAt          DateTime             @db.DateTime(3)
+  paidAt         DateTime?            @db.DateTime(3)
+  paidVia        String?              @db.VarChar(20)
+  reference      String?              @db.VarChar(191)
+  voidedAt       DateTime?            @db.DateTime(3)
+  voidReason     String?              @db.VarChar(300)
+  reminderStage  Int                  @default(0)
+  createdById    String?              @db.Char(25)
+  createdAt      DateTime             @default(now()) @db.DateTime(3)
+  updatedAt      DateTime             @updatedAt @db.DateTime(3)
+  payments       BillingPayment[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, status, createdAt])
+  @@index([status, dueAt])
+  @@index([kind, tenantId, commissionTo])
+}
+
+model BillingPayment {
+  id                String         @id @default(cuid()) @db.Char(25)
+  tenantId          String         @db.Char(25)
+  invoiceId         String         @db.Char(25)
+  providerOrderId   String         @unique @db.VarChar(191)
+  providerPaymentId String?        @db.VarChar(191)
+  status            PaymentStatus  @default(CREATED)
+  amount            Decimal        @db.Decimal(19, 4)
+  currency          String         @db.Char(3)
+  method            String?        @db.VarChar(40)
+  failureReason     String?        @db.VarChar(500)
+  raw               Json?
+  capturedAt        DateTime?      @db.DateTime(3)
+  createdAt         DateTime       @default(now()) @db.DateTime(3)
+  updatedAt         DateTime       @updatedAt @db.DateTime(3)
+  invoice           BillingInvoice @relation(fields: [tenantId, invoiceId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([status, createdAt])
+}

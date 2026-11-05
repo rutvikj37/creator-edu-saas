@@ -52,6 +52,14 @@ export const emailTemplates = {
       text: `Hi ${p.name},\n\nA refund of ${p.amount} for order ${p.orderNumber} has been processed. Banks usually take 5-7 working days to show it.\n${access}`,
     };
   },
+  /** Plan billing notices (invoice ready, reminder, past due, expired, receipt, trial ending). */
+  billingNotice(p: { brand: string; subject: string; heading: string; lines: string[]; cta?: { label: string; url: string } }): RenderedEmail {
+    return {
+      subject: p.subject,
+      html: layout(p.brand, p.heading, p.lines.map((l) => `<p>${escapeHtml(l)}</p>`).join(''), p.cta),
+      text: `${p.lines.join('\n\n')}${p.cta ? `\n\n${p.cta.label}: ${p.cta.url}` : ''}`,
+    };
+  },
   passwordReset(p: { brand: string; name: string; url: string }): RenderedEmail {
     return {
       subject: `Reset your ${p.brand} password`,

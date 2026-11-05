@@ -65,6 +65,7 @@ const OrderDetailPage = lazyNamed(() => import('../pages/creator/OrderDetailPage
 const CheckoutPage = lazyNamed(() => import('../pages/student/CheckoutPage.jsx'), 'CheckoutPage');
 const OrderStatusPage = lazyNamed(() => import('../pages/student/OrdersPages.jsx'), 'OrderStatusPage');
 const StudentOrdersPage = lazyNamed(() => import('../pages/student/OrdersPages.jsx'), 'StudentOrdersPage');
+const SubscriptionsAdminPage = lazyNamed(() => import('../pages/admin/SubscriptionsAdminPage.jsx'), 'SubscriptionsAdminPage');
 const PlatformTransactionsPage = lazyNamed(() => import('../pages/finance/FinanceDashboardPage.jsx'), 'PlatformTransactionsPage');
 const BillingPage = lazyNamed(() => import('../pages/creator/BillingPage.jsx'), 'BillingPage');
 const CreatorSupportPage = lazyNamed(() => import('../pages/creator/CreatorSupportPage.jsx'), 'CreatorSupportPage');
@@ -112,6 +113,7 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/super-admin/tenants', element: page(TenantsPage) },
             { path: '/super-admin/tenants/:id', element: page(TenantDetailPage) },
             { path: '/super-admin/plans', element: page(PlansPage) },
+            { path: '/super-admin/subscriptions', element: page(SubscriptionsAdminPage) },
             { path: '/super-admin/plans/new', element: page(PlanEditorPage) },
             { path: '/super-admin/plans/:id', element: page(PlanEditorPage) },
             { path: '/super-admin/settings', element: page(SettingsPage) },
@@ -128,7 +130,7 @@ export function buildRoutes(surface = getSurface()) {
         ...Object.entries(PREVIEW_LAYOUTS).map(([key, Layout]) => ({ path: `/preview/${key}`, element: <Layout />, children: [{ index: true, element: page(LayoutPreviewPage) }] })),
         {
           element: <FinanceLayout />,
-          children: [{ path: '/finance', element: page(FinanceDashboardPage) }, { path: '/finance/transactions', element: page(PlatformTransactionsPage) }],
+          children: [{ path: '/finance', element: page(FinanceDashboardPage) }, { path: '/finance/transactions', element: page(PlatformTransactionsPage) }, { path: '/finance/billing', element: page(SubscriptionsAdminPage) }],
         },
         {
           element: <SupportLayout />,

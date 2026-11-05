@@ -53,7 +53,7 @@ export function financialYear(d: Date) {
   return `${y}-${String((y + 1) % 100).padStart(2, '0')}`;
 }
 
-async function nextSequence(tx: { $executeRaw: any; $queryRaw: any }, tenantId: string, name: string): Promise<number> {
+export async function nextSequence(tx: { $executeRaw: any; $queryRaw: any }, tenantId: string, name: string): Promise<number> {
   await tx.$executeRaw`INSERT INTO TenantSequence (tenantId, name, value) VALUES (${tenantId}, ${name}, 1) ON DUPLICATE KEY UPDATE value = value + 1`;
   const rows: { value: number }[] = await tx.$queryRaw`SELECT value FROM TenantSequence WHERE tenantId = ${tenantId} AND name = ${name}`;
   return Number(rows[0].value);
@@ -130,11 +130,11 @@ export class OrdersService {
     const coupon = couponCode ? await this.coupons.evaluate(couponCode, course.id, userId, unit, course.currency) : null;
     const tax = await this.taxRule(tenantId);
     const q = computeQuote(unit, coupon?.rule ?? null, tax);
-    const selling = await this.gateways.sellingAccount();
+    const selling = (await this.entitlements.get(tenantId)).active ? await this.gateways.sellingAccount() : null;
     return {
       course: { id: course.id, title: course.title, slug: course.slug }, currency: course.currency, couponCode: coupon?.code ?? null,
       subtotal: fromMinor(q.subtotal, course.currency), discount: fromMinor(q.discount, course.currency), tax: fromMinor(q.tax, course.currency), total: fromMinor(q.total, course.currency),
-      taxRate: tax?.rate ?? null, taxInclusive: tax?.inclusive ?? true, paymentsEnabled: Boolean(selling) || q.total === 0,
+      taxRate: tax?.rate ?? null, taxInclusive: tax?.inclusive ?? true, paymentsEnabled: Boolean(selling) || (q.total === 0 && (await this.entitlements.get(tenantId)).active),
     };
   }
 
@@ -156,6 +156,7 @@ export class OrdersService {
     const coupon = input.couponCode ? await this.coupons.evaluate(input.couponCode, course.id, userId, unit, course.currency) : null;
     const tax = await this.taxRule(tenantId);
     const q = computeQuote(unit, coupon?.rule ?? null, tax);
+    if (!(await this.entitlements.get(tenantId)).active) throw AppException.conflict('This academy is not accepting new purchases right now.');
     if (q.total > 0 && !(await this.gateways.sellingAccount())) throw AppException.integrationNotConfigured('Online payments for this academy');
     if (q.total > 0 && q.total < 100 && course.currency === 'INR') throw AppException.validation([{ field: 'couponCode', message: 'The amount to pay must be at least ₹1' }]);
 
@@ -213,6 +214,7 @@ export class OrdersService {
     if (!o) throw AppException.notFound('Order not found');
     if (o.status === 'PAID' || o.status === 'REFUNDED' || o.status === 'PARTIALLY_REFUNDED') throw AppException.conflict('This order is already paid.');
     if (!['PENDING', 'PAYMENT_INITIATED', 'FAILED'].includes(o.status) || o.expiresAt <= new Date()) throw AppException.conflict('This order has expired. Start checkout again.');
+    if (!(await this.entitlements.get(o.tenantId)).active) throw AppException.conflict('This academy is not accepting new purchases right now.');
     const selling = await this.gateways.sellingAccount();
     if (!selling) throw AppException.integrationNotConfigured('Online payments for this academy');
     const { tenant } = await this.academy(o.tenantId);

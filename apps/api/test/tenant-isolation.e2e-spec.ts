@@ -52,6 +52,10 @@ const WORKSPACE_ROUTES_COVERED = [
   'GET /api/v1/creator/coupons', 'POST /api/v1/creator/coupons', 'PATCH /api/v1/creator/coupons/:id', 'DELETE /api/v1/creator/coupons/:id',
   'GET /api/v1/creator/orders', 'GET /api/v1/creator/orders/summary', 'GET /api/v1/creator/orders/:id', 'GET /api/v1/creator/orders/:id/invoice', 'POST /api/v1/creator/orders/:id/refunds',
   'GET /api/v1/creator/transactions',
+  // Phase 7 — plan billing (cross-tenant checks in billing.e2e-spec.ts)
+  'GET /api/v1/creator/billing/plans', 'POST /api/v1/creator/billing/quote', 'POST /api/v1/creator/billing/checkout', 'GET /api/v1/creator/billing/invoices',
+  'GET /api/v1/creator/billing/invoices/:id', 'GET /api/v1/creator/billing/invoices/:id/pdf', 'POST /api/v1/creator/billing/invoices/:id/pay',
+  'POST /api/v1/creator/billing/invoices/:id/confirm', 'POST /api/v1/creator/billing/cancellation',
   'GET /api/v1/creator/staff', 'POST /api/v1/creator/staff/invitations', 'DELETE /api/v1/creator/staff/invitations/:id', 'PATCH /api/v1/creator/staff/:memberId', 'DELETE /api/v1/creator/staff/:memberId',
 ];
 
@@ -172,6 +176,8 @@ describe('Tenant isolation (e2e)', () => {
     await authed(app, session).get('/api/v1/creator/transactions').expect(403);
     await authed(app, session).post('/api/v1/creator/orders/ckxxxxxxxxxxxxxxxxxxxxxxx/refunds').send({}).expect(403);
     await authed(app, session).get('/api/v1/creator/coupons').expect(403);
+    await authed(app, session).get('/api/v1/creator/billing/invoices').expect(403);
+    await authed(app, session).post('/api/v1/creator/billing/checkout').send({ planPriceId: 'ckxxxxxxxxxxxxxxxxxxxxxxx' }).expect(403);
     await authed(app, session).put('/api/v1/creator/payments/razorpay').send({ keyId: 'rzp_test_AbCdEf123456', keySecret: 'secret-secret' }).expect(403);
 
     // Removing membership cuts access immediately (membership verified per request).
