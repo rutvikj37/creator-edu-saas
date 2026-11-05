@@ -39,6 +39,10 @@ export const envSchema = z.object({
   SMTP_PASS: z.string().optional(),
   SMTP_SECURE: bool.optional(),
   MAIL_FROM: z.string().default('Creator Education <no-reply@localhost>'),
+  // LiveKit (optional; live classes report "not configured" without these)
+  LIVEKIT_URL: z.string().optional(),
+  LIVEKIT_API_KEY: z.string().optional(),
+  LIVEKIT_API_SECRET: z.string().optional(),
   // SMS (optional; OTP over SMS reports "not configured" without these)
   SMS_PROVIDER: z.enum(['twilio', 'msg91']).optional(),
   TWILIO_ACCOUNT_SID: z.string().optional(),

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isValidTimeZone } from '../../common/time/timezone.js';
 
 /**
  * Every platform setting that may be edited, with its validation. Unknown keys are rejected,
@@ -22,7 +23,7 @@ export const SETTINGS: SettingDef[] = [
   { group: 'branding', key: 'branding.logoUrl', label: 'Logo URL', schema: optUrl, public: true },
   { group: 'branding', key: 'branding.faviconUrl', label: 'Favicon URL', schema: optUrl, public: true },
   { group: 'general', key: 'general.defaultCurrency', label: 'Default currency', schema: z.string().regex(/^[A-Z]{3}$/) },
-  { group: 'general', key: 'general.defaultTimezone', label: 'Default time zone', schema: str(64).refine((tz) => Intl.supportedValuesOf('timeZone').includes(tz) || tz === 'UTC', 'Unknown time zone') },
+  { group: 'general', key: 'general.defaultTimezone', label: 'Default time zone', schema: str(64).refine((tz) => isValidTimeZone(tz), 'Unknown time zone') },
   { group: 'general', key: 'general.defaultLocale', label: 'Default language', schema: z.enum(['en', 'hi', 'gu']) },
   { group: 'registration', key: 'registration.creatorSignupEnabled', label: 'Allow creator sign-ups', schema: z.boolean() },
   { group: 'registration', key: 'registration.requireEmailVerification', label: 'Require verified email before publishing', schema: z.boolean() },

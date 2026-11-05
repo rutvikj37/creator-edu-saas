@@ -1718,3 +1718,231 @@ model BlogPost {
   @@unique([tenantId, slug])
   @@index([tenantId, status, publishedAt])
 }
+
+// ───────────────────────────── Live learning (Phase 9) ─────────────────────────────
+
+model Batch {
+  id          String        @id @default(cuid()) @db.Char(25)
+  tenantId    String        @db.Char(25)
+  name        String        @db.VarChar(120)
+  description String?       @db.VarChar(500)
+  courseId    String?       @db.Char(25)
+  startsAt    DateTime?     @db.DateTime(3)
+  endsAt      DateTime?     @db.DateTime(3)
+  capacity    Int?
+  createdById String        @db.Char(25)
+  createdAt   DateTime      @default(now()) @db.DateTime(3)
+  updatedAt   DateTime      @updatedAt @db.DateTime(3)
+  archivedAt  DateTime?     @db.DateTime(3)
+  members     BatchMember[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, createdAt])
+}
+
+model BatchMember {
+  id       String   @id @default(cuid()) @db.Char(25)
+  tenantId String   @db.Char(25)
+  batchId  String   @db.Char(25)
+  userId   String   @db.Char(25)
+  addedAt  DateTime @default(now()) @db.DateTime(3)
+  batch    Batch    @relation(fields: [tenantId, batchId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, batchId, userId])
+  @@index([tenantId, userId])
+}
+
+enum LiveProvider {
+  LIVEKIT
+  EXTERNAL
+}
+
+enum LiveKind {
+  CLASS
+  WEBINAR
+}
+
+enum LiveAudience {
+  COURSE
+  BATCH
+  ALL_STUDENTS
+  REGISTRANTS
+}
+
+enum LiveClassStatus {
+  ACTIVE
+  CANCELLED
+}
+
+/// A live class or webinar; one or more scheduled sessions (recurring classes materialise ahead).
+model LiveClass {
+  id              String          @id @default(cuid()) @db.Char(25)
+  tenantId        String          @db.Char(25)
+  kind            LiveKind        @default(CLASS)
+  title           String          @db.VarChar(200)
+  description     String?         @db.VarChar(2000)
+  provider        LiveProvider
+  externalUrl     String?         @db.VarChar(500)
+  audience        LiveAudience
+  courseId        String?         @db.Char(25)
+  batchId         String?         @db.Char(25)
+  hostUserId      String          @db.Char(25)
+  durationMinutes Int
+  timezone        String          @db.VarChar(64)
+  recurrence      Json?
+  capacity        Int?
+  waitingRoom     Boolean         @default(false)
+  recordSessions  Boolean         @default(false)
+  slug            String?         @db.VarChar(120)
+  status          LiveClassStatus @default(ACTIVE)
+  createdById     String          @db.Char(25)
+  createdAt       DateTime        @default(now()) @db.DateTime(3)
+  updatedAt       DateTime        @updatedAt @db.DateTime(3)
+  sessions        LiveSession[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, slug])
+  @@index([tenantId, status, createdAt])
+}
+
+enum LiveSessionStatus {
+  SCHEDULED
+  LIVE
+  ENDED
+  CANCELLED
+}
+
+enum RecordingStatus {
+  NONE
+  RECORDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+model LiveSession {
+  id              String            @id @default(cuid()) @db.Char(25)
+  tenantId        String            @db.Char(25)
+  liveClassId     String            @db.Char(25)
+  startsAt        DateTime          @db.DateTime(3)
+  endsAt          DateTime          @db.DateTime(3)
+  status          LiveSessionStatus @default(SCHEDULED)
+  roomName        String            @unique @db.VarChar(64)
+  startedAt       DateTime?         @db.DateTime(3)
+  endedAt         DateTime?         @db.DateTime(3)
+  recordingStatus RecordingStatus   @default(NONE)
+  egressId        String?           @db.VarChar(100)
+  videoAssetId    String?           @db.Char(25)
+  createdAt       DateTime          @default(now()) @db.DateTime(3)
+  updatedAt       DateTime          @updatedAt @db.DateTime(3)
+  liveClass       LiveClass         @relation(fields: [tenantId, liveClassId], references: [tenantId, id], onDelete: Cascade)
+  attendance      LiveAttendance[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, liveClassId, startsAt])
+  @@index([status, startsAt])
+  @@index([tenantId, startsAt])
+}
+
+/// One join→leave interval. Several per person when they reconnect; merged for attendance %.
+model LiveAttendance {
+  id             String      @id @default(cuid()) @db.Char(25)
+  tenantId       String      @db.Char(25)
+  sessionId      String      @db.Char(25)
+  identity       String      @db.VarChar(64)
+  userId         String?     @db.Char(25)
+  registrationId String?     @db.Char(25)
+  displayName    String      @db.VarChar(120)
+  role           String      @db.VarChar(16)
+  source         String      @db.VarChar(16)
+  joinedAt       DateTime    @db.DateTime(3)
+  leftAt         DateTime?   @db.DateTime(3)
+  session        LiveSession @relation(fields: [tenantId, sessionId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, sessionId, identity])
+}
+
+enum AdmissionStatus {
+  WAITING
+  ADMITTED
+  DENIED
+}
+
+model LiveAdmission {
+  id        String          @id @default(cuid()) @db.Char(25)
+  tenantId  String          @db.Char(25)
+  sessionId String          @db.Char(25)
+  identity  String          @db.VarChar(64)
+  name      String          @db.VarChar(120)
+  status    AdmissionStatus @default(WAITING)
+  decidedAt DateTime?       @db.DateTime(3)
+  createdAt DateTime        @default(now()) @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, sessionId, identity])
+}
+
+enum PollStatus {
+  OPEN
+  CLOSED
+}
+
+model LivePoll {
+  id        String         @id @default(cuid()) @db.Char(25)
+  tenantId  String         @db.Char(25)
+  sessionId String         @db.Char(25)
+  question  String         @db.VarChar(300)
+  options   Json
+  status    PollStatus     @default(OPEN)
+  createdAt DateTime       @default(now()) @db.DateTime(3)
+  closedAt  DateTime?      @db.DateTime(3)
+  votes     LivePollVote[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, sessionId])
+}
+
+model LivePollVote {
+  id          String   @id @default(cuid()) @db.Char(25)
+  tenantId    String   @db.Char(25)
+  pollId      String   @db.Char(25)
+  identity    String   @db.VarChar(64)
+  optionIndex Int
+  createdAt   DateTime @default(now()) @db.DateTime(3)
+  poll        LivePoll @relation(fields: [tenantId, pollId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, pollId, identity])
+}
+
+model LiveQuestion {
+  id         String    @id @default(cuid()) @db.Char(25)
+  tenantId   String    @db.Char(25)
+  sessionId  String    @db.Char(25)
+  identity   String    @db.VarChar(64)
+  name       String    @db.VarChar(120)
+  text       String    @db.VarChar(500)
+  upvotes    Json
+  answeredAt DateTime? @db.DateTime(3)
+  createdAt  DateTime  @default(now()) @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, sessionId])
+}
+
+model WebinarRegistration {
+  id          String   @id @default(cuid()) @db.Char(25)
+  tenantId    String   @db.Char(25)
+  liveClassId String   @db.Char(25)
+  name        String   @db.VarChar(120)
+  email       String   @db.VarChar(191)
+  userId      String?  @db.Char(25)
+  ticketCode  String   @unique @db.VarChar(32)
+  consent     Boolean  @default(false)
+  createdAt   DateTime @default(now()) @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, liveClassId, email])
+}

@@ -20,6 +20,9 @@ export function configureApp(app: NestExpressApplication): INestApplication {
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'same-site' } }));
   app.use(cookieParser());
+  // One JSON parser for normal requests and LiveKit webhooks (application/webhook+json); registering it
+  // replaces Nest's default JSON parser, so both types must be listed. Raw bodies are kept for signatures.
+  app.useBodyParser('json', { type: ['application/json', 'application/*+json'] });
   app.useGlobalPipes(createValidationPipe());
 
   // Phase 1: platform app origin only. Phase 2 extends this with verified tenant domains.

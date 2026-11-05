@@ -47,6 +47,15 @@ const WORKSPACE_ROUTES_COVERED = [
   'POST /api/v1/creator/certificates/:id/revoke', 'POST /api/v1/creator/certificates/:id/reinstate',
   // Phase 6 routes: isolation covered in video.e2e-spec.ts
   'POST /api/v1/creator/files/:id/parts', 'GET /api/v1/creator/videos', 'POST /api/v1/creator/videos', 'PATCH /api/v1/creator/videos/:id', 'GET /api/v1/creator/videos/:id/preview', 'DELETE /api/v1/creator/videos/:id',
+  // Phase 9 — live classes & batches (cross-tenant checks in live.e2e-spec.ts)
+  'GET /api/v1/creator/live/providers', 'GET /api/v1/creator/live/classes', 'POST /api/v1/creator/live/classes', 'GET /api/v1/creator/live/classes/:id', 'PATCH /api/v1/creator/live/classes/:id',
+  'POST /api/v1/creator/live/classes/:id/cancel', 'POST /api/v1/creator/live/sessions/:id/cancel', 'POST /api/v1/creator/live/sessions/:id/host', 'POST /api/v1/creator/live/sessions/:id/end',
+  'GET /api/v1/creator/live/sessions/:id/attendance', 'GET /api/v1/creator/live/sessions/:id/attendance.csv', 'GET /api/v1/creator/live/sessions/:id/recording',
+  'GET /api/v1/creator/live/sessions/:id/admissions', 'POST /api/v1/creator/live/sessions/:id/admissions/:admissionId', 'GET /api/v1/creator/live/sessions/:id/polls',
+  'POST /api/v1/creator/live/sessions/:id/polls', 'POST /api/v1/creator/live/sessions/:id/polls/:pollId/close', 'GET /api/v1/creator/live/sessions/:id/questions',
+  'POST /api/v1/creator/live/sessions/:id/questions/:questionId/answer',
+  'GET /api/v1/creator/batches', 'POST /api/v1/creator/batches', 'GET /api/v1/creator/batches/:id', 'PATCH /api/v1/creator/batches/:id', 'POST /api/v1/creator/batches/:id/members',
+  'POST /api/v1/creator/batches/:id/members/:memberId/remove', 'POST /api/v1/creator/batches/:id/archive',
   // Phase 8 — website builder & blog (cross-tenant checks in website.e2e-spec.ts)
   'GET /api/v1/creator/website', 'PUT /api/v1/creator/website/settings', 'POST /api/v1/creator/website/templates/:key/apply', 'POST /api/v1/creator/website/preview-token',
   'POST /api/v1/creator/website/pages', 'GET /api/v1/creator/website/pages/:id', 'PATCH /api/v1/creator/website/pages/:id', 'POST /api/v1/creator/website/pages/:id/publish',

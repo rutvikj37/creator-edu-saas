@@ -92,6 +92,13 @@ export class StorageService {
     return (await stat(this.localPath(key))).size;
   }
 
+  /** Size of a stored object in the private bucket (S3) or local storage. */
+  async objectSize(key: string): Promise<number> {
+    if (this.driver === 'local') return this.localSize(key);
+    const out = await this.s3!.send(new HeadObjectCommand({ Bucket: this.bucketFor(false), Key: key }));
+    return Number(out.ContentLength ?? 0);
+  }
+
   // ── multipart (S3 only; large videos) ────────────────────
   get supportsMultipart() {
     return this.driver === 's3';
