@@ -82,6 +82,7 @@ const CommunityPostPage = lazyNamed(() => import('../pages/community/CommunityPa
 const StudentCommunitiesPage = lazyNamed(() => import('../pages/community/CommunityPages.jsx'), 'StudentCommunitiesPage');
 const CreatorCommunitiesPage = lazyNamed(() => import('../pages/community/CommunityPages.jsx'), 'CreatorCommunitiesPage');
 const AnalyticsPage = lazyNamed(() => import('../pages/creator/AnalyticsPage.jsx'), 'AnalyticsPage');
+const AiStudioPage = lazyNamed(() => import('../pages/creator/AiStudioPage.jsx'), 'AiStudioPage');
 const CreatorMembershipsPage = lazyNamed(() => import('../pages/community/MembershipsPages.jsx'), 'CreatorMembershipsPage');
 const PublicMembershipsPage = lazyNamed(() => import('../pages/community/MembershipsPages.jsx'), 'PublicMembershipsPage');
 const SubscriptionsAdminPage = lazyNamed(() => import('../pages/admin/SubscriptionsAdminPage.jsx'), 'SubscriptionsAdminPage');
@@ -192,6 +193,7 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/creator/communities/:id/posts/:postId', element: page(CommunityPostPage, { staff: true }) },
             { path: '/creator/memberships', element: page(CreatorMembershipsPage) },
             { path: '/creator/analytics', element: page(AnalyticsPage) },
+            { path: '/creator/ai', element: page(AiStudioPage) },
             { path: '/creator/discussions', element: page(DiscussionsPage) },
             { path: '/creator/certificates', element: page(CertificatesAdminPage) },
             { path: '/creator/domains', element: page(DomainsPage) },

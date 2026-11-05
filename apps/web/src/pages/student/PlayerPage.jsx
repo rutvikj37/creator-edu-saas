@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Award, Bookmark, BookmarkCheck, Check, ChevronLeft, ChevronRight, CircleCheck, Download, ExternalLink, Lock, Menu, MessageSquare, NotebookPen, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Award, Bookmark, BookmarkCheck, Check, ChevronLeft, ChevronRight, CircleCheck, Download, ExternalLink, Lock, Menu, MessageSquare, NotebookPen, Sparkles, Trash2, X } from 'lucide-react';
 import { Alert } from '../../components/auth/Alert.jsx';
 import { Badge, Button, ErrorState, Skeleton, Tabs, Textarea, toast } from '../../components/ui/index.js';
 import { RichTextView } from '../../components/forms/RichTextView.jsx';
@@ -11,6 +11,8 @@ import { formatDate } from '../../utils/format.js';
 import { QuizRunner } from './QuizRunner.jsx';
 import { AssignmentPanel } from './AssignmentPanel.jsx';
 import { VideoPlayer } from '../../components/video/VideoPlayer.jsx';
+import { TutorPanel } from '../../components/ai/AiTools.jsx';
+import { aiApi } from '../../services/api/ai.js';
 
 function flatLessons(sections) {
   return sections.flatMap((s) => s.lessons.flatMap((l) => [l, ...(l.children ?? [])]));
@@ -85,6 +87,7 @@ export function PlayerPage() {
   const player = useQuery({ queryKey: ['player', courseId], queryFn: () => learnApi.player(courseId), retry: false });
   const [sidebar, setSidebar] = useState(false);
   const [tab, setTab] = useState('notes');
+  const tutor = useQuery({ queryKey: ['learn', 'ai-tutor'], queryFn: aiApi.tutorStatus, staleTime: 60_000, retry: false });
   const lessons = useMemo(() => (player.data ? flatLessons(player.data.sections) : []), [player.data]);
   const currentId = params.get('lesson') ?? player.data?.enrollment.lastLessonId ?? lessons.find((l) => !l.completed && !l.locked)?.id ?? lessons[0]?.id;
   const idx = lessons.findIndex((l) => l.id === currentId);
@@ -153,8 +156,12 @@ export function PlayerPage() {
         </main>
         {current && (
           <aside className="hidden w-80 shrink-0 overflow-y-auto border-l border-line bg-surface p-4 xl:block">
-            <Tabs className="mb-4" value={tab} onChange={setTab} tabs={[{ value: 'notes', label: <span className="inline-flex items-center gap-1"><NotebookPen className="size-4" />Notes</span> }, { value: 'discussion', label: <span className="inline-flex items-center gap-1"><MessageSquare className="size-4" />Q&A</span> }]} />
-            {tab === 'notes' ? <NotesPanel courseId={courseId} lessonId={current.id} /> : <DiscussionPanel lessonId={current.id} />}
+            <Tabs className="mb-4" value={tab} onChange={setTab} tabs={[
+              { value: 'notes', label: <span className="inline-flex items-center gap-1"><NotebookPen className="size-4" />Notes</span> },
+              { value: 'discussion', label: <span className="inline-flex items-center gap-1"><MessageSquare className="size-4" />Q&A</span> },
+              ...(tutor.data?.enabled ? [{ value: 'ai', label: <span className="inline-flex items-center gap-1"><Sparkles className="size-4" />Ask AI</span> }] : []),
+            ]} />
+            {tab === 'notes' ? <NotesPanel courseId={courseId} lessonId={current.id} /> : tab === 'ai' ? <TutorPanel key={current.id} lessonId={current.id} /> : <DiscussionPanel lessonId={current.id} />}
           </aside>
         )}
       </div>

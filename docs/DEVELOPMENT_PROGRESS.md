@@ -109,7 +109,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 
 **SaaS plan billing (added 2026-11-05)**: academies pay the platform through the platform's own Razorpay account (keys are encrypted platform settings managed by Super Admin) · plan checkout with credit for unused paid time and 18% GST on INR invoices when the platform GSTIN is set · renewal invoice 7 days before period end with reminders (−3 days, due date, +3 days) · unpaid at period end → PAST_DUE for the grace period (default 7 days, features keep working) → EXPIRED (creating courses and taking new course payments pause; students keep access) · paying the renewal restores ACTIVE (from the old period end during grace, from now after expiry) · free trials now end, with a reminder 3 days before · cancel at period end / undo · monthly commission invoices from the ledger per currency, with a minimum (default ₹100) carried over · platform webhook `/webhooks/razorpay/platform` and payment reconciliation in a 15-minute billing cycle · Super Admin / Finance: subscriptions and invoices, record bank transfer, void, invoice PDFs. Verified by API e2e 76 ✅ (billing suite: purchase, forged signature, upgrade credit, renewal, past due, expiry, webhook reactivation, cancellation, trial end, commission with carry-over, offline payment, permissions, isolation), API unit 63 ✅, web 66 ✅. Not verified: a live Razorpay payment (blocked by this environment's network policy) and an in-browser run of the admin pages.
 
-**Pending / not in this phase**: multi-course cart and bundles · GST reports/exports (Phase 10) · Content-Security-Policy, if one is added, must allow `checkout.razorpay.com` (script/frame) and `api.razorpay.com` (connect).
+**Pending / not in this phase**: multi-course cart and bundles · Content-Security-Policy, if one is added, must allow `checkout.razorpay.com` (script/frame) and `api.razorpay.com` (connect).
 
 ## Phase 8 — Website builder (🟨 in progress)
 
@@ -133,6 +133,25 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 
 **Fixed during verification**: a JSON body parser added for `application/*+json` (LiveKit webhooks) had replaced the default parser so ordinary JSON bodies arrived empty — now one parser covers both · `Asia/Kolkata` was rejected as a time zone (this runtime lists only `Asia/Calcutta`) in live classes and platform settings — now validated by the runtime · weekly classes started a week late when the start time had seconds.
 
+## Phase 10 — Growth & advanced (✅ complete)
+
+**Delivered (API)**
+- **Notifications**: in-app inbox, per-category preferences (learning, live, orders, community, marketing) per channel; email, web push (VAPID), SMS and WhatsApp through a messaging queue; hooks for certificates, orders, live reminders and community replies.
+- **Contacts and consent**: leads from student sign-up, the public lead form and CSV import; consent is recorded per channel with its source; marketing never goes to contacts without consent.
+- **Campaigns**: rich-text email to segments (all, tag, course, batch), test send, scheduling, cancel, per-recipient delivery, List-Unsubscribe header and one-click unsubscribe.
+- **Automations**: event-triggered sequences (student registered, enrolled, completed, order paid, lead created) with waits and emails, run by the worker from domain events.
+- **Affiliates**: program settings (rate, cookie days, hold period, auto-approve, terms); students join and share `?ref=` links; attribution at checkout (no self-referral); commission excluding GST, held for the refund window, then approved; partial refunds reduce it and full refunds reverse it; payouts recorded with a reference; ledger entries for commission and reversals.
+- **Communities**: spaces for all students, a course or a membership plan; staff-only announcement spaces; posts, comments, likes; reply notifications; pin, lock and hide; reports and resolution.
+- **Memberships**: monthly/yearly plans that bundle courses; sold through the normal checkout (`membershipPlanId`); paying again extends from the current end; enrolments carry the membership end date; reminder 7 days before the end; expiry; full refund with access removal cancels the membership. No automatic card charges (renewal = paying again).
+- **Analytics and exports**: overview from the ledger, orders, enrolments and users with daily series in the academy time zone; top courses; per-course completion, progress and active learners (plan feature `analytics.advanced`); CSV exports of orders, students, enrolments; **GST report** with invoices and credit notes, IGST vs CGST/SGST by place of supply (B2B GSTIN state code; B2C state; unknown → supplier's state), summary by rate. CSVs carry a UTF-8 BOM and neutralise formula cells.
+- **AI (Claude)**: course outline (applied as unpublished draft lessons), lesson draft (converted to allow-listed rich text), multiple-choice questions from a lesson, and a student study assistant over the current lesson (off by default; daily per-student limit). Calls use the official Anthropic SDK with structured outputs, the server-side refusal fallback and prompt caching for lesson context; default model `claude-opus-5-5` (`ANTHROPIC_MODEL` overrides it). Monthly credits come from the plan's `ai.credits` (1 credit ≈ 1,000 input tokens or 200 output tokens; cache reads count 1/10); credits are reserved under a per-academy lock before each call and settled to real usage afterwards; failed calls cost nothing.
+
+**Delivered (Web)**: notification bell and settings, service worker for push · Marketing (contacts, import, campaigns, automations) · Affiliates (creator program and payouts; student "Earn by sharing") · Communities (creator moderation, student feeds) · Memberships (creator plans and members, public plans page, membership checkout) · Analytics (overview charts, courses, GST report, exports) · AI studio (credits, study-assistant settings, outline generator), "Draft with AI" in the lesson editor, "Generate with AI" in the quiz editor, "Ask AI" beside lessons for students.
+
+**Verification**: API e2e 92 ✅ · API unit 87 ✅ · web 88 ✅. Suites: API e2e (notifications, marketing, affiliates, communities and memberships, analytics/GST, AI suites; isolation suite covers every new creator route) · API unit (pricing, GST split, CSV escaping, credit maths, the AI client running the real Anthropic SDK against a local stand-in API) · web tests for each area · browser: analytics overview (light and dark), GST report, memberships (creator and public), community feed, AI studio.
+
+**Not verified here**: a live Claude call (no Anthropic API key in this environment; the platform needs `ANTHROPIC_API_KEY`), SMS/WhatsApp delivery (no provider credentials), web-push delivery to a real browser push service, and a paid Razorpay membership purchase (Razorpay blocked by network policy; tested with the Razorpay stand-in).
+
 ## Change log of this file
 - 2026-11-04 — Phase 0 documents drafted and approved.
 - 2026-11-04 — Phase 1 foundation completed.
@@ -144,3 +163,4 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 - 2026-11-05 — Phase 7 commerce (Razorpay) completed; SaaS plan billing pending.
 - 2026-11-05 — Phase 8 started: both domain options (branded subdomain, own domain).
 - 2026-11-05 — Phase 9 live learning completed (LiveKit + meeting links).
+- 2026-11-05 — Phase 10 growth & advanced completed (notifications, marketing, affiliates, communities, memberships, analytics/GST, AI credits).

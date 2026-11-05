@@ -2,6 +2,14 @@
 
 Format: Keep a Changelog. Versions follow SemVer once Phase 1 ships.
 
+## [0.10.0] — 2026-11-05 — Phase 10: Growth & advanced
+### Added
+- Notifications (in-app, email, web push, SMS/WhatsApp adapters) with preferences; contacts with consent; email campaigns and automations; affiliate program with held commissions and payouts; communities with moderation; memberships sold through checkout; analytics, CSV exports and a GST report; AI features (course outline, lesson draft, quiz questions, student study assistant) metered by monthly plan credits.
+### Changed
+- Default AI model is `claude-opus-5-5` (override with `ANTHROPIC_MODEL`).
+### Fixed
+- Affiliate commission on repeated partial refunds is recomputed from the original sale instead of compounding.
+
 ## [0.9.0] — 2026-11-05 — Phase 9: Live learning
 ### Added
 - LiveKit classroom (waiting room, host controls, attendance webhooks, recordings to the video library), meeting-link classes, weekly recurrence, polls and Q&A, reminders, free webinars with ticket links, batches.

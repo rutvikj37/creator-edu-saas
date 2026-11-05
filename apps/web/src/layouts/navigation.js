@@ -69,7 +69,7 @@ export const NAV = {
         item('Affiliates', '/creator/affiliates', Handshake, 10, { available: true, perm: 'affiliates.manage' }),
         item('Communities', '/creator/communities', MessagesSquare, 10, { available: true, perm: 'community.manage' }),
         item('Analytics', '/creator/analytics', BarChart3, 10, { available: true, perm: 'analytics.read' }),
-        item('AI studio', '/creator/ai', Sparkles, 10),
+        item('AI studio', '/creator/ai', Sparkles, 10, { available: true, perm: 'courses.manage' }),
       ],
     },
     {

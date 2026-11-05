@@ -5,6 +5,7 @@ import { FileUpload } from '../../components/forms/FileUpload.jsx';
 import { RichTextEditor } from '../../components/forms/RichTextEditor.jsx';
 import { coursesApi } from '../../services/api/creator.js';
 import { QuizEditor } from './QuizEditor.jsx';
+import { AiDraftButton } from '../../components/ai/AiTools.jsx';
 import { AssignmentEditor } from './AssignmentEditor.jsx';
 import { useQuery } from '@tanstack/react-query';
 import { Select } from '../../components/ui/index.js';
@@ -60,7 +61,12 @@ export function LessonEditor({ courseId, lesson, onClose, onSaved, readOnly }) {
       footer={!readOnly && <><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={saving} onClick={save}>Save lesson</Button></>}>
       <div className="space-y-5">
         <Input label="Title" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} error={errors.title} disabled={readOnly} />
-        {lesson.type === 'TEXT' && <RichTextEditor label="Content" value={draft.content} onChange={(content) => setDraft({ ...draft, content })} error={errors.content} />}
+        {lesson.type === 'TEXT' && (
+          <div className="space-y-2">
+            {!readOnly && <div className="flex justify-end"><AiDraftButton courseId={courseId} lessonId={lesson.id} hasContent={Boolean(draft.content?.content?.some((n) => n.content?.length))} onDraft={(content) => setDraft((d) => ({ ...d, content }))} /></div>}
+            <RichTextEditor label="Content" value={draft.content} onChange={(content) => setDraft({ ...draft, content })} error={errors.content} />
+          </div>
+        )}
         {lesson.type === 'LINK' && <Input label="URL" type="url" placeholder="https://" value={draft.externalUrl} onChange={(e) => setDraft({ ...draft, externalUrl: e.target.value })} error={errors.externalUrl} />}
         {ACCEPT[lesson.type] && (
           <div>

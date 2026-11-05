@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { Badge, Button, Checkbox, Input, Modal, Select, Skeleton, Switch, Tabs, Textarea, toast } from '../../components/ui/index.js';
 import { creatorLearnApi } from '../../services/api/learn.js';
+import { AiQuizGenerator } from '../../components/ai/AiTools.jsx';
 import { formatDate } from '../../utils/format.js';
 
 const TYPES = [
@@ -116,7 +117,10 @@ export function QuizEditor({ courseId, lessonId }) {
               <Button variant="ghost" size="icon-sm" aria-label="Delete question" onClick={() => removeQ.mutate(x.id)}><Trash2 className="size-4" /></Button>
             </div>
           ))}
-          <Button variant="secondary" size="sm" leftIcon={Plus} onClick={() => { setError(null); setEditing(blankQuestion()); }}>Add question</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" size="sm" leftIcon={Plus} onClick={() => { setError(null); setEditing(blankQuestion()); }}>Add question</Button>
+            <AiQuizGenerator courseId={courseId} lessonId={lessonId} />
+          </div>
         </div>
       )}
       {tab === 'settings' && (
