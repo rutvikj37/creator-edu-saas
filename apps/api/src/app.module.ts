@@ -28,6 +28,7 @@ import { MarketingModule } from './modules/marketing/marketing.module.js';
 import { AffiliatesModule } from './modules/affiliates/affiliates.module.js';
 import { CommunitiesModule } from './modules/communities/communities.module.js';
 import { MembershipsModule } from './modules/memberships/memberships.module.js';
+import { AnalyticsModule } from './modules/analytics/analytics.module.js';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard.js';
 import { TenantGuard } from './modules/auth/guards/tenant.guard.js';
 import { PermissionsGuard } from './modules/auth/guards/permissions.guard.js';
@@ -61,6 +62,7 @@ import { PermissionsGuard } from './modules/auth/guards/permissions.guard.js';
     AffiliatesModule,
     CommunitiesModule,
     MembershipsModule,
+    AnalyticsModule,
     HealthModule,
     SystemModule,
   ],

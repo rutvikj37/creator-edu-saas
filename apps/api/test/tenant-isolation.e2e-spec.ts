@@ -53,6 +53,9 @@ const WORKSPACE_ROUTES_COVERED = [
   'POST /api/v1/creator/communities/posts/:postId/comments', 'POST /api/v1/creator/communities/posts/:postId/moderate', 'DELETE /api/v1/creator/communities/posts/:postId',
   'POST /api/v1/creator/communities/comments/:commentId/hide', 'GET /api/v1/creator/communities/reports', 'POST /api/v1/creator/communities/reports/:reportId/resolve',
   'GET /api/v1/creator/memberships', 'POST /api/v1/creator/memberships', 'PATCH /api/v1/creator/memberships/:id', 'GET /api/v1/creator/memberships/:id/members',
+  // Phase 10 — analytics & exports (cross-tenant checks in analytics.e2e-spec.ts)
+  'GET /api/v1/creator/analytics/overview', 'GET /api/v1/creator/analytics/courses', 'GET /api/v1/creator/analytics/gst', 'GET /api/v1/creator/analytics/exports/gst.csv',
+  'GET /api/v1/creator/analytics/exports/orders.csv', 'GET /api/v1/creator/analytics/exports/students.csv', 'GET /api/v1/creator/analytics/exports/enrollments.csv',
   // Phase 10 — affiliates (affiliates.e2e-spec.ts)
   'GET /api/v1/creator/affiliates/program', 'PUT /api/v1/creator/affiliates/program', 'GET /api/v1/creator/affiliates', 'GET /api/v1/creator/affiliates/conversions',
   'PATCH /api/v1/creator/affiliates/:id', 'POST /api/v1/creator/affiliates/:id/payouts',
