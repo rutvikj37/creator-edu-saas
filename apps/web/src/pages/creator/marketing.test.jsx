@@ -34,7 +34,7 @@ it('shows how many contacts a campaign reaches and how many are excluded without
   marketingApi.campaigns.mockResolvedValue([{ id: 'c1', name: 'News', subject: 'Hello', status: 'DRAFT', stats: null }]);
   marketingApi.campaign.mockResolvedValue({ id: 'c1', name: 'News', subject: 'Hello', previewText: null, content: { type: 'doc', content: [] }, segment: { type: 'all' }, status: 'DRAFT', audience: { recipients: 2, excludedWithoutConsent: 3 } });
   wrap('/creator/marketing?tab=campaigns');
-  await userEvent.click(await screen.findByText('News'));
+  await userEvent.click((await screen.findAllByText('News'))[0]);
   expect(await screen.findByText(/3 without consent are left out/)).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Send now' })).toBeEnabled();
 });
