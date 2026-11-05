@@ -7,6 +7,7 @@ import { LiveClassesPage } from '../creator/LiveClassesPage.jsx';
 import { StudentLivePage, WebinarPage } from './LivePages.jsx';
 import { LiveRoom } from '../../components/live/LiveRoom.jsx';
 import { batchesApi, creatorLiveApi, learnLiveApi, webinarApi } from '../../services/api/live.js';
+import { academyApi } from '../../services/api/auth.js';
 
 vi.mock('@livekit/components-react', () => ({
   LiveKitRoom: ({ children }) => <div data-testid="lk-room">{children}</div>,
@@ -128,6 +129,35 @@ describe('WebinarPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Register for free' }));
     expect(await screen.findByText(/sent your personal join link to guest@example.test/)).toBeInTheDocument();
     expect(webinarApi.register).toHaveBeenCalledWith('py', { name: 'Guest', email: 'guest@example.test', consent: false });
+  });
+});
+
+describe('Paid webinars', () => {
+  it('public page sells a ticket instead of free registration', async () => {
+    academyApi.site.mockResolvedValueOnce({ name: 'Acme', theme: {}, paymentsEnabled: true });
+    webinarApi.get.mockResolvedValue({ id: 'w1', slug: 'tax', title: 'Tax Saving Masterclass', description: null, durationMinutes: 60, sessions: [{ id: 's1', startsAt: new Date(Date.now() + 86_400_000).toISOString() }], seatsLeft: 2, open: true, priceAmount: '299', currency: 'INR' });
+    const router = wrap(<WebinarPage />, '/webinars/tax', '/webinars/:slug');
+    expect(await screen.findByText('₹299.00')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Register for free' })).toBeNull();
+    expect(screen.getByText('2 seats left')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Buy ticket' }));
+    expect(router.state.location.pathname).toBe('/checkout/webinar/tax');
+  });
+
+  it('creator sets a ticket price on a webinar', async () => {
+    creatorLiveApi.providers.mockResolvedValue({ livekit: false, plugnmeet: false, external: true, recording: false });
+    creatorLiveApi.classes.mockResolvedValue([]);
+    creatorLiveApi.create.mockResolvedValue({ id: 'w2' });
+    wrap(<LiveClassesPage />);
+    await userEvent.click(await screen.findByRole('tab', { name: 'Webinars' }));
+    await userEvent.click(screen.getByRole('button', { name: 'New webinar' }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.type(within(dialog).getByLabelText(/^Title/), 'Tax Saving Masterclass');
+    await userEvent.type(within(dialog).getByLabelText('Meeting link'), 'https://meet.example.test/tax');
+    await userEvent.type(within(dialog).getByLabelText('Ticket price'), '299');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Schedule' }));
+    await waitFor(() => expect(creatorLiveApi.create).toHaveBeenCalled());
+    expect(creatorLiveApi.create.mock.calls[0][0]).toMatchObject({ kind: 'WEBINAR', priceAmount: 299 });
   });
 });
 

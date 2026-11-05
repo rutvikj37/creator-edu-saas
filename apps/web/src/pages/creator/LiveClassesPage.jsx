@@ -14,7 +14,7 @@ import { workspaceApi } from '../../services/api/auth.js';
 import { PLATFORM_ROOT } from '../../utils/host.js';
 import { applyApiErrors } from '../../utils/forms.js';
 import { saveBlob } from '../../utils/download.js';
-import { formatDate } from '../../utils/format.js';
+import { formatDate, formatMoney } from '../../utils/format.js';
 import { openClassroom, opensByUrl, providerLabel } from '../live/openClassroom.js';
 
 const DAYS = [['MO', 'Mon'], ['TU', 'Tue'], ['WE', 'Wed'], ['TH', 'Thu'], ['FR', 'Fri'], ['SA', 'Sat'], ['SU', 'Sun']];
@@ -40,6 +40,7 @@ const schema = z
     capacity: z.union([z.literal(''), z.coerce.number().int().min(1).max(1000)]),
     waitingRoom: z.boolean(),
     recordSessions: z.boolean(),
+    priceAmount: z.union([z.literal(''), z.coerce.number().min(0).max(10_000_000)]),
   })
   .refine((v) => v.provider !== 'EXTERNAL' || /^https:\/\//i.test(v.externalUrl ?? ''), { path: ['externalUrl'], message: 'Paste your Zoom, Google Meet or Teams link (https://…)' })
   .refine((v) => v.audience !== 'COURSE' || v.courseId, { path: ['courseId'], message: 'Choose a course' })
@@ -55,7 +56,7 @@ function ScheduleForm({ kind, providers, onDone }) {
     resolver: zodResolver(schema),
     defaultValues: {
       kind, title: '', description: '', provider: providers.plugnmeet ? 'PLUGNMEET' : providers.livekit ? 'LIVEKIT' : 'EXTERNAL', externalUrl: '', audience: kind === 'WEBINAR' ? 'REGISTRANTS' : 'ALL_STUDENTS', courseId: '', batchId: '',
-      startsAt: toLocalInput(new Date(Date.now() + 24 * 3600_000)), durationMinutes: 60, repeat: false, byDay: [], endMode: 'count', count: 8, until: '', capacity: '', waitingRoom: false, recordSessions: false,
+      startsAt: toLocalInput(new Date(Date.now() + 24 * 3600_000)), durationMinutes: 60, repeat: false, byDay: [], endMode: 'count', count: 8, until: '', capacity: '', waitingRoom: false, recordSessions: false, priceAmount: '',
     },
   });
   const { register, watch, setValue, formState: { errors, isSubmitting } } = form;
@@ -73,14 +74,14 @@ function ScheduleForm({ kind, providers, onDone }) {
         audience: x.audience, courseId: x.audience === 'COURSE' ? x.courseId : undefined, batchId: x.audience === 'BATCH' ? x.batchId : undefined,
         startsAt: new Date(x.startsAt).toISOString(), durationMinutes: x.durationMinutes, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         recurrence: x.repeat ? { freq: 'WEEKLY', byDay: x.byDay, ...(x.endMode === 'count' ? { count: x.count } : { until: x.until }) } : null,
-        capacity: x.capacity === '' ? null : x.capacity, waitingRoom: x.provider !== 'EXTERNAL' && x.waitingRoom, recordSessions: x.provider !== 'EXTERNAL' && x.recordSessions,
+        capacity: x.capacity === '' ? null : x.capacity, ...(x.kind === 'WEBINAR' && x.priceAmount !== '' && Number(x.priceAmount) > 0 ? { priceAmount: Number(x.priceAmount) } : {}), waitingRoom: x.provider !== 'EXTERNAL' && x.waitingRoom, recordSessions: x.provider !== 'EXTERNAL' && x.recordSessions,
       };
       const created = await creatorLiveApi.create(body);
       toast.success(kind === 'WEBINAR' ? 'Webinar scheduled' : 'Live class scheduled');
       onDone();
       navigate(`/creator/live/${created.id}`);
     } catch (e) {
-      applyApiErrors(e, form.setError, ['title', 'provider', 'externalUrl', 'courseId', 'batchId', 'startsAt', 'recurrence', 'recordSessions', 'waitingRoom', 'audience', 'timezone']);
+      applyApiErrors(e, form.setError, ['priceAmount', 'title', 'provider', 'externalUrl', 'courseId', 'batchId', 'startsAt', 'recurrence', 'recordSessions', 'waitingRoom', 'audience', 'timezone']);
     }
   });
   return (
@@ -127,6 +128,7 @@ function ScheduleForm({ kind, providers, onDone }) {
       )}
       <div className="grid gap-4 sm:grid-cols-2">
         <Input label={kind === 'WEBINAR' ? 'Seats' : 'Capacity'} type="number" min={1} placeholder="No limit" {...register('capacity')} />
+        {kind === 'WEBINAR' && <Input label="Ticket price" type="number" min={0} step="0.01" placeholder="Free" hint="Leave empty for free registration. Paid tickets are sold through your Razorpay account." {...register('priceAmount')} error={errors.priceAmount?.message} />}
       </div>
       {v.provider !== 'EXTERNAL' && (
         <div className="space-y-2">
@@ -250,6 +252,7 @@ export function LiveClassDetailPage() {
               {c.externalUrl && <p className="break-all"><span className="text-muted">Link:</span> <a className="text-primary-600 underline" href={c.externalUrl} target="_blank" rel="noreferrer noopener">{c.externalUrl}</a></p>}
               <p><span className="text-muted">Time zone:</span> {c.timezone}</p>
               {c.capacity && <p><span className="text-muted">Capacity:</span> {c.capacity}</p>}
+              {c.priceAmount && <p><span className="text-muted">Ticket price:</span> {formatMoney(c.priceAmount, c.currency)}</p>}
               {c.waitingRoom && <p>Waiting room on</p>}
             </CardBody>
           </Card>

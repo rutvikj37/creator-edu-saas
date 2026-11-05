@@ -59,6 +59,7 @@ class QuoteDto {
   @ApiPropertyOptional({ description: 'Buy a membership plan instead of a course' }) @IsOptional() @IsString() @Length(25, 25) membershipPlanId?: string;
   @ApiPropertyOptional({ description: 'Buy a course bundle' }) @IsOptional() @IsString() @Length(25, 25) bundleId?: string;
   @ApiPropertyOptional({ description: 'Buy everything in the cart' }) @IsOptional() @IsBoolean() fromCart?: boolean;
+  @ApiPropertyOptional({ description: 'Buy a paid webinar ticket' }) @IsOptional() @IsString() @Length(25, 25) webinarId?: string;
   @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(40) couponCode?: string | null;
 }
 class CheckoutDto extends QuoteDto {

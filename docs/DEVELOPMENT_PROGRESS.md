@@ -137,6 +137,8 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 
 **Verification**: API e2e 81 ✅ (live suite: recurrence, enrolment and batch access, join window, waiting room with real signed tokens, host admission, signed/forged/duplicate webhooks, attendance and CSV, polls and Q&A, end, meeting-link click attendance, reminders once, webinar registration + ticket join, plan gate, isolation) · API unit 75 ✅ · web 70 ✅ · browser: batch with unknown-email report, weekly meeting-link class (4 sessions), student join opens the meeting, webinar registration → ticket email → ticket page.
 
+**Paid webinars (added 2026-11-05)**: creators set a ticket price on a webinar (classes cannot be priced) · the public page shows the price and "Buy ticket" (sign-up first when needed); free registration is refused for priced webinars · tickets go through the normal checkout (coupons, GST, Razorpay, invoice, ledger, affiliate) as an order line for the webinar; seats checked at checkout; one active ticket per buyer · payment creates the registration and emails the personal join link (after the receipt) · a full refund with revoke cancels the ticket: link and join stop working, the seat frees up, the session leaves the student's Live list; buying again issues a new link · setting the price back to empty re-opens free registration. Verified by API e2e 118 ✅ (paid webinar suite), web 114 ✅.
+
 **Not verified here**: a real audio/video session and recording — LiveKit Cloud is blocked by this environment's network policy and no LiveKit server is configured. To verify: set `LIVEKIT_URL/API_KEY/API_SECRET`, add the webhook `https://<api>/api/v1/webhooks/livekit` in LiveKit, run one class with two browsers, check attendance; with S3 configured, enable recording.
 
 **Fixed during verification**: a JSON body parser added for `application/*+json` (LiveKit webhooks) had replaced the default parser so ordinary JSON bodies arrived empty — now one parser covers both · `Asia/Kolkata` was rejected as a time zone (this runtime lists only `Asia/Calcutta`) in live classes and platform settings — now validated by the runtime · weekly classes started a week late when the start time had seconds.
@@ -201,3 +203,4 @@ Bunny Stream as primary video host (direct TUS uploads, webhook + API-verified p
 - 2026-11-05 — Website drag-and-drop page builder.
 - 2026-11-05 — plugNmeet integration for live classes and webinars.
 - 2026-11-05 — Cart and course bundles.
+- 2026-11-05 — Paid webinars.

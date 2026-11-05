@@ -2,6 +2,10 @@
 
 Format: Keep a Changelog. Versions follow SemVer once Phase 1 ships.
 
+## [0.16.0] — 2026-11-05 — Paid webinars
+### Added
+- Webinar tickets: set a price, sell through Razorpay checkout with coupons and GST; the join link is emailed after payment; refunds can cancel the ticket.
+
 ## [0.15.0] — 2026-11-05 — Cart and course bundles
 ### Added
 - Course bundles: several courses at one price with the saving shown, on the catalogue and their own page; creators manage them under Bundles.

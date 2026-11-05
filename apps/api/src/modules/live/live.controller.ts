@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Headers, HttpCode, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsEmail, IsIn, IsInt, IsObject, IsOptional, IsString, Length, Max, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsEmail, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, Length, Max, MaxLength, Min } from 'class-validator';
 import type { Request, Response } from 'express';
 import { FEATURES, PERMISSIONS } from '@ce/shared';
 import { CurrentAuth, RequireFeature, RequirePermissions, RequireRealm, TenantScoped } from '../../common/decorators/auth.decorators.js';
@@ -33,6 +33,7 @@ class ClassDto {
   @ApiPropertyOptional() @IsOptional() @IsBoolean() waitingRoom?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() recordSessions?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsString() @Length(25, 25) hostUserId?: string;
+  @ApiPropertyOptional({ description: 'Webinars: ticket price; null or 0 = free' }) @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(10_000_000) priceAmount?: number | null;
 }
 class CreateClassDto extends ClassDto {
   @ApiProperty() @Transform(trim) @IsString() @Length(1, 200) declare title: string;

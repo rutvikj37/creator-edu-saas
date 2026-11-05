@@ -257,6 +257,7 @@ export function buildRoutes(surface = getSurface()) {
         { path: '/checkout/:slug', element: page(CheckoutPage) },
         { path: '/checkout/membership/:planId', element: page(CheckoutPage) },
         { path: '/checkout/bundle/:bundleSlug', element: page(CheckoutPage) },
+        { path: '/checkout/webinar/:webinarSlug', element: page(CheckoutPage) },
         { path: '/cart/checkout', element: page(CheckoutPage) },
         { path: '/cart', element: page(CartPage) },
         { path: '/learn/live/:id', element: page(StudentRoomPage) },

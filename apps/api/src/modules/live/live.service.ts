@@ -44,6 +44,8 @@ export interface ClassInput {
   waitingRoom?: boolean;
   recordSessions?: boolean;
   hostUserId?: string;
+  /** Webinars only: ticket price (null/0 = free). */
+  priceAmount?: number | null;
 }
 
 const STUDENT: LiveGrant = { canPublish: true, canSubscribe: true, canPublishData: true };
@@ -98,6 +100,8 @@ export class LiveService {
     if (input.recordSessions && provider === 'LIVEKIT' && !this.providers().livekitRecording) errors.push({ field: 'recordSessions', message: 'Recording needs the built-in classroom with S3 storage configured' });
     if (input.recordSessions && provider === 'EXTERNAL') errors.push({ field: 'recordSessions', message: 'Meeting-link classes are recorded in Zoom/Meet itself' });
     if (input.waitingRoom && provider === 'EXTERNAL') errors.push({ field: 'waitingRoom', message: 'Use the waiting room in Zoom/Meet for meeting-link classes' });
+    if (input.priceAmount && kind !== 'WEBINAR') errors.push({ field: 'priceAmount', message: 'Only webinars can be sold as tickets; classes follow their audience' });
+    if (input.priceAmount !== undefined && input.priceAmount !== null && input.priceAmount < 0) errors.push({ field: 'priceAmount', message: 'Enter a price' });
     if (input.hostUserId) {
       const member = await this.db.tenantMember.findFirst({ where: { userId: input.hostUserId, status: 'ACTIVE' } });
       if (!member) errors.push({ field: 'hostUserId', message: 'The host must be a member of your team' });
@@ -118,7 +122,7 @@ export class LiveService {
     const kind = input.kind ?? 'CLASS';
     const audience = input.audience ?? (kind === 'WEBINAR' ? 'REGISTRANTS' : 'ALL_STUDENTS');
     await this.validate({ ...input, kind, audience, externalUrl: input.provider === 'EXTERNAL' ? input.externalUrl ?? '' : input.externalUrl });
-    const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: this.ctx.requireTenantId() }, select: { timezone: true } });
+    const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: this.ctx.requireTenantId() }, select: { timezone: true, defaultCurrency: true } });
     const timezone = input.timezone ?? tenant.timezone;
     const first = new Date(input.startsAt);
     if (first.getTime() < Date.now() - 5 * 60_000) throw AppException.validation([{ field: 'startsAt', message: 'Choose a time in the future' }]);
@@ -128,6 +132,7 @@ export class LiveService {
         audience, courseId: audience === 'COURSE' ? input.courseId : null, batchId: audience === 'BATCH' ? input.batchId : null, hostUserId: input.hostUserId ?? actorUserId,
         durationMinutes: input.durationMinutes, timezone, recurrence: (input.recurrence ?? null) as never, capacity: input.capacity ?? null, waitingRoom: Boolean(input.waitingRoom),
         recordSessions: Boolean(input.recordSessions), slug: kind === 'WEBINAR' ? await this.uniqueSlug(input.title) : null, createdById: actorUserId,
+        ...(kind === 'WEBINAR' && input.priceAmount ? { priceAmount: input.priceAmount, currency: tenant.defaultCurrency } : {}),
       } as never,
     });
     await this.materialize(c.id, first);
@@ -166,6 +171,7 @@ export class LiveService {
       id: c.id, kind: c.kind, title: c.title, description: c.description, provider: c.provider, externalUrl: c.externalUrl, audience: c.audience, courseId: c.courseId, batchId: c.batchId,
       hostUserId: c.hostUserId, durationMinutes: c.durationMinutes, timezone: c.timezone, recurrence: c.recurrence, capacity: c.capacity, waitingRoom: c.waitingRoom,
       recordSessions: c.recordSessions, slug: c.slug, status: c.status, createdAt: c.createdAt,
+      priceAmount: c.priceAmount && Number(c.priceAmount) > 0 ? c.priceAmount.toString() : null, currency: c.currency ?? null,
     };
   }
 
@@ -176,7 +182,7 @@ export class LiveService {
   async get(id: string) {
     const c = await this.db.liveClass.findFirst({ where: { id }, include: { sessions: { orderBy: { startsAt: 'asc' } } } });
     if (!c) throw AppException.notFound('Live class not found');
-    const registrations = c.kind === 'WEBINAR' ? await this.db.webinarRegistration.count({ where: { liveClassId: c.id } }) : null;
+    const registrations = c.kind === 'WEBINAR' ? await this.db.webinarRegistration.count({ where: { liveClassId: c.id, cancelledAt: null } }) : null;
     return { ...this.classView(c), sessions: c.sessions.map((s) => this.sessionView(s)), registrations };
   }
 
@@ -193,6 +199,7 @@ export class LiveService {
         ...(input.capacity !== undefined ? { capacity: input.capacity } : {}),
         ...(input.waitingRoom !== undefined ? { waitingRoom: input.waitingRoom } : {}),
         ...(input.recordSessions !== undefined ? { recordSessions: input.recordSessions } : {}),
+        ...(input.priceAmount !== undefined && c.kind === 'WEBINAR' ? { priceAmount: input.priceAmount || null, currency: input.priceAmount ? c.currency ?? (await this.prisma.tenant.findUniqueOrThrow({ where: { id: c.tenantId }, select: { defaultCurrency: true } })).defaultCurrency : null } : {}),
         ...(input.hostUserId !== undefined ? { hostUserId: input.hostUserId } : {}),
       },
     });
@@ -227,7 +234,7 @@ export class LiveService {
 
   /** Whether a student (or webinar registrant) may attend. */
   async mayAttend(c: { id: string; audience: string; courseId: string | null; batchId: string | null }, userId: string | null, registrationId: string | null) {
-    if (registrationId) return Boolean(await this.db.webinarRegistration.findFirst({ where: { id: registrationId, liveClassId: c.id } }));
+    if (registrationId) return Boolean(await this.db.webinarRegistration.findFirst({ where: { id: registrationId, liveClassId: c.id, cancelledAt: null } }));
     if (!userId) return false;
     switch (c.audience) {
       case 'ALL_STUDENTS':
@@ -237,7 +244,7 @@ export class LiveService {
       case 'BATCH':
         return Boolean(await this.db.batchMember.findFirst({ where: { batchId: c.batchId!, userId } }));
       case 'REGISTRANTS':
-        return Boolean(await this.db.webinarRegistration.findFirst({ where: { liveClassId: c.id, userId } }));
+        return Boolean(await this.db.webinarRegistration.findFirst({ where: { liveClassId: c.id, userId, cancelledAt: null } }));
       default:
         return false;
     }
@@ -670,7 +677,7 @@ export class LiveService {
   // ── audience (for reminders) ──────────────────────────────
   async audienceEmails(c: { id: string; audience: string; courseId: string | null; batchId: string | null }) {
     const tenantId = this.ctx.requireTenantId();
-    if (c.audience === 'REGISTRANTS') return (await this.db.webinarRegistration.findMany({ where: { liveClassId: c.id }, select: { email: true, name: true, userId: true } })).map((r) => ({ email: r.email, name: r.name, userId: undefined as string | undefined }));
+    if (c.audience === 'REGISTRANTS') return (await this.db.webinarRegistration.findMany({ where: { liveClassId: c.id, cancelledAt: null }, select: { email: true, name: true, userId: true } })).map((r) => ({ email: r.email, name: r.name, userId: undefined as string | undefined }));
     let userIds: string[] | null = null;
     if (c.audience === 'COURSE') userIds = (await this.db.enrollment.findMany({ where: { courseId: c.courseId!, status: 'ACTIVE' }, select: { userId: true } })).map((e) => e.userId);
     if (c.audience === 'BATCH') userIds = (await this.db.batchMember.findMany({ where: { batchId: c.batchId! }, select: { userId: true } })).map((m) => m.userId);

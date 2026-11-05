@@ -8,6 +8,7 @@ import { Lock, ShieldCheck, Tag, X } from 'lucide-react';
 import { academyApi } from '../../services/api/auth.js';
 import { catalogApi } from '../../services/api/learn.js';
 import { bundlesApi, checkoutApi } from '../../services/api/commerce.js';
+import { webinarApi } from '../../services/api/live.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { Alert } from '../../components/auth/Alert.jsx';
 import { Button, Card, CardBody, CardHeader, ErrorState, Input, Skeleton, toast } from '../../components/ui/index.js';
@@ -29,17 +30,17 @@ const schema = z.object({
 const newKey = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
 export function CheckoutPage() {
-  const { slug, planId, bundleSlug } = useParams();
+  const { slug, planId, bundleSlug, webinarSlug } = useParams();
   const isPlan = Boolean(planId);
-  // What is being bought: a course, a membership plan, a bundle, or the whole cart (/cart/checkout).
-  const mode = isPlan ? 'plan' : bundleSlug ? 'bundle' : slug ? 'course' : 'cart';
+  // What is being bought: a course, a membership plan, a bundle, a webinar ticket, or the whole cart (/cart/checkout).
+  const mode = isPlan ? 'plan' : bundleSlug ? 'bundle' : webinarSlug ? 'webinar' : slug ? 'course' : 'cart';
   const qc = useQueryClient();
   const auth = useAuth();
   const navigate = useNavigate();
   const site = useQuery({ queryKey: ['brand', 'academy'], queryFn: academyApi.site, staleTime: 5 * 60_000 });
   // A checkout sells either a course (by slug) or a membership plan (by id).
   const course = useQuery({
-    queryKey: ['checkout', 'product', mode, planId ?? bundleSlug ?? slug ?? 'cart'],
+    queryKey: ['checkout', 'product', mode, planId ?? bundleSlug ?? webinarSlug ?? slug ?? 'cart'],
     queryFn: mode === 'plan'
       ? async () => {
           const p = (await membershipsApi.publicPlans()).find((x) => x.id === planId);
@@ -47,6 +48,7 @@ export function CheckoutPage() {
           return { ...p, title: p.name, currency: p.currency };
         }
       : mode === 'bundle' ? () => bundlesApi.publicGet(bundleSlug)
+      : mode === 'webinar' ? () => webinarApi.get(webinarSlug)
       : mode === 'cart' ? async () => ({ id: 'cart', title: 'Your cart' })
       : () => catalogApi.course(slug),
     retry: false,
@@ -59,7 +61,7 @@ export function CheckoutPage() {
   // One idempotency key per distinct checkout attempt; changes when the coupon changes.
   const attempt = useRef({ key: newKey(), orderId: null, coupon: null });
   const courseId = mode === 'course' ? course.data?.id : undefined;
-  const product = mode === 'plan' ? { membershipPlanId: planId } : mode === 'bundle' ? { bundleId: course.data?.id } : mode === 'cart' ? { fromCart: true } : { courseId };
+  const product = mode === 'plan' ? { membershipPlanId: planId } : mode === 'bundle' ? { bundleId: course.data?.id } : mode === 'webinar' ? { webinarId: course.data?.id } : mode === 'cart' ? { fromCart: true } : { courseId };
   const quote = useQuery({
     queryKey: ['checkout', 'quote', mode, course.data?.id ?? planId, applied],
     queryFn: () => checkoutApi.quote({ ...product, couponCode: applied || undefined }),
@@ -120,7 +122,7 @@ export function CheckoutPage() {
     }
   });
 
-  const noun = { plan: 'membership', bundle: 'bundle', cart: 'cart', course: 'course' }[mode];
+  const noun = { plan: 'membership', bundle: 'bundle', cart: 'cart', course: 'course', webinar: 'webinar' }[mode];
   if (course.isError) return <div className="grid min-h-dvh place-items-center"><ErrorState title={`${noun[0].toUpperCase()}${noun.slice(1)} not found`} error={course.error} /></div>;
   const c = course.data;
   const qd = quote.data;
@@ -130,7 +132,7 @@ export function CheckoutPage() {
     <div className="min-h-dvh bg-surface-2" style={{ fontFamily: site.data?.theme?.fontBody }}>
       <AcademyHeader site={site.data} />
       <main className="mx-auto max-w-5xl px-4 py-8">
-        <Link to={{ plan: '/memberships', bundle: `/bundles/${bundleSlug}`, cart: '/cart', course: `/courses/${slug}` }[mode]} className="text-sm text-muted hover:text-fg">← Back to {mode === 'plan' ? 'memberships' : noun}</Link>
+        <Link to={{ plan: '/memberships', bundle: `/bundles/${bundleSlug}`, cart: '/cart', course: `/courses/${slug}`, webinar: `/webinars/${webinarSlug}` }[mode]} className="text-sm text-muted hover:text-fg">← Back to {mode === 'plan' ? 'memberships' : noun}</Link>
         <h1 className="mt-2 mb-6 text-2xl font-semibold">Checkout</h1>
         {!c || quote.isLoading ? <Skeleton className="h-80" /> : quote.isError ? (
           <Alert tone="error" title={mode === 'cart' ? "Your cart can't be checked out right now" : `This ${noun} can't be bought right now`}>{quote.error.message}{mode === 'cart' && <> <Link to="/cart" className="underline">Review your cart</Link></>}</Alert>
@@ -158,7 +160,7 @@ export function CheckoutPage() {
               <Card>
                 <CardBody className="space-y-4">
                   <div>
-                    <p className="text-xs font-medium tracking-wide text-muted uppercase">{mode === 'cart' ? `${qd.items?.length ?? 0} item${qd.items?.length === 1 ? '' : 's'}` : mode === 'bundle' ? `Bundle · ${c.courseCount} courses` : mode === 'plan' ? 'Membership' : 'Course'}</p>
+                    <p className="text-xs font-medium tracking-wide text-muted uppercase">{mode === 'cart' ? `${qd.items?.length ?? 0} item${qd.items?.length === 1 ? '' : 's'}` : mode === 'bundle' ? `Bundle · ${c.courseCount} courses` : mode === 'plan' ? 'Membership' : mode === 'webinar' ? 'Webinar ticket' : 'Course'}</p>
                     {mode === 'cart' ? (
                       <ul className="mt-2 space-y-1.5 text-sm">
                         {(qd.items ?? []).map((i) => (

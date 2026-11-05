@@ -1619,6 +1619,8 @@ model OrderItem {
   courseId         String?  @db.Char(25)
   membershipPlanId String?  @db.Char(25)
   bundleId         String?  @db.Char(25)
+  /// Paid webinar ticket.
+  liveClassId      String?  @db.Char(25)
   /// Courses this line grants, fixed at purchase (a bundle's courses; the course itself otherwise).
   grantCourseIds   Json?
   title            String   @db.VarChar(200)
@@ -2069,6 +2071,9 @@ model LiveClass {
   waitingRoom     Boolean         @default(false)
   recordSessions  Boolean         @default(false)
   slug            String?         @db.VarChar(120)
+  /// Webinar ticket price; null = free registration.
+  priceAmount     Decimal?        @db.Decimal(19, 4)
+  currency        String?         @db.Char(3)
   status          LiveClassStatus @default(ACTIVE)
   createdById     String          @db.Char(25)
   createdAt       DateTime        @default(now()) @db.DateTime(3)
@@ -2245,6 +2250,10 @@ model WebinarRegistration {
   userId      String?  @db.Char(25)
   ticketCode  String   @unique @db.VarChar(32)
   consent     Boolean  @default(false)
+  /// Paid ticket: the order that bought it.
+  orderId     String?  @db.Char(25)
+  /// Set when a paid ticket is refunded with access revoked; the link stops working.
+  cancelledAt DateTime? @db.DateTime(3)
   createdAt   DateTime @default(now()) @db.DateTime(3)
 
   @@unique([tenantId, id])

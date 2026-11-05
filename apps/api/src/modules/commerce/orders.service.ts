@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import type { Redis } from 'ioredis';
 import { ERROR_CODES, FEATURES } from '@ce/shared';
@@ -40,8 +41,10 @@ export interface BillingInput {
 }
 
 export interface ProductRef {
-  /** Exactly one of courseId / bundleId / membershipPlanId / fromCart. */
+  /** Exactly one of courseId / bundleId / membershipPlanId / webinarId / fromCart. */
   courseId?: string;
+  /** A paid webinar ticket (LiveClass id). */
+  webinarId?: string;
   bundleId?: string;
   membershipPlanId?: string;
   /** Buy everything in the student's cart (courses and bundles). */
@@ -50,7 +53,7 @@ export interface ProductRef {
 
 /** One thing being bought. `grant` = courses it unlocks. */
 interface Line {
-  kind: 'course' | 'bundle' | 'membership';
+  kind: 'course' | 'bundle' | 'membership' | 'webinar';
   id: string;
   title: string;
   slug: string | null;
@@ -127,7 +130,7 @@ export class OrdersService {
       subtotalAmount: m(o.subtotalAmount), discountAmount: m(o.discountAmount), taxAmount: m(o.taxAmount), totalAmount: m(o.totalAmount), refundedAmount: m(o.refundedAmount),
       taxRate: m(o.taxRate), taxInclusive: o.taxInclusive, couponCode: o.couponCode, provider: o.provider, billing: o.billing,
       paidAt: o.paidAt, failureReason: o.failureReason, expiresAt: o.expiresAt, createdAt: o.createdAt, userId: o.userId,
-      items: o.items?.map((i: any) => ({ id: i.id, courseId: i.courseId, bundleId: i.bundleId ?? null, membershipPlanId: i.membershipPlanId ?? null, title: i.title, unitAmount: m(i.unitAmount), discountAmount: m(i.discountAmount), totalAmount: m(i.totalAmount) })),
+      items: o.items?.map((i: any) => ({ id: i.id, courseId: i.courseId, bundleId: i.bundleId ?? null, membershipPlanId: i.membershipPlanId ?? null, liveClassId: i.liveClassId ?? null, title: i.title, unitAmount: m(i.unitAmount), discountAmount: m(i.discountAmount), totalAmount: m(i.totalAmount) })),
       payments: o.payments?.map((p: any) => ({
         id: p.id, provider: p.provider, providerOrderId: p.providerOrderId, providerPaymentId: p.providerPaymentId, status: p.status,
         amount: m(p.amount), currency: p.currency, method: p.method, feeAmount: m(p.feeAmount), failureReason: p.failureReason, capturedAt: p.capturedAt, createdAt: p.createdAt,
@@ -175,6 +178,16 @@ export class OrdersService {
     return this.product({ courseId });
   }
 
+  /** A paid webinar with upcoming sessions and seats left. */
+  async sellableWebinar(id: string): Promise<Line> {
+    const c = await this.db.liveClass.findFirst({ where: { id, kind: 'WEBINAR', status: 'ACTIVE' }, include: { sessions: { where: { status: { in: ['SCHEDULED', 'LIVE'] } }, take: 1 } } });
+    if (!c) throw AppException.notFound('Webinar not found');
+    if (!c.priceAmount || Number(c.priceAmount) <= 0 || !c.currency) throw AppException.conflict('This webinar is free — register on its page.');
+    if (!c.sessions.length) throw AppException.conflict('There are no upcoming sessions for this webinar.');
+    if (c.capacity && (await this.db.webinarRegistration.count({ where: { liveClassId: c.id, cancelledAt: null } })) >= c.capacity) throw AppException.conflict('This webinar is full.');
+    return { kind: 'webinar', id: c.id, title: `${c.title} (webinar ticket)`.slice(0, 200), slug: c.slug, unitMinor: toMinor(c.priceAmount, c.currency), currency: c.currency, grant: [] };
+  }
+
   /** A published bundle whose courses are all still published. */
   async sellableBundle(bundleId: string): Promise<Line> {
     const b = await this.db.bundle.findFirst({ where: { id: bundleId, status: 'PUBLISHED' } });
@@ -194,6 +207,8 @@ export class OrdersService {
       for (const i of items) lines.push(i.bundleId ? await this.sellableBundle(i.bundleId) : await this.product({ courseId: i.courseId! }));
     } else if (ref.bundleId) {
       lines = [await this.sellableBundle(ref.bundleId)];
+    } else if (ref.webinarId) {
+      lines = [await this.sellableWebinar(ref.webinarId)];
     } else {
       lines = [await this.product(ref)];
     }
@@ -209,6 +224,11 @@ export class OrdersService {
     for (const l of lines) {
       if (l.kind === 'course' && owned.has(l.id)) throw AppException.conflict(lines.length > 1 ? `You already have access to “${l.title}”. Remove it from your cart.` : 'You already have access to this course.');
       if (l.kind === 'bundle' && l.grant.every((id) => owned.has(id))) throw AppException.conflict(`You already have every course in “${l.title}”.`);
+    }
+    for (const w of lines.filter((l) => l.kind === 'webinar')) {
+      const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+      const reg = await this.db.webinarRegistration.findFirst({ where: { liveClassId: w.id, cancelledAt: null, OR: [{ userId }, ...(user ? [{ email: user.email.toLowerCase() }] : [])] } });
+      if (reg) throw AppException.conflict('You already have a ticket for this webinar. Check your email for the join link.');
     }
     for (const c of lines.filter((l) => l.kind === 'course')) {
       const b = lines.find((l) => l.kind === 'bundle' && l.grant.includes(c.id));
@@ -240,14 +260,14 @@ export class OrdersService {
     };
   }
 
-  private static signature(items: { courseId?: string | null; bundleId?: string | null; membershipPlanId?: string | null }[]) {
-    return items.map((i) => (i.bundleId ? `b:${i.bundleId}` : i.membershipPlanId ? `m:${i.membershipPlanId}` : `c:${i.courseId}`)).sort().join(',');
+  private static signature(items: { courseId?: string | null; bundleId?: string | null; membershipPlanId?: string | null; liveClassId?: string | null }[]) {
+    return items.map((i) => (i.bundleId ? `b:${i.bundleId}` : i.membershipPlanId ? `m:${i.membershipPlanId}` : i.liveClassId ? `w:${i.liveClassId}` : `c:${i.courseId}`)).sort().join(',');
   }
 
   async checkout(userId: string, input: CheckoutInput, idempotencyKey?: string) {
     const tenantId = this.ctx.requireTenantId();
     const lines = await this.lines(userId, input);
-    const sig = OrdersService.signature(lines.map((l) => ({ courseId: l.kind === 'course' ? l.id : null, bundleId: l.kind === 'bundle' ? l.id : null, membershipPlanId: l.kind === 'membership' ? l.id : null })));
+    const sig = OrdersService.signature(lines.map((l) => ({ courseId: l.kind === 'course' ? l.id : null, bundleId: l.kind === 'bundle' ? l.id : null, membershipPlanId: l.kind === 'membership' ? l.id : null, liveClassId: l.kind === 'webinar' ? l.id : null })));
     if (idempotencyKey) {
       const prior = await this.db.order.findFirst({ where: { userId, idempotencyKey }, include: { items: true } });
       if (prior) {
@@ -268,7 +288,8 @@ export class OrdersService {
     const affiliateId = await this.affiliates.attribute(input.affiliateCode, userId);
     const order = await this.db.$transaction(async (tx) => {
       // A new checkout supersedes this buyer's earlier unpaid orders for any of the same items.
-      const match = lines.map((l) => (l.kind === 'course' ? { courseId: l.id } : l.kind === 'bundle' ? { bundleId: l.id } : { membershipPlanId: l.id }));
+      const ref = (l: Line) => (l.kind === 'course' ? { courseId: l.id } : l.kind === 'bundle' ? { bundleId: l.id } : l.kind === 'webinar' ? { liveClassId: l.id } : { membershipPlanId: l.id });
+      const match = lines.map(ref);
       const open = await tx.order.findMany({ where: { userId, status: { in: ['PENDING', 'PAYMENT_INITIATED'] }, items: { some: { OR: match } } }, select: { id: true } });
       if (open.length) await tx.order.updateMany({ where: { id: { in: open.map((o) => o.id) } }, data: { status: 'CANCELLED', failureReason: 'Superseded by a newer checkout' } });
       const n = await nextSequence(tx, tenantId, 'order');
@@ -283,7 +304,7 @@ export class OrdersService {
       for (const [i, l] of lines.entries()) {
         await tx.orderItem.create({
           data: {
-            orderId: o.id, ...(l.kind === 'course' ? { courseId: l.id } : l.kind === 'bundle' ? { bundleId: l.id } : { membershipPlanId: l.id }), grantCourseIds: l.grant.length ? l.grant : undefined,
+            orderId: o.id, ...ref(l), grantCourseIds: l.grant.length ? l.grant : undefined,
             title: l.title.slice(0, 200), unitAmount: fromMinor(q.lines[i].unit, cur), discountAmount: fromMinor(q.lines[i].discount, cur), totalAmount: fromMinor(q.lines[i].total, cur),
           } as never,
         });
@@ -448,6 +469,19 @@ export class OrdersService {
       const granted = grantedCourses(order.items);
       for (const courseId of granted) await this.grantInTx(tx, order.userId, courseId);
       for (const item of order.items) if (item.membershipPlanId) await this.memberships.applyPurchase(tx, order.userId, item.membershipPlanId, order.id, now);
+      const tickets: { code: string; liveClassId: string }[] = [];
+      for (const item of order.items) {
+        if (!item.liveClassId) continue;
+        // Paid webinar ticket: one registration per buyer (a cancelled one is re-issued with a new link).
+        const buyer = await tx.user.findUniqueOrThrow({ where: { id: order.userId }, select: { email: true, fullName: true } });
+        const email = buyer.email.toLowerCase();
+        const code = randomBytes(12).toString('base64url');
+        const prior = await tx.webinarRegistration.findFirst({ where: { liveClassId: item.liveClassId, email } });
+        if (prior && !prior.cancelledAt) { tickets.push({ code: prior.ticketCode, liveClassId: item.liveClassId }); continue; }
+        if (prior) await tx.webinarRegistration.update({ where: { id: prior.id }, data: { cancelledAt: null, orderId: order.id, userId: order.userId, ticketCode: code } });
+        else await tx.webinarRegistration.create({ data: { liveClassId: item.liveClassId, name: ((order.billing as Record<string, string | null>).name || buyer.fullName).slice(0, 120), email, userId: order.userId, ticketCode: code, orderId: order.id } as never });
+        tickets.push({ code, liveClassId: item.liveClassId });
+      }
       // Bought items leave the cart (also courses now unlocked through a bundle).
       const bundles = order.items.map((i) => i.bundleId).filter((x): x is string => Boolean(x));
       await tx.cartItem.deleteMany({ where: { userId: order.userId, OR: [{ courseId: { in: granted } }, ...(bundles.length ? [{ bundleId: { in: bundles } }] : [])] } });
@@ -481,7 +515,7 @@ export class OrdersService {
           totals: { currency: cur, subtotal: order.subtotalAmount.toString(), discount: order.discountAmount.toString(), tax: order.taxAmount.toString(), taxRate: order.taxRate?.toString() ?? null, taxInclusive: order.taxInclusive, total: order.totalAmount.toString(), paidVia: paid ? `Razorpay ${paid.result.method ?? ''}`.trim() : 'Free (100% discount)', paymentId: paid?.result.providerPaymentId ?? null },
         } as never,
       });
-      return { order, invoice };
+      return { order, invoice, tickets };
     }, { timeout: 20_000 });
 
     if (!done) return false;
@@ -496,7 +530,24 @@ export class OrdersService {
         ...emailTemplates.purchaseReceipt({ brand: tenant.name, name: billing.name ?? '', orderNumber: order.number, items: order.items.map((i) => i.title), total: fmtMoney(q.total, order.currency), url: `${origin}/learn` }),
       });
     }
+    for (const t of done.tickets) await this.sendTicket(tenantId, order.userId, t.liveClassId, t.code, tenant.name, origin).catch((e) => this.logger.warn({ err: (e as Error).message }, 'webinar ticket email failed'));
     return true;
+  }
+
+  /** Emails the personal join link of a paid webinar ticket. */
+  private async sendTicket(tenantId: string, userId: string, liveClassId: string, code: string, brand: string, origin: string) {
+    const c = await this.db.liveClass.findFirst({ where: { id: liveClassId }, include: { sessions: { where: { status: { in: ['SCHEDULED', 'LIVE'] } }, orderBy: { startsAt: 'asc' }, take: 1 } } });
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { email: true, fullName: true } });
+    if (!c || !user) return;
+    const when = c.sessions[0] ? new Intl.DateTimeFormat('en-IN', { dateStyle: 'full', timeStyle: 'short', timeZone: c.timezone }).format(c.sessions[0].startsAt) : null;
+    await this.mail.send({
+      to: user.email, tenantId, tag: 'webinar-ticket',
+      ...emailTemplates.billingNotice({
+        brand, subject: `Your ticket: ${c.title}`, heading: 'Your webinar ticket',
+        lines: [`Hi ${user.fullName},`, `Thanks for buying a ticket for “${c.title}”.`, ...(when ? [`Next session: ${when} (${c.timezone}).`] : []), 'Use your personal link below to join — it opens 15 minutes before the start. Please do not share it.'],
+        cta: { label: 'Your join link', url: `${origin}/live/ticket/${code}` },
+      }),
+    });
   }
 
   /** Invoice PDF. Buyers see only their own orders (userId given); staff see any order of the academy. */
@@ -656,6 +707,7 @@ export class OrdersService {
       if (r.revokeAccess && full) {
         await tx.enrollment.updateMany({ where: { userId: o.userId, courseId: { in: grantedCourses(o.items) }, source: 'PURCHASE' }, data: { status: 'REVOKED' } });
         for (const i of o.items) if (i.membershipPlanId) await this.memberships.revokeForRefund(tx, o.userId, i.membershipPlanId);
+        await tx.webinarRegistration.updateMany({ where: { orderId: o.id, cancelledAt: null }, data: { cancelledAt: new Date() } });
       }
       return { r, o, amount };
     });

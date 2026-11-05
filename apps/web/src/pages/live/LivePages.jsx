@@ -12,7 +12,8 @@ import { LiveRoom } from '../../components/live/LiveRoom.jsx';
 import { creatorLiveApi, learnLiveApi, participantApi, webinarApi } from '../../services/api/live.js';
 import { academyApi } from '../../services/api/auth.js';
 import { applyApiErrors } from '../../utils/forms.js';
-import { formatDate } from '../../utils/format.js';
+import { formatDate, formatMoney } from '../../utils/format.js';
+import { useAuth } from '../../context/AuthContext.jsx';
 import { AcademyHeader } from '../public/AcademyLandingPage.jsx';
 import { openClassroom, opensByUrl } from './openClassroom.js';
 
@@ -130,6 +131,8 @@ export function WebinarPage() {
   const { slug } = useParams();
   const site = useQuery({ queryKey: ['brand', 'academy'], queryFn: academyApi.site, staleTime: 5 * 60_000 });
   const q = useQuery({ queryKey: ['webinar', slug], queryFn: () => webinarApi.get(slug), retry: false });
+  const auth = useAuth();
+  const navigate = useNavigate();
   const [done, setDone] = useState(null);
   const form = useForm({ resolver: zodResolver(regSchema), defaultValues: { name: '', email: '', consent: false } });
   const submit = form.handleSubmit(async (v) => {
@@ -150,7 +153,7 @@ export function WebinarPage() {
         {!w ? <Skeleton className="h-64" /> : (
           <>
             <section>
-              <p className="text-sm font-medium" style={{ color }}>Free live webinar</p>
+              <p className="text-sm font-medium" style={{ color }}>{w.priceAmount ? 'Live webinar' : 'Free live webinar'}</p>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight">{w.title}</h1>
               {w.description && <p className="mt-4 whitespace-pre-line text-fg-2">{w.description}</p>}
               <ul className="mt-6 space-y-2">{w.sessions.map((s) => <li key={s.id} className="flex items-center gap-2 text-sm"><CalendarClock className="size-4 text-muted" />{new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeStyle: 'short' }).format(new Date(s.startsAt))} · {w.durationMinutes} min</li>)}</ul>
@@ -159,7 +162,19 @@ export function WebinarPage() {
               <CardBody className="space-y-4">
                 {done ? (
                   <div className="space-y-2 text-center"><CheckCircle2 className="mx-auto size-10 text-green-600" /><p className="font-semibold">You're registered!</p><p className="text-sm text-muted">We sent your personal join link to {done}.</p></div>
-                ) : !w.open ? <Alert tone="info">{w.sessions.length ? 'This webinar is full.' : 'There are no upcoming sessions.'}</Alert> : (
+                ) : !w.open ? <Alert tone="info">{w.sessions.length ? 'This webinar is full.' : 'There are no upcoming sessions.'}</Alert> : w.priceAmount ? (
+                  <div className="space-y-3">
+                    <p className="text-3xl font-semibold" style={{ color }}>{formatMoney(w.priceAmount, w.currency)}</p>
+                    <p className="text-sm text-muted">Your ticket and personal join link are emailed right after payment.</p>
+                    {!site.data?.paymentsEnabled ? <Alert tone="info">Ticket sales open once this academy enables payments.</Alert> : (
+                      <Button className="w-full" size="lg" style={{ background: color }}
+                        onClick={() => navigate(auth.status === 'authenticated' ? `/checkout/webinar/${slug}` : `/register?next=${encodeURIComponent(`/checkout/webinar/${slug}`)}`)}>
+                        {auth.status === 'authenticated' ? 'Buy ticket' : 'Sign up to buy a ticket'}
+                      </Button>
+                    )}
+                    {w.seatsLeft !== null && <p className="text-center text-xs text-muted">{w.seatsLeft} seats left</p>}
+                  </div>
+                ) : (
                   <form onSubmit={submit} className="space-y-3" noValidate>
                     <p className="font-semibold">Save your seat</p>
                     <Input label="Name" autoComplete="name" {...form.register('name')} error={form.formState.errors.name?.message} />

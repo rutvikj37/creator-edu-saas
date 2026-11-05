@@ -35,8 +35,9 @@ export class WebinarsService {
 
   async publicGet(slug: string) {
     const c = await this.webinar(slug);
-    const count = await this.db.webinarRegistration.count({ where: { liveClassId: c.id } });
+    const count = await this.db.webinarRegistration.count({ where: { liveClassId: c.id, cancelledAt: null } });
     return {
+      id: c.id, priceAmount: c.priceAmount && Number(c.priceAmount) > 0 ? c.priceAmount.toString() : null, currency: c.currency,
       slug: c.slug, title: c.title, description: c.description, durationMinutes: c.durationMinutes, timezone: c.timezone, provider: c.provider,
       sessions: c.sessions.map((s) => ({ id: s.id, startsAt: s.startsAt, endsAt: s.endsAt, status: s.status })),
       seatsLeft: c.capacity ? Math.max(0, c.capacity - count) : null, open: c.sessions.length > 0 && (!c.capacity || count < c.capacity),
@@ -46,10 +47,11 @@ export class WebinarsService {
   async register(slug: string, input: { name: string; email: string; consent: boolean }) {
     const c = await this.webinar(slug);
     if (!c.sessions.length) throw AppException.conflict('There are no upcoming sessions for this webinar.');
+    if (c.priceAmount && Number(c.priceAmount) > 0) throw AppException.conflict('This webinar needs a ticket. Buy one to register.');
     const email = input.email.trim().toLowerCase();
     let reg = await this.db.webinarRegistration.findFirst({ where: { liveClassId: c.id, email } });
     if (!reg) {
-      if (c.capacity && (await this.db.webinarRegistration.count({ where: { liveClassId: c.id } })) >= c.capacity) throw AppException.conflict('This webinar is full.');
+      if (c.capacity && (await this.db.webinarRegistration.count({ where: { liveClassId: c.id, cancelledAt: null } })) >= c.capacity) throw AppException.conflict('This webinar is full.');
       const student = await this.prisma.user.findFirst({ where: { tenantId: this.ctx.requireTenantId(), realm: 'TENANT', email }, select: { id: true } });
       try {
         reg = await this.db.webinarRegistration.create({ data: { liveClassId: c.id, name: input.name.trim().slice(0, 120), email, userId: student?.id ?? null, ticketCode: randomBytes(12).toString('base64url'), consent: input.consent } as never });
@@ -76,6 +78,7 @@ export class WebinarsService {
   private async byTicket(code: string) {
     const reg = await this.db.webinarRegistration.findFirst({ where: { ticketCode: code } });
     if (!reg) throw AppException.notFound('Ticket not found');
+    if (reg.cancelledAt) throw AppException.notFound('This ticket was cancelled');
     return reg;
   }
 
