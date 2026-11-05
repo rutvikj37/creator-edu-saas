@@ -1634,3 +1634,87 @@ model BillingPayment {
   @@unique([tenantId, id])
   @@index([status, createdAt])
 }
+
+// ───────────────────────────── Website builder (Phase 8) ─────────────────────────────
+
+/// One per academy: template style, header links and footer.
+model SiteSettings {
+  id        String   @id @default(cuid()) @db.Char(25)
+  tenantId  String   @unique @db.Char(25)
+  template  String   @default("classic") @db.VarChar(40)
+  header    Json
+  footer    Json
+  createdAt DateTime @default(now()) @db.DateTime(3)
+  updatedAt DateTime @updatedAt @db.DateTime(3)
+
+  @@unique([tenantId, id])
+}
+
+/// A page built from blocks. Edits go to draftBlocks; publishing copies them to publishedBlocks and records a version.
+model SitePage {
+  id              String            @id @default(cuid()) @db.Char(25)
+  tenantId        String            @db.Char(25)
+  slug            String            @db.VarChar(80)
+  title           String            @db.VarChar(120)
+  isHome          Boolean           @default(false)
+  draftBlocks     Json
+  publishedBlocks Json?
+  publishedTitle  String?           @db.VarChar(120)
+  publishedAt     DateTime?         @db.DateTime(3)
+  draftUpdatedAt  DateTime          @default(now()) @db.DateTime(3)
+  seoTitle        String?           @db.VarChar(70)
+  seoDescription  String?           @db.VarChar(170)
+  ogImageFileId   String?           @db.Char(25)
+  showInNav       Boolean           @default(true)
+  navOrder        Int               @default(0)
+  createdById     String            @db.Char(25)
+  createdAt       DateTime          @default(now()) @db.DateTime(3)
+  updatedAt       DateTime          @updatedAt @db.DateTime(3)
+  versions        SitePageVersion[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, slug])
+  @@index([tenantId, navOrder])
+}
+
+model SitePageVersion {
+  id          String   @id @default(cuid()) @db.Char(25)
+  tenantId    String   @db.Char(25)
+  pageId      String   @db.Char(25)
+  title       String   @db.VarChar(120)
+  blocks      Json
+  note        String?  @db.VarChar(120)
+  createdById String   @db.Char(25)
+  createdAt   DateTime @default(now()) @db.DateTime(3)
+  page        SitePage @relation(fields: [tenantId, pageId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, pageId, createdAt])
+}
+
+enum BlogPostStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model BlogPost {
+  id             String         @id @default(cuid()) @db.Char(25)
+  tenantId       String         @db.Char(25)
+  slug           String         @db.VarChar(160)
+  title          String         @db.VarChar(200)
+  excerpt        String?        @db.VarChar(300)
+  content        Json
+  coverFileId    String?        @db.Char(25)
+  tags           Json?
+  status         BlogPostStatus @default(DRAFT)
+  publishedAt    DateTime?      @db.DateTime(3)
+  authorId       String         @db.Char(25)
+  seoTitle       String?        @db.VarChar(70)
+  seoDescription String?        @db.VarChar(170)
+  createdAt      DateTime       @default(now()) @db.DateTime(3)
+  updatedAt      DateTime       @updatedAt @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, slug])
+  @@index([tenantId, status, publishedAt])
+}

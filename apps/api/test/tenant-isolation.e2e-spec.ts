@@ -47,6 +47,13 @@ const WORKSPACE_ROUTES_COVERED = [
   'POST /api/v1/creator/certificates/:id/revoke', 'POST /api/v1/creator/certificates/:id/reinstate',
   // Phase 6 routes: isolation covered in video.e2e-spec.ts
   'POST /api/v1/creator/files/:id/parts', 'GET /api/v1/creator/videos', 'POST /api/v1/creator/videos', 'PATCH /api/v1/creator/videos/:id', 'GET /api/v1/creator/videos/:id/preview', 'DELETE /api/v1/creator/videos/:id',
+  // Phase 8 — website builder & blog (cross-tenant checks in website.e2e-spec.ts)
+  'GET /api/v1/creator/website', 'PUT /api/v1/creator/website/settings', 'POST /api/v1/creator/website/templates/:key/apply', 'POST /api/v1/creator/website/preview-token',
+  'POST /api/v1/creator/website/pages', 'GET /api/v1/creator/website/pages/:id', 'PATCH /api/v1/creator/website/pages/:id', 'POST /api/v1/creator/website/pages/:id/publish',
+  'POST /api/v1/creator/website/pages/:id/unpublish', 'GET /api/v1/creator/website/pages/:id/versions', 'POST /api/v1/creator/website/pages/:id/versions/:versionId/restore',
+  'POST /api/v1/creator/website/pages/:id/home', 'DELETE /api/v1/creator/website/pages/:id',
+  'GET /api/v1/creator/blog/posts', 'POST /api/v1/creator/blog/posts', 'GET /api/v1/creator/blog/posts/:id', 'PATCH /api/v1/creator/blog/posts/:id',
+  'POST /api/v1/creator/blog/posts/:id/publish', 'POST /api/v1/creator/blog/posts/:id/unpublish', 'DELETE /api/v1/creator/blog/posts/:id',
   // Phase 8 — branded subdomains (domains.e2e-spec.ts)
   'GET /api/v1/creator/domains/subdomains/availability', 'POST /api/v1/creator/domains/subdomains',
   // Phase 7 — commerce (cross-tenant behaviour is also exercised in commerce.e2e-spec.ts)
@@ -179,6 +186,8 @@ describe('Tenant isolation (e2e)', () => {
     await authed(app, session).post('/api/v1/creator/orders/ckxxxxxxxxxxxxxxxxxxxxxxx/refunds').send({}).expect(403);
     await authed(app, session).get('/api/v1/creator/coupons').expect(403);
     await authed(app, session).get('/api/v1/creator/billing/invoices').expect(403);
+    await authed(app, session).get('/api/v1/creator/website').expect(403);
+    await authed(app, session).post('/api/v1/creator/blog/posts').send({ title: 'x' }).expect(403);
     await authed(app, session).post('/api/v1/creator/billing/checkout').send({ planPriceId: 'ckxxxxxxxxxxxxxxxxxxxxxxx' }).expect(403);
     await authed(app, session).put('/api/v1/creator/payments/razorpay').send({ keyId: 'rzp_test_AbCdEf123456', keySecret: 'secret-secret' }).expect(403);
 
