@@ -12,6 +12,7 @@ import { REDIS_CLIENT } from '../../core/redis/redis.constants.js';
 import { TenantContext } from '../../core/tenancy/tenant-context.service.js';
 import { academyOrigin } from '../tenants/academy-origin.js';
 import { LiveService } from './live.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 
 export const LIVE_JOBS = { REMINDERS: 'live-reminders', MAINTAIN: 'live-maintain' } as const;
 const REMINDERS = [
@@ -31,6 +32,7 @@ export class LiveJobs {
     private readonly mail: MailService,
     private readonly config: AppConfig,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async sendReminders(now = new Date()) {
@@ -48,6 +50,11 @@ export class LiveJobs {
           const { origin, name } = await academyOrigin(this.prisma, this.config, s.tenantId);
           const when = new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: s.liveClass.timezone }).format(s.startsAt);
           for (const p of people) {
+            if (p.userId) {
+              await this.notifications.notify({ userId: p.userId, tenantId: s.tenantId, category: 'live', title: `Starting ${r.label}: ${s.liveClass.title}`, body: `“${s.liveClass.title}” starts ${when} (${s.liveClass.timezone}).`, link: '/learn/live', url: `${origin}/learn/live`, brand: name });
+              sent++;
+              continue;
+            }
             await this.mail.send({
               to: p.email, tenantId: s.tenantId, tag: `live-reminder-${r.key}`,
               ...emailTemplates.billingNotice({

@@ -73,6 +73,7 @@ const StudentRoomPage = lazyNamed(() => import('../pages/live/LivePages.jsx'), '
 const StudentLivePage = lazyNamed(() => import('../pages/live/LivePages.jsx'), 'StudentLivePage');
 const WebinarPage = lazyNamed(() => import('../pages/live/LivePages.jsx'), 'WebinarPage');
 const TicketPage = lazyNamed(() => import('../pages/live/LivePages.jsx'), 'TicketPage');
+const NotificationSettingsPage = lazyNamed(() => import('../pages/account/NotificationSettingsPage.jsx'), 'NotificationSettingsPage');
 const SubscriptionsAdminPage = lazyNamed(() => import('../pages/admin/SubscriptionsAdminPage.jsx'), 'SubscriptionsAdminPage');
 const PlatformTransactionsPage = lazyNamed(() => import('../pages/finance/FinanceDashboardPage.jsx'), 'PlatformTransactionsPage');
 const BillingPage = lazyNamed(() => import('../pages/creator/BillingPage.jsx'), 'BillingPage');
@@ -132,6 +133,7 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/super-admin/status', element: page(SystemStatusPage) },
             { path: '/super-admin/design-system', element: page(DesignSystemPage) },
             { path: '/super-admin/account/security', element: page(SecurityPage, { breadcrumbs: [{ label: 'System' }] }) },
+            { path: '/super-admin/account/notifications', element: page(NotificationSettingsPage, { breadcrumbs: [{ label: 'Account' }] }) },
             ...Object.entries(PREVIEW_LAYOUTS).map(([key]) => ({ path: `/super-admin/preview/${key}`, element: <Navigate to={`/preview/${key}`} replace /> })),
           ],
         },
@@ -180,6 +182,7 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/creator/support', element: page(CreatorSupportPage) },
             { path: '/creator/support/:id', element: page(CreatorTicketPage) },
             { path: '/creator/account/security', element: page(SecurityPage, { breadcrumbs: [{ label: 'Workspace' }] }) },
+            { path: '/creator/account/notifications', element: page(NotificationSettingsPage, { breadcrumbs: [{ label: 'Account' }] }) },
           ],
         },
         { path: '/creator/live/sessions/:id/room', element: page(HostRoomPage) },
@@ -204,6 +207,7 @@ export function buildRoutes(surface = getSurface()) {
           children: [
             { path: '/learn', element: page(StudentHomePage) },
             { path: '/learn/account/security', element: page(SecurityPage, { breadcrumbs: [{ label: 'Account' }] }) },
+            { path: '/learn/account/notifications', element: page(NotificationSettingsPage, { breadcrumbs: [{ label: 'Account' }] }) },
             { path: '/learn/certificates', element: page(StudentCertificatesPage) },
             { path: '/learn/orders', element: page(StudentOrdersPage) },
             { path: '/learn/orders/:id', element: page(OrderStatusPage) },

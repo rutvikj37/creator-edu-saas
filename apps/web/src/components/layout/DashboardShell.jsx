@@ -67,7 +67,7 @@ function SidebarNav({ nav, collapsed, onNavigate }) {
  * Shared dashboard layout for every panel: collapsible (remembered) sidebar, mobile
  * drawer, top bar with ⌘K search, notifications, theme, language and profile menu.
  */
-export function DashboardShell({ nav, brand, user, footer, onSignOut, notifications = [], banner }) {
+export function DashboardShell({ nav, brand, user, footer, onSignOut, notifications = [], notificationsSlot, banner }) {
   const { t, i18n } = useTranslation();
   const { theme, toggle } = useTheme();
   const location = useLocation();
@@ -170,6 +170,7 @@ export function DashboardShell({ nav, brand, user, footer, onSignOut, notificati
             <Button variant="ghost" size="icon-sm" aria-label={t('shell.theme')} onClick={toggle}>
               {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
             </Button>
+            {notificationsSlot ?? (
             <Dropdown
               panelClassName="w-80 p-0"
               trigger={(p) => (
@@ -193,6 +194,7 @@ export function DashboardShell({ nav, brand, user, footer, onSignOut, notificati
                 </ul>
               )}
             </Dropdown>
+            )}
             {user && (
               <Dropdown
                 trigger={(p) => (

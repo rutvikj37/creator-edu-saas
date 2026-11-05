@@ -2,6 +2,7 @@
 export const QUEUES = {
   MAINTENANCE: 'maintenance',
   NOTIFICATIONS: 'notifications',
+  MESSAGING: 'messaging',
   VIDEO: 'video',
   WEBHOOKS_IN: 'webhooks-in',
   COMMERCE: 'commerce',

@@ -1946,3 +1946,48 @@ model WebinarRegistration {
   @@unique([tenantId, id])
   @@unique([tenantId, liveClassId, email])
 }
+
+// ───────────────────────────── Notifications (Phase 10) ─────────────────────────────
+
+/// In-app notification for one user (any realm). tenantId is the academy it relates to, if any.
+model Notification {
+  id        String    @id @default(cuid()) @db.Char(25)
+  userId    String    @db.Char(25)
+  tenantId  String?   @db.Char(25)
+  category  String    @db.VarChar(32)
+  title     String    @db.VarChar(160)
+  body      String    @db.VarChar(500)
+  link      String?   @db.VarChar(300)
+  readAt    DateTime? @db.DateTime(3)
+  createdAt DateTime  @default(now()) @db.DateTime(3)
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+}
+
+model NotificationPreference {
+  id        String   @id @default(cuid()) @db.Char(25)
+  userId    String   @db.Char(25)
+  category  String   @db.VarChar(32)
+  email     Boolean  @default(true)
+  sms       Boolean  @default(false)
+  whatsapp  Boolean  @default(false)
+  push      Boolean  @default(true)
+  updatedAt DateTime @updatedAt @db.DateTime(3)
+
+  @@unique([userId, category])
+}
+
+model PushSubscription {
+  id           String    @id @default(cuid()) @db.Char(25)
+  userId       String    @db.Char(25)
+  endpoint     String    @db.VarChar(700)
+  endpointHash String    @unique @db.Char(64)
+  p256dh       String    @db.VarChar(200)
+  auth         String    @db.VarChar(100)
+  userAgent    String?   @db.VarChar(300)
+  createdAt    DateTime  @default(now()) @db.DateTime(3)
+  lastUsedAt   DateTime? @db.DateTime(3)
+
+  @@index([userId])
+}

@@ -39,6 +39,15 @@ export const envSchema = z.object({
   SMTP_PASS: z.string().optional(),
   SMTP_SECURE: bool.optional(),
   MAIL_FROM: z.string().default('Creator Education <no-reply@localhost>'),
+  // WhatsApp Cloud API (optional; business-initiated messages need an approved template)
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_ACCESS_TOKEN: z.string().optional(),
+  WHATSAPP_TEMPLATE_NAME: z.string().optional(),
+  WHATSAPP_TEMPLATE_LANG: z.string().default('en'),
+  // Web push (optional; generate with `npx web-push generate-vapid-keys`)
+  WEB_PUSH_VAPID_PUBLIC_KEY: z.string().optional(),
+  WEB_PUSH_VAPID_PRIVATE_KEY: z.string().optional(),
+  WEB_PUSH_SUBJECT: z.string().optional(),
   // LiveKit (optional; live classes report "not configured" without these)
   LIVEKIT_URL: z.string().optional(),
   LIVEKIT_API_KEY: z.string().optional(),

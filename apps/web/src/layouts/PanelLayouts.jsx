@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronsUpDown } from 'lucide-react';
+import { NotificationBell } from '../components/layout/NotificationBell.jsx';
 import { DashboardShell } from '../components/layout/DashboardShell.jsx';
 import { Dropdown, DropdownItem, toast } from '../components/ui/index.js';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -14,6 +15,7 @@ function useShellAccount(profileTo) {
   const navigate = useNavigate();
   return {
     user: auth.user ? { name: auth.user.fullName, email: auth.user.email, profileTo } : null,
+    notificationsSlot: auth.user ? <NotificationBell settingsTo={profileTo.replace(/security$/, 'notifications')} /> : undefined,
     onSignOut: async () => {
       await auth.logout();
       navigate('/login', { replace: true });

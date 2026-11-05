@@ -186,8 +186,9 @@ describe('Live learning (e2e)', () => {
     const at = new Date(new Date(soon.sessions[0].startsAt).getTime() - 60 * 60_000 + 30_000);
     expect(await jobs.sendReminders(at)).toBe(1);
     expect(await jobs.sendReminders(at)).toBe(0);
-    expect((await lastEmail(app, member.email))!).toMatchObject({ tag: 'live-reminder-1h', subject: 'Starting in 1 hour: Doubt clearing' });
-    expect((await lastEmail(app, outsider.email))?.tag).not.toMatch(/^live-reminder/);
+    expect((await lastEmail(app, member.email))!).toMatchObject({ tag: 'notify-live', subject: 'Starting in 1 hour: Doubt clearing' });
+    expect((await authed(app, member.s).get('/api/v1/notifications')).body.data.items[0]).toMatchObject({ category: 'live', title: 'Starting in 1 hour: Doubt clearing', link: '/learn/live' });
+    expect((await lastEmail(app, outsider.email))?.tag).not.toMatch(/^(live-reminder|notify-live)/);
 
     // Webinar: public page, registration emails a personal link, ticket joins without an account.
     const web = (await authed(app, cs).post('/api/v1/creator/live/classes').send({ kind: 'WEBINAR', title: 'Free Python Masterclass', provider: 'LIVEKIT', startsAt: new Date(Date.now() + 10 * 60_000).toISOString(), durationMinutes: 60, capacity: 100 }).expect(201)).body.data;

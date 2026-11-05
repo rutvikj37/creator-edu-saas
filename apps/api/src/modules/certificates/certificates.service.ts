@@ -6,6 +6,7 @@ import { AppException } from '../../common/errors/app-exception.js';
 import { AppConfig } from '../../config/app-config.service.js';
 import { PrismaService } from '../../core/prisma/prisma.service.js';
 import { AuditService } from '../../core/audit/audit.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { TENANT_PRISMA } from '../../core/tenancy/tenancy.module.js';
 import type { TenantPrismaClient } from '../../core/tenancy/tenant-prisma.js';
 import { TenantContext } from '../../core/tenancy/tenant-context.service.js';
@@ -36,6 +37,7 @@ export class CertificatesService {
     private readonly ctx: TenantContext,
     private readonly config: AppConfig,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async template() {
@@ -60,9 +62,11 @@ export class CertificatesService {
     ]);
     for (let i = 0; i < 5; i++) {
       try {
-        return await this.db.certificate.create({
+        const cert = await this.db.certificate.create({
           data: { number: certificateNumber(), enrollmentId, userId: e.userId, courseId: e.courseId, recipientName: user.fullName, courseTitle: e.course.title, academyName: tenant.name } as never,
         });
+        await this.notifications.notify({ userId: e.userId, tenantId: e.tenantId, category: 'learning', title: 'Your certificate is ready', body: `Congratulations on completing ${e.course.title}!`, link: '/learn/certificates', brand: tenant.name }).catch(() => undefined);
+        return cert;
       } catch (err) {
         if ((err as { code?: string }).code !== 'P2002') throw err;
         const raced = await this.db.certificate.findFirst({ where: { enrollmentId } });

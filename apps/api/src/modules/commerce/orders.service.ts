@@ -12,6 +12,7 @@ import { TENANT_PRISMA } from '../../core/tenancy/tenancy.module.js';
 import type { TenantPrismaClient } from '../../core/tenancy/tenant-prisma.js';
 import { TenantContext } from '../../core/tenancy/tenant-context.service.js';
 import { EntitlementsService } from '../subscriptions/entitlements.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 import { enrollmentExpiry, isEnrollmentUsable } from '../learning/access.js';
 import { CouponsService } from './coupons.service.js';
 import { GatewayService } from './gateway.service.js';
@@ -82,6 +83,7 @@ export class OrdersService {
     private readonly mail: MailService,
     private readonly config: AppConfig,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // ── views ─────────────────────────────────────────────────
@@ -373,6 +375,7 @@ export class OrdersService {
     const { order } = done;
     const billing = order.billing as Record<string, string | null>;
     await this.audit.record({ action: 'order.paid', tenantId, actorRealm: 'SYSTEM', targetType: 'Order', targetId: order.id, after: { number: order.number, total: order.totalAmount.toString(), paymentId: paid?.result.providerPaymentId ?? null } });
+    await this.notifications.notify({ userId: order.userId, tenantId, category: 'orders', title: 'Purchase confirmed', body: `You now have access to ${order.items.map((i) => i.title).join(', ')}.`, link: '/learn', brand: tenant.name, skipEmail: true }).catch(() => undefined);
     if (billing.email) {
       await this.mail.send({
         to: billing.email, tenantId, tag: 'purchase-receipt',
@@ -537,6 +540,7 @@ export class OrdersService {
     const billing = done.o.billing as Record<string, string | null>;
     const { tenant } = await this.academy(done.o.tenantId);
     await this.audit.record({ action: 'refund.processed', tenantId: done.o.tenantId, actorRealm: 'SYSTEM', targetType: 'Order', targetId: done.o.id, after: { refundId: done.r.id, amount: done.r.amount.toString() } });
+    await this.notifications.notify({ userId: done.o.userId, tenantId: done.o.tenantId, category: 'orders', title: 'Refund processed', body: `${fmtMoney(done.amount, done.o.currency)} for order ${done.o.number} is on its way.`, link: `/learn/orders/${done.o.id}`, brand: tenant.name, skipEmail: true }).catch(() => undefined);
     if (billing.email) {
       await this.mail.send({ to: billing.email, tenantId: done.o.tenantId, tag: 'refund-issued', ...emailTemplates.refundIssued({ brand: tenant.name, name: billing.name ?? '', orderNumber: done.o.number, amount: fmtMoney(done.amount, done.o.currency), accessRevoked: done.r.revokeAccess }) });
     }

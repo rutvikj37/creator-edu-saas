@@ -507,11 +507,11 @@ export class LiveService {
   // ── audience (for reminders) ──────────────────────────────
   async audienceEmails(c: { id: string; audience: string; courseId: string | null; batchId: string | null }) {
     const tenantId = this.ctx.requireTenantId();
-    if (c.audience === 'REGISTRANTS') return (await this.db.webinarRegistration.findMany({ where: { liveClassId: c.id }, select: { email: true, name: true } })).map((r) => ({ email: r.email, name: r.name }));
+    if (c.audience === 'REGISTRANTS') return (await this.db.webinarRegistration.findMany({ where: { liveClassId: c.id }, select: { email: true, name: true, userId: true } })).map((r) => ({ email: r.email, name: r.name, userId: undefined as string | undefined }));
     let userIds: string[] | null = null;
     if (c.audience === 'COURSE') userIds = (await this.db.enrollment.findMany({ where: { courseId: c.courseId!, status: 'ACTIVE' }, select: { userId: true } })).map((e) => e.userId);
     if (c.audience === 'BATCH') userIds = (await this.db.batchMember.findMany({ where: { batchId: c.batchId! }, select: { userId: true } })).map((m) => m.userId);
-    const users = await this.prisma.user.findMany({ where: { tenantId, realm: 'TENANT', status: 'ACTIVE', deletedAt: null, ...(userIds ? { id: { in: userIds } } : {}) }, select: { email: true, fullName: true }, take: 10_000 });
-    return users.map((u) => ({ email: u.email, name: u.fullName }));
+    const users = await this.prisma.user.findMany({ where: { tenantId, realm: 'TENANT', status: 'ACTIVE', deletedAt: null, ...(userIds ? { id: { in: userIds } } : {}) }, select: { id: true, email: true, fullName: true }, take: 10_000 });
+    return users.map((u) => ({ email: u.email, name: u.fullName, userId: u.id as string | undefined }));
   }
 }
