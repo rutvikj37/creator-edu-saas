@@ -1,5 +1,5 @@
 import {
-  Activity, Award, Banknote, BarChart3, BookOpen, Boxes, Brush, Building2, CalendarDays, ClipboardCheck, Component,
+  Activity, Award, Banknote, BarChart3, BookOpen, Boxes, Brush, Building2, ClipboardCheck, Component,
   CreditCard, Crown, FileText, FolderTree, Globe, GraduationCap, Handshake, HeartPulse, Inbox, LayoutDashboard, LifeBuoy,
   KeyRound, Link2, Mail, Megaphone, MessagesSquare, Palette, Percent, Plug, Radio, Receipt, ScrollText, Settings, ShieldCheck,
   ShoppingCart, Sparkles, Tag, Ticket, UserCog, Users, Video, Wallet,
@@ -50,7 +50,7 @@ export const NAV = {
         item('Certificates', '/creator/certificates', Award, 5, { available: true, perm: 'certificates.manage' }),
       ],
     },
-    { label: 'Students', items: [item('Students', '/creator/students', GraduationCap, 5, { available: true, perm: 'students.read' }), item('Batches', '/creator/batches', Boxes, 9)] },
+    { label: 'Students', items: [item('Students', '/creator/students', GraduationCap, 5, { available: true, perm: 'students.read' }), item('Batches', '/creator/batches', Boxes, 9, { available: true, perm: 'students.read' })] },
     {
       label: 'Sales',
       items: [
@@ -59,7 +59,7 @@ export const NAV = {
         item('Coupons', '/creator/coupons', Tag, 7, { available: true, perm: 'coupons.manage' }),
       ],
     },
-    { label: 'Live', items: [item('Live classes', '/creator/live', Radio, 9), item('Webinars', '/creator/webinars', CalendarDays, 9)] },
+    { label: 'Live', items: [item('Live classes & webinars', '/creator/live', Radio, 9, { available: true, perm: 'live.manage' })] },
     { label: 'Website', items: [item('Website builder', '/creator/website', Brush, 8), item('Domains', '/creator/domains', Globe, 2, { available: true, perm: 'domains.manage' })] },
     {
       label: 'Growth',
@@ -90,7 +90,7 @@ export const NAV = {
       items: [
         item('My learning', '/learn', LayoutDashboard, 2, { end: true, available: true }),
         item('Browse courses', '/courses', BookOpen, 5, { available: true }),
-        item('Live classes', '/learn/live', Video, 9),
+        item('Live classes', '/learn/live', Video, 9, { available: true }),
         item('Certificates', '/learn/certificates', Award, 5, { available: true }),
         item('Communities', '/learn/communities', MessagesSquare, 10),
         item('Orders', '/learn/orders', Receipt, 7, { available: true }),

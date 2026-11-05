@@ -13,7 +13,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 | 6 Video (no DRM — scope set by owner 2026-11-05) | video library, direct + multipart uploads, signed playback sessions, resume, auto-complete, concurrent-stream limit, revocation | student plays an attached video; unauthorized playback denied | ✅ 2026-11-05 |
 | 7 Commerce (Razorpay only — owner decision 2026-11-05) | Razorpay gateway per academy, checkout, coupons, GST, orders, webhooks, reconciliation, refunds, invoices, ledger, commission recording, finance views | paid checkout → access → invoice → refund, verified against Razorpay's API contract | ✅ 2026-11-05 |
 | 8 Website builder | themes, templates, block page builder, versions, undo/redo, previews, blog, SEO meta injection, **domains: free branded subdomain on the platform domain and/or own domain** + TLS | creator publishes branded site on a subdomain or custom domain | 🟨 in progress (domains done) |
-| 9 Live learning | LiveKit (primary), Zoom, Google Meet adapters, scheduling, recurring, waiting room, chat/polls/Q&A, attendance, recordings, webinars, batches/cohorts | real A/V session with attendance recorded | ⬜ |
+| 9 Live learning | LiveKit built-in classroom (primary) + meeting-link classes (Zoom/Meet/Teams URL), scheduling, weekly recurrence, waiting room, chat (LiveKit), polls/Q&A, attendance, recordings, webinars, batches | live class with attendance recorded | ✅ 2026-11-05 (live A/V not verifiable here) |
 | 10 Growth & advanced | notifications (email/SMS/WhatsApp/web-push), campaigns, automations, leads, consent, affiliates, communities, memberships, advanced analytics + exports, AI features with credits | module tests + e2e | ⬜ |
 | 11 Quality & production | security audit, load tests, query optimisation, backups/restore drill, Nginx/PM2/AWS config, runbooks | release checklist signed off | ⬜ |
 
@@ -119,6 +119,20 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 
 **Next**: themes/templates, block page builder with versions and preview, header/footer/navigation, blog, SEO meta + sitemap, automated TLS for verified own domains.
 
+## Phase 9 — Live learning (✅ complete)
+
+**Scope decision**: LiveKit is the full provider (embedded classroom, platform-provided account gated by the plan's `live_classes` feature). Zoom, Google Meet and Teams are supported as **meeting links** the creator pastes (click-to-join attendance); their full APIs need a Zoom Marketplace app / Google Workspace credentials and can be added later.
+
+**Delivered (API)**: live classes and webinars with audiences (all students, a course's enrolments, a batch, webinar registrants) · weekly recurrence in the class time zone (DST-safe; the chosen start is always session 1), sessions materialised 90 days ahead · join window (15 min before; hosts 30) and capacity · LiveKit join tokens signed locally with the official SDK; waiting room (no publish/subscribe until the host admits; admission/denial via LiveKit's server API) · host start/end (room deleted, attendance closed) · attendance from signed LiveKit webhooks (`participant_joined/left`, `room_started/finished`; duplicate events ignored), merged intervals → minutes and %, CSV export · polls and Q&A (stored; upvotes; host closes/answers) · recordings via LiveKit Egress to S3, imported into the video library on `egress_ended` (requires S3 storage) · reminders 24 h / 1 h / 10 min to the audience, once each · free webinar registration with a personal ticket link by email; ticket holders join without an account (watch-only) and can use polls/Q&A · batches (add existing students by email; a batch with a course enrols its members) · stale LIVE sessions auto-ended.
+
+**Delivered (Web)**: Live classes & webinars (schedule form with classroom choice, audience, weekly days, end by count/date, waiting room, recording), class page (sessions, start/rejoin, cancel, attendance drawer with CSV, recording, webinar share link) · full-screen classroom (LiveKit conference: video, audio, screen share, chat, participants) with polls, Q&A and the host's waiting-room panel; waiting screen for attendees · student Live classes (join when open, recordings) · public webinar page and personal ticket page · Batches.
+
+**Verification**: API e2e 81 ✅ (live suite: recurrence, enrolment and batch access, join window, waiting room with real signed tokens, host admission, signed/forged/duplicate webhooks, attendance and CSV, polls and Q&A, end, meeting-link click attendance, reminders once, webinar registration + ticket join, plan gate, isolation) · API unit 75 ✅ · web 70 ✅ · browser: batch with unknown-email report, weekly meeting-link class (4 sessions), student join opens the meeting, webinar registration → ticket email → ticket page.
+
+**Not verified here**: a real audio/video session and recording — LiveKit Cloud is blocked by this environment's network policy and no LiveKit server is configured. To verify: set `LIVEKIT_URL/API_KEY/API_SECRET`, add the webhook `https://<api>/api/v1/webhooks/livekit` in LiveKit, run one class with two browsers, check attendance; with S3 configured, enable recording.
+
+**Fixed during verification**: a JSON body parser added for `application/*+json` (LiveKit webhooks) had replaced the default parser so ordinary JSON bodies arrived empty — now one parser covers both · `Asia/Kolkata` was rejected as a time zone (this runtime lists only `Asia/Calcutta`) in live classes and platform settings — now validated by the runtime · weekly classes started a week late when the start time had seconds.
+
 ## Change log of this file
 - 2026-11-04 — Phase 0 documents drafted and approved.
 - 2026-11-04 — Phase 1 foundation completed.
@@ -129,3 +143,4 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 - 2026-11-05 — Phase 6 video (no DRM) completed.
 - 2026-11-05 — Phase 7 commerce (Razorpay) completed; SaaS plan billing pending.
 - 2026-11-05 — Phase 8 started: both domain options (branded subdomain, own domain).
+- 2026-11-05 — Phase 9 live learning completed (LiveKit + meeting links).

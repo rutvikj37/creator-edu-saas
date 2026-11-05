@@ -65,6 +65,14 @@ const OrderDetailPage = lazyNamed(() => import('../pages/creator/OrderDetailPage
 const CheckoutPage = lazyNamed(() => import('../pages/student/CheckoutPage.jsx'), 'CheckoutPage');
 const OrderStatusPage = lazyNamed(() => import('../pages/student/OrdersPages.jsx'), 'OrderStatusPage');
 const StudentOrdersPage = lazyNamed(() => import('../pages/student/OrdersPages.jsx'), 'StudentOrdersPage');
+const LiveClassesPage = lazyNamed(() => import('../pages/creator/LiveClassesPage.jsx'), 'LiveClassesPage');
+const LiveClassDetailPage = lazyNamed(() => import('../pages/creator/LiveClassesPage.jsx'), 'LiveClassDetailPage');
+const BatchesPage = lazyNamed(() => import('../pages/creator/BatchesPage.jsx'), 'BatchesPage');
+const HostRoomPage = lazyNamed(() => import('../pages/live/LivePages.jsx'), 'HostRoomPage');
+const StudentRoomPage = lazyNamed(() => import('../pages/live/LivePages.jsx'), 'StudentRoomPage');
+const StudentLivePage = lazyNamed(() => import('../pages/live/LivePages.jsx'), 'StudentLivePage');
+const WebinarPage = lazyNamed(() => import('../pages/live/LivePages.jsx'), 'WebinarPage');
+const TicketPage = lazyNamed(() => import('../pages/live/LivePages.jsx'), 'TicketPage');
 const SubscriptionsAdminPage = lazyNamed(() => import('../pages/admin/SubscriptionsAdminPage.jsx'), 'SubscriptionsAdminPage');
 const PlatformTransactionsPage = lazyNamed(() => import('../pages/finance/FinanceDashboardPage.jsx'), 'PlatformTransactionsPage');
 const BillingPage = lazyNamed(() => import('../pages/creator/BillingPage.jsx'), 'BillingPage');
@@ -162,6 +170,9 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/creator/orders', element: page(OrdersPage) },
             { path: '/creator/orders/:id', element: page(OrderDetailPage) },
             { path: '/creator/transactions', element: page(TransactionsPage) },
+            { path: '/creator/live', element: page(LiveClassesPage) },
+            { path: '/creator/live/:id', element: page(LiveClassDetailPage) },
+            { path: '/creator/batches', element: page(BatchesPage) },
             { path: '/creator/discussions', element: page(DiscussionsPage) },
             { path: '/creator/certificates', element: page(CertificatesAdminPage) },
             { path: '/creator/domains', element: page(DomainsPage) },
@@ -171,6 +182,7 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/creator/account/security', element: page(SecurityPage, { breadcrumbs: [{ label: 'Workspace' }] }) },
           ],
         },
+        { path: '/creator/live/sessions/:id/room', element: page(HostRoomPage) },
       ],
     },
     { element: <RequireAuth />, children: [{ path: '/account/security', element: <NoWorkspacePage /> }] },
@@ -180,6 +192,8 @@ export function buildRoutes(surface = getSurface()) {
     { path: '/', element: page(AcademyLandingPage) },
     { path: '/courses', element: page(AcademyCatalog) },
     { path: '/courses/:slug', element: page(CourseLandingPage) },
+    { path: '/webinars/:slug', element: page(WebinarPage) },
+    { path: '/live/ticket/:code', element: page(TicketPage) },
     { element: <GuestOnly />, children: [{ path: '/login', element: page(LoginPage) }, { path: '/register', element: page(StudentRegisterPage) }] },
     ...sharedAuthRoutes,
     {
@@ -193,10 +207,12 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/learn/certificates', element: page(StudentCertificatesPage) },
             { path: '/learn/orders', element: page(StudentOrdersPage) },
             { path: '/learn/orders/:id', element: page(OrderStatusPage) },
+            { path: '/learn/live', element: page(StudentLivePage) },
           ],
         },
         { path: '/learn/courses/:courseId', element: page(PlayerPage) },
         { path: '/checkout/:slug', element: page(CheckoutPage) },
+        { path: '/learn/live/:id', element: page(StudentRoomPage) },
       ],
     },
   ];

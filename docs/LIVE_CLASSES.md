@@ -1,6 +1,6 @@
 # Live Classes & Webinars
 
-Status: **Phase 0 design** — implemented in Phase 9.
+Status: **Phase 9 shipped**: LiveKit (full) and meeting-link classes for Zoom/Meet/Teams (link + click attendance). The Zoom and Google Meet API adapters below remain design only. See DEVELOPMENT_PROGRESS → Phase 9.
 
 ## Provider abstraction
 ```ts

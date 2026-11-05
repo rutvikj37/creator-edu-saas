@@ -62,3 +62,9 @@ Status: **Phase 0 design**. Live docs will be served by Swagger at `/api/docs` (
 | 7 | `GET /platform/billing/gateway` · `GET /platform/billing/subscriptions|invoices` · `GET /platform/billing/invoices/:id/pdf` · `POST /platform/billing/invoices/:id/record-payment|void` | platform.finance.read / manage | Subscriptions, invoices, bank-transfer recording |
 | 7 | `POST /webhooks/razorpay/platform` | public (X-Razorpay-Signature) | Platform Razorpay webhook (plan billing) |
 | 8 | `GET /creator/domains/subdomains/availability?name=` · `POST /creator/domains/subdomains` | domains.manage | Branded subdomains on the platform domain (live instantly, max 3) |
+| 9 | `GET /creator/live/providers` · `GET/POST /creator/live/classes` · `GET/PATCH /creator/live/classes/:id` · `POST /classes/:id/cancel` · `POST /creator/live/sessions/:id/cancel|host|end` | live.manage + live_classes | Schedule and run live classes/webinars |
+| 9 | `GET /creator/live/sessions/:id/attendance[.csv]|recording|admissions|polls|questions` · `POST /sessions/:id/admissions/:aid` · `POST /sessions/:id/polls[/:pid/close]` · `POST /sessions/:id/questions/:qid/answer` | live.manage | Attendance, recordings, waiting room, polls, Q&A |
+| 9 | `GET/POST /creator/batches` · `GET/PATCH /creator/batches/:id` · `POST /:id/members` · `POST /:id/members/:mid/remove` · `POST /:id/archive` | students.read / students.manage | Batches |
+| 9 | `GET /learn/live/upcoming|recordings` · `GET /learn/live/sessions/:id/recording|admission|polls|questions` · `POST /sessions/:id/join` · `POST /polls/:pid/vote` · `POST /questions[/:qid/upvote]` | student | Join, waiting room, polls, Q&A, recordings |
+| 9 | `GET /public/webinars/:slug` · `POST /:slug/register` · `GET /public/live/tickets/:code` · `POST /tickets/:code/join` · ticket polls/Q&A | public (academy host) | Webinar registration and ticket joining |
+| 9 | `POST /webhooks/livekit` | public (LiveKit JWT) | Attendance, room and recording events |

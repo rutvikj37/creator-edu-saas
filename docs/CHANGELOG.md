@@ -2,6 +2,16 @@
 
 Format: Keep a Changelog. Versions follow SemVer once Phase 1 ships.
 
+## [0.9.0] — 2026-11-05 — Phase 9: Live learning
+### Added
+- LiveKit classroom (waiting room, host controls, attendance webhooks, recordings to the video library), meeting-link classes, weekly recurrence, polls and Q&A, reminders, free webinars with ticket links, batches.
+### Fixed
+- JSON bodies were empty after adding the webhook content-type parser (caught by tests before release); Asia/Kolkata time zone accepted; recurring classes no longer skip the first session.
+
+## [0.8.0] — 2026-11-05 — Phase 8 (partial): Domains, website and blog API
+### Added
+- Free branded subdomains alongside own domains; website pages from blocks with drafts, publishing, versions, templates; blog. Builder UI deferred.
+
 ## [0.7.0] — 2026-11-05 — Phase 7: Commerce (Razorpay)
 ### Added
 - Academy-owned Razorpay accounts, checkout with coupons and GST, signature-verified payments, webhooks, reconciliation, refunds, invoices (FY series), ledger with plan commission, receipt/refund emails, creator orders/coupons/transactions/payments pages, student checkout and order history, platform finance overview and transactions.
