@@ -12,6 +12,7 @@ export const QUEUES = {
   LIVE: 'live',
   ANALYTICS: 'analytics',
   AI: 'ai',
+  BACKUPS: 'backups',
   DOMAINS: 'domains',
 } as const;
 

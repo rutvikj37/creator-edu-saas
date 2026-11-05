@@ -8,12 +8,10 @@ import { QuizzesService } from '../assessment/quizzes.service.js';
 import { AssignmentsService } from '../assessment/assignments.service.js';
 import { CertificatesService } from '../certificates/certificates.service.js';
 import { PublicCertificatesController } from '../certificates/public-certificates.controller.js';
-import { VideosService } from '../videos/videos.service.js';
-import { CreatorVideosController, LearnVideoController } from '../videos/videos.controller.js';
 
 @Module({
-  controllers: [CatalogController, LearnController, CreatorLearningController, PublicCertificatesController, CreatorVideosController, LearnVideoController],
-  providers: [LearningService, CreatorLearningService, QuizzesService, AssignmentsService, CertificatesService, VideosService],
+  controllers: [CatalogController, LearnController, CreatorLearningController, PublicCertificatesController],
+  providers: [LearningService, CreatorLearningService, QuizzesService, AssignmentsService, CertificatesService],
   exports: [LearningService],
 })
 export class LearningModule {}

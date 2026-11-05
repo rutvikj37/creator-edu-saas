@@ -9,7 +9,8 @@ import { NotificationsWorkerModule } from './modules/notifications/notifications
 import { MarketingWorkerModule } from './modules/marketing/marketing.module.js';
 import { AffiliatesWorkerModule } from './modules/affiliates/affiliates.module.js';
 import { MembershipsWorkerModule } from './modules/memberships/memberships.module.js';
+import { VideosWorkerModule } from './modules/videos/videos.module.js';
 
 /** Background worker process: BullMQ processors and schedulers, no HTTP server. */
-@Module({ imports: [CoreModule, MaintenanceWorkerModule, MailWorkerModule, SubscriptionsModule, CommerceWorkerModule, LiveWorkerModule, NotificationsWorkerModule, MarketingWorkerModule, AffiliatesWorkerModule, MembershipsWorkerModule] })
+@Module({ imports: [CoreModule, MaintenanceWorkerModule, MailWorkerModule, SubscriptionsModule, CommerceWorkerModule, LiveWorkerModule, NotificationsWorkerModule, MarketingWorkerModule, AffiliatesWorkerModule, MembershipsWorkerModule, VideosWorkerModule] })
 export class WorkerModule {}

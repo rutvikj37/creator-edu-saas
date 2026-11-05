@@ -499,7 +499,7 @@ export class LiveService {
     if (!who.staff && !(await this.mayAttend(s.liveClass, who.userId, who.registrationId))) throw AppException.forbidden('You are not part of this session.');
     if (s.recordingStatus !== 'READY' || !s.videoAssetId) throw AppException.notFound('No recording for this session');
     const v = await this.db.videoAsset.findFirst({ where: { id: s.videoAssetId } });
-    const f = v && (await this.db.fileAsset.findFirst({ where: { id: v.sourceFileId } }));
+    const f = v?.sourceFileId && (await this.db.fileAsset.findFirst({ where: { id: v.sourceFileId } }));
     if (!f) throw AppException.notFound('No recording for this session');
     return { url: await this.storage.downloadUrl(f, f.fileName, apiOrigin, 4 * 3600), title: v!.title, durationSeconds: v!.durationSeconds };
   }

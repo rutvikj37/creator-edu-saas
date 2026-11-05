@@ -52,6 +52,32 @@ export const envSchema = z.object({
   LIVEKIT_URL: z.string().optional(),
   LIVEKIT_API_KEY: z.string().optional(),
   LIVEKIT_API_SECRET: z.string().optional(),
+  // Bunny Stream (primary video provider). Without these, uploads use private storage (Phase 6).
+  BUNNY_STREAM_API_KEY: z.string().optional(),
+  BUNNY_STREAM_LIBRARY_ID: z.string().regex(/^\d+$/).optional().or(z.literal('')),
+  BUNNY_STREAM_CDN_HOSTNAME: z.string().optional(),
+  /** Shared secret embedded in the webhook URL configured in Bunny (≥ 24 chars). */
+  BUNNY_STREAM_WEBHOOK_SECRET: z.string().optional(),
+  /** Library "Token authentication key" — signs player embed tokens. */
+  BUNNY_STREAM_TOKEN_AUTH_KEY: z.string().optional(),
+  /** Optional account API key: reads library storage/traffic usage from the core API. */
+  BUNNY_ACCOUNT_API_KEY: z.string().optional(),
+  BUNNY_STREAM_API_BASE_URL: z.string().url().default('https://video.bunnycdn.com'),
+  BUNNY_CORE_API_BASE_URL: z.string().url().default('https://api.bunny.net'),
+  BUNNY_STREAM_TUS_ENDPOINT: z.string().url().default('https://video.bunnycdn.com/tusupload'),
+  BUNNY_STREAM_EMBED_BASE_URL: z.string().url().default('https://iframe.mediadelivery.net'),
+  /** Upload limits for video files. */
+  VIDEO_MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(20 * 1024 ** 3),
+  VIDEO_PROCESSING_TIMEOUT_MINUTES: z.coerce.number().int().positive().default(180),
+  // Google Drive backups (optional; backups report "not connected" without these)
+  GOOGLE_DRIVE_CLIENT_ID: z.string().optional(),
+  GOOGLE_DRIVE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_DRIVE_REDIRECT_URI: z.string().url().optional().or(z.literal('')),
+  GOOGLE_DRIVE_ROOT_FOLDER: z.string().default('TechX-LMS-Backups'),
+  /** Test-only override of https://www.googleapis.com/ */
+  GOOGLE_API_ROOT_URL: z.string().url().optional().or(z.literal('')),
+  /** 32-byte key (base64) that encrypts backup files. Keep a copy offline: without it backups cannot be restored. */
+  BACKUP_ENCRYPTION_KEY: z.string().optional().refine((v) => !v || Buffer.from(v, 'base64').length === 32, 'BACKUP_ENCRYPTION_KEY must be 32 bytes, base64-encoded'),
   ANTHROPIC_API_KEY: z.string().optional(),
   /** Claude model for AI features. */
   ANTHROPIC_MODEL: z.string().default('claude-opus-5-5'),

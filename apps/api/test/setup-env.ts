@@ -18,3 +18,15 @@ delete process.env.GOOGLE_CLIENT_ID;
 delete process.env.SMS_PROVIDER;
 process.env.STORAGE_DRIVER = 'local';
 process.env.LOCAL_STORAGE_DIR = '/tmp/ce-e2e-storage';
+// Bunny Stream: the e2e suite routes provider HTTP through test/bunny-sim.ts (no network).
+process.env.BUNNY_STREAM_API_KEY = 'test-bunny-library-key';
+process.env.BUNNY_STREAM_LIBRARY_ID = '424242';
+process.env.BUNNY_STREAM_CDN_HOSTNAME = 'vz-test.b-cdn.net';
+process.env.BUNNY_STREAM_WEBHOOK_SECRET = 'test-webhook-secret-0123456789abcdef';
+process.env.BUNNY_STREAM_TOKEN_AUTH_KEY = 'test-token-auth-key';
+process.env.BUNNY_ACCOUNT_API_KEY = 'test-bunny-account-key';
+// Google Drive backups: test/drive-sim.ts serves the Drive API on a local port.
+process.env.GOOGLE_DRIVE_CLIENT_ID = 'test-drive-client.apps.googleusercontent.com';
+process.env.GOOGLE_DRIVE_CLIENT_SECRET = 'test-drive-client-secret';
+process.env.GOOGLE_DRIVE_REDIRECT_URI = 'http://api.lvh.me:4000/api/v1/backups/drive/oauth/callback';
+process.env.BACKUP_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString('base64');

@@ -1208,58 +1208,270 @@ model CertificateVerification {
 
 /// Delivery backend. STORAGE = private object storage with short-lived signed URLs (no DRM).
 enum VideoProviderType {
+  /// Private object storage with signed URLs (Phase 6, no transcoding).
   STORAGE
+  /// Bunny Stream (encoding, HLS, CDN).
+  BUNNY
 }
 
 enum VideoStatus {
+  CREATED
+  UPLOAD_AUTHORIZED
+  UPLOADING
   UPLOADED
   PROCESSING
   READY
   FAILED
+  DELETING
+  DELETED
 }
 
 enum VideoProtection {
+  /// Short-lived signed storage URL.
   SIGNED
+  /// Provider token authentication (Bunny embed token). Not DRM.
+  TOKEN
+}
+
+enum VideoUploadStatus {
+  AUTHORIZED
+  UPLOADING
+  COMPLETED
+  FAILED
+  EXPIRED
+  CANCELLED
+}
+
+enum BackupProviderType {
+  GOOGLE_DRIVE
+}
+
+enum BackupStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  RETRYING
+}
+
+enum RestoreStatus {
+  NONE
+  IN_PROGRESS
+  COMPLETED
+  FAILED
 }
 
 model VideoAsset {
-  id              String                 @id @default(cuid()) @db.Char(25)
-  tenantId        String                 @db.Char(25)
-  title           String                 @db.VarChar(200)
-  sourceFileId    String                 @db.Char(25)
-  provider        VideoProviderType
-  providerAssetId String?                @db.VarChar(191)
-  playbackId      String?                @db.VarChar(191)
-  status          VideoStatus            @default(UPLOADED)
-  protection      VideoProtection        @default(SIGNED)
-  durationSeconds Int?
-  errorMessage    String?                @db.VarChar(500)
-  createdById     String                 @db.Char(25)
-  createdAt       DateTime               @default(now()) @db.DateTime(3)
-  updatedAt       DateTime               @updatedAt @db.DateTime(3)
-  deletedAt       DateTime?              @db.DateTime(3)
-  sessions        VideoPlaybackSession[]
+  id                   String                 @id @default(cuid()) @db.Char(25)
+  tenantId             String                 @db.Char(25)
+  title                String                 @db.VarChar(200)
+  /// STORAGE videos only (the uploaded FileAsset). Null for provider-hosted videos.
+  sourceFileId         String?                @db.Char(25)
+  provider             VideoProviderType
+  /// Provider's video id (Bunny video GUID).
+  providerAssetId      String?                @db.VarChar(191)
+  playbackId           String?                @db.VarChar(191)
+  status               VideoStatus            @default(UPLOADED)
+  protection           VideoProtection        @default(SIGNED)
+  courseId             String?                @db.Char(25)
+  lessonId             String?                @db.Char(25)
+  originalFilename     String?                @db.VarChar(255)
+  mimeType             String?                @db.VarChar(127)
+  originalSize         BigInt?
+  durationSeconds      Int?
+  width                Int?
+  height               Int?
+  thumbnailUrl         String?                @db.VarChar(1024)
+  availableResolutions String?                @db.VarChar(255)
+  /// Bytes the provider stores for all renditions (Bunny `storageSize`).
+  storageSize          BigInt?
+  encodeProgress       Int?
+  /// Raw provider status code from the last API read (Bunny 0–8).
+  providerStatus       Int?
+  /// SHA-256 of the original upload as reported by the provider (Bunny `originalHash`).
+  originalHash         String?                @db.VarChar(128)
+  processingRound      Int                    @default(0)
+  processingStartedAt  DateTime?              @db.DateTime(3)
+  readyAt              DateTime?              @db.DateTime(3)
+  lastSyncedAt         DateTime?              @db.DateTime(3)
+  errorMessage         String?                @db.VarChar(500)
+  createdById          String                 @db.Char(25)
+  createdAt            DateTime               @default(now()) @db.DateTime(3)
+  updatedAt            DateTime               @updatedAt @db.DateTime(3)
+  deletedAt            DateTime?              @db.DateTime(3)
+  sessions             VideoPlaybackSession[]
+  statusHistory        VideoStatusHistory[]
+  uploadSessions       VideoUploadSession[]
+  processingEvents     VideoProcessingEvent[]
+  backups              VideoBackup[]
+  usageRecords         VideoUsageRecord[]
 
   @@unique([tenantId, id])
+  @@unique([provider, providerAssetId])
   @@index([tenantId, status, createdAt])
-  @@index([provider, providerAssetId])
+  @@index([status, updatedAt])
+  @@index([tenantId, courseId])
+}
+
+/// Every status change of a video, with who/what caused it.
+model VideoStatusHistory {
+  id           String       @id @default(cuid()) @db.Char(25)
+  tenantId     String       @db.Char(25)
+  videoAssetId String       @db.Char(25)
+  fromStatus   VideoStatus?
+  toStatus     VideoStatus
+  /// USER | API | WEBHOOK | SYNC | WORKER
+  source       String       @db.VarChar(16)
+  reason       String?      @db.VarChar(255)
+  createdAt    DateTime     @default(now()) @db.DateTime(3)
+  video        VideoAsset   @relation(fields: [tenantId, videoAssetId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, videoAssetId, createdAt])
+}
+
+/// One authorised direct upload (browser → provider). A retry creates a new session.
+model VideoUploadSession {
+  id                     String            @id @default(cuid()) @db.Char(25)
+  tenantId               String            @db.Char(25)
+  videoAssetId           String            @db.Char(25)
+  uploadStatus           VideoUploadStatus @default(AUTHORIZED)
+  attempt                Int               @default(1)
+  authorizationExpiresAt DateTime          @db.DateTime(3)
+  uploadStartedAt        DateTime?         @db.DateTime(3)
+  uploadCompletedAt      DateTime?         @db.DateTime(3)
+  errorMessage           String?           @db.VarChar(500)
+  createdById            String            @db.Char(25)
+  createdAt              DateTime          @default(now()) @db.DateTime(3)
+  updatedAt              DateTime          @updatedAt @db.DateTime(3)
+  video                  VideoAsset        @relation(fields: [tenantId, videoAssetId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, videoAssetId, createdAt])
+  @@index([uploadStatus, authorizationExpiresAt])
+}
+
+/// Provider notifications, stored once (idempotency) and processed by re-reading the provider.
+model VideoProcessingEvent {
+  id              String            @id @default(cuid()) @db.Char(25)
+  tenantId        String            @db.Char(25)
+  videoAssetId    String            @db.Char(25)
+  provider        VideoProviderType
+  /// Dedup key: the provider's event id, or a hash of the payload when the provider sends none.
+  providerEventId String            @db.VarChar(191)
+  eventType       String            @db.VarChar(64)
+  eventPayload    Json
+  result          String?           @db.VarChar(255)
+  receivedAt      DateTime          @default(now()) @db.DateTime(3)
+  processedAt     DateTime?         @db.DateTime(3)
+  video           VideoAsset        @relation(fields: [tenantId, videoAssetId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([provider, providerEventId])
+  @@index([tenantId, videoAssetId, receivedAt])
+}
+
+/// Encrypted copy of a video's original upload in the backup store.
+model VideoBackup {
+  id             String             @id @default(cuid()) @db.Char(25)
+  tenantId       String             @db.Char(25)
+  videoAssetId   String             @db.Char(25)
+  provider       BackupProviderType
+  status         BackupStatus       @default(PENDING)
+  driveFileId    String?            @db.VarChar(191)
+  metadataFileId String?            @db.VarChar(191)
+  backupFilename String             @db.VarChar(255)
+  /// Size of the encrypted object.
+  backupSize     BigInt?
+  /// Size of the original (plaintext) file.
+  originalSize   BigInt?
+  /// SHA-256 (hex) of the original file computed while backing up.
+  checksum       String?            @db.VarChar(64)
+  /// MD5 (hex) of the encrypted object, compared with the backup store's checksum.
+  encryptedMd5   String?            @db.VarChar(32)
+  /// Algorithm, IV and wrapped data key (never the plain key).
+  encryption     Json?
+  attempts       Int                @default(0)
+  startedAt      DateTime?          @db.DateTime(3)
+  completedAt    DateTime?          @db.DateTime(3)
+  errorMessage   String?            @db.VarChar(500)
+  restoreStatus  RestoreStatus      @default(NONE)
+  restoredAt     DateTime?          @db.DateTime(3)
+  restoreError   String?            @db.VarChar(500)
+  createdAt      DateTime           @default(now()) @db.DateTime(3)
+  updatedAt      DateTime           @updatedAt @db.DateTime(3)
+  video          VideoAsset         @relation(fields: [tenantId, videoAssetId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, videoAssetId])
+  @@index([status, updatedAt])
+}
+
+/// Encrypted copy of a selected learning document (lesson file).
+model DocumentBackup {
+  id             String             @id @default(cuid()) @db.Char(25)
+  tenantId       String             @db.Char(25)
+  fileAssetId    String             @db.Char(25)
+  courseId       String?            @db.Char(25)
+  provider       BackupProviderType
+  status         BackupStatus       @default(PENDING)
+  driveFileId    String?            @db.VarChar(191)
+  backupFilename String             @db.VarChar(255)
+  backupSize     BigInt?
+  originalSize   BigInt?
+  checksum       String?            @db.VarChar(64)
+  encryptedMd5   String?            @db.VarChar(32)
+  encryption     Json?
+  attempts       Int                @default(0)
+  startedAt      DateTime?          @db.DateTime(3)
+  completedAt    DateTime?          @db.DateTime(3)
+  errorMessage   String?            @db.VarChar(500)
+  createdAt      DateTime           @default(now()) @db.DateTime(3)
+  updatedAt      DateTime           @updatedAt @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, fileAssetId])
+  @@index([status, updatedAt])
+}
+
+/// Monthly usage snapshot per video (storage from the provider; delivery allocated from provider totals).
+model VideoUsageRecord {
+  id             String     @id @default(cuid()) @db.Char(25)
+  tenantId       String     @db.Char(25)
+  videoAssetId   String     @db.Char(25)
+  /// YYYY-MM (UTC)
+  billingPeriod  String     @db.Char(7)
+  storageBytes   BigInt     @default(0)
+  deliveryBytes  BigInt     @default(0)
+  watchSeconds   BigInt     @default(0)
+  views          Int        @default(0)
+  /// How deliveryBytes was obtained: NONE | ALLOCATED_BY_WATCH_TIME
+  deliverySource String     @default("NONE") @db.VarChar(32)
+  recordedAt     DateTime   @default(now()) @db.DateTime(3)
+  video          VideoAsset @relation(fields: [tenantId, videoAssetId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([videoAssetId, billingPeriod])
+  @@index([tenantId, billingPeriod])
 }
 
 model VideoPlaybackSession {
-  id           String     @id @default(cuid()) @db.Char(25)
-  tenantId     String     @db.Char(25)
-  videoAssetId String     @db.Char(25)
-  lessonId     String     @db.Char(25)
-  userId       String     @db.Char(25)
-  enrollmentId String     @db.Char(25)
-  ipHash       String?    @db.Char(64)
-  userAgent    String?    @db.VarChar(512)
-  lastSeenAt   DateTime   @default(now()) @db.DateTime(3)
-  expiresAt    DateTime   @db.DateTime(3)
-  revokedAt    DateTime?  @db.DateTime(3)
-  revokeReason String?    @db.VarChar(64)
-  createdAt    DateTime   @default(now()) @db.DateTime(3)
-  video        VideoAsset @relation(fields: [tenantId, videoAssetId], references: [tenantId, id], onDelete: Cascade)
+  id               String     @id @default(cuid()) @db.Char(25)
+  tenantId         String     @db.Char(25)
+  videoAssetId     String     @db.Char(25)
+  lessonId         String     @db.Char(25)
+  userId           String     @db.Char(25)
+  enrollmentId     String     @db.Char(25)
+  ipHash           String?    @db.Char(64)
+  userAgent        String?    @db.VarChar(512)
+  lastSeenAt       DateTime   @default(now()) @db.DateTime(3)
+  expiresAt        DateTime   @db.DateTime(3)
+  revokedAt        DateTime?  @db.DateTime(3)
+  revokeReason     String?    @db.VarChar(64)
+  /// SHA-256 of the playback token handed to the player (provider-token videos).
+  sessionTokenHash String?    @db.Char(64)
+  createdAt        DateTime   @default(now()) @db.DateTime(3)
+  video            VideoAsset @relation(fields: [tenantId, videoAssetId], references: [tenantId, id], onDelete: Cascade)
 
   @@unique([tenantId, id])
   @@index([tenantId, userId, lastSeenAt])

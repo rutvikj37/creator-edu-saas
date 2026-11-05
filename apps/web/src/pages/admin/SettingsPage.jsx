@@ -4,7 +4,7 @@ import { PageHeader } from '../../components/layout/PageHeader.jsx';
 import { Button, Card, CardBody, ErrorState, Input, Skeleton, Switch, Tabs, toast } from '../../components/ui/index.js';
 import { platformApi } from '../../services/api/platform.js';
 
-const GROUP_LABELS = { branding: 'Branding', general: 'General', registration: 'Registration', email: 'Email', sms: 'SMS', whatsapp: 'WhatsApp', payments: 'Payments', tax: 'Tax', legal: 'Legal', system: 'System' };
+const GROUP_LABELS = { branding: 'Branding', general: 'General', registration: 'Registration', email: 'Email', sms: 'SMS', whatsapp: 'WhatsApp', payments: 'Payments', tax: 'Tax', legal: 'Legal', video: 'Video costs', backups: 'Backups', system: 'System' };
 
 export function SettingsPage() {
   const qc = useQueryClient();

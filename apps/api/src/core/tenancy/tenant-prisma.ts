@@ -11,7 +11,7 @@ export const TENANT_MODELS = new Set<string>(['TenantMember', 'TenantSetting', '
   'Academy', 'TenantBusinessProfile', 'FileAsset', 'Course', 'CourseInstructor', 'CourseSection', 'CourseLesson', 'StaffInvitation',
   'Enrollment', 'LessonProgress', 'LessonNote', 'CourseBookmark', 'LessonComment', 'Quiz', 'QuizQuestion', 'QuizOption', 'QuizAttempt', 'QuizAnswer',
   'Assignment', 'AssignmentSubmission', 'CertificateTemplate', 'Certificate',
-  'VideoAsset', 'VideoPlaybackSession',
+  'VideoAsset', 'VideoPlaybackSession', 'VideoStatusHistory', 'VideoUploadSession', 'VideoProcessingEvent', 'VideoBackup', 'DocumentBackup', 'VideoUsageRecord',
   'AiRequest', 'PaymentGatewayAccount', 'Coupon', 'CouponRedemption', 'Order', 'OrderItem', 'Payment', 'Refund', 'LedgerEntry', 'Invoice', 'TenantSequence',
   'BillingInvoice', 'BillingPayment',
   'SiteSettings', 'SitePage', 'SitePageVersion', 'BlogPost',
