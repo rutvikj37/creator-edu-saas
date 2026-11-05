@@ -52,6 +52,9 @@ export const envSchema = z.object({
   LIVEKIT_URL: z.string().optional(),
   LIVEKIT_API_KEY: z.string().optional(),
   LIVEKIT_API_SECRET: z.string().optional(),
+  ANTHROPIC_API_KEY: z.string().optional(),
+  /** Claude model for AI features. */
+  ANTHROPIC_MODEL: z.string().default('claude-opus-5-5'),
   // SMS (optional; OTP over SMS reports "not configured" without these)
   SMS_PROVIDER: z.enum(['twilio', 'msg91']).optional(),
   TWILIO_ACCOUNT_SID: z.string().optional(),

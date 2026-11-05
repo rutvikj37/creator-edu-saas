@@ -2302,3 +2302,42 @@ model Membership {
   @@unique([tenantId, userId, planId])
   @@index([status, currentPeriodEnd])
 }
+
+// ── Phase 10.9: AI with monthly credits ───────────────────────
+
+enum AiFeature {
+  COURSE_OUTLINE
+  LESSON_DRAFT
+  QUIZ_QUESTIONS
+  TUTOR
+}
+
+enum AiRequestStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUSED
+}
+
+/// One Claude call. Credits are reserved before the call (PENDING) and settled to the real usage after.
+model AiRequest {
+  id              String          @id @default(cuid()) @db.Char(25)
+  tenantId        String          @db.Char(25)
+  userId          String          @db.Char(25)
+  feature         AiFeature
+  status          AiRequestStatus @default(PENDING)
+  model           String?         @db.VarChar(64)
+  courseId        String?         @db.Char(25)
+  reservedCredits Int
+  creditsCharged  Int             @default(0)
+  inputTokens     Int             @default(0)
+  outputTokens    Int             @default(0)
+  latencyMs       Int?
+  error           String?         @db.VarChar(500)
+  createdAt       DateTime        @default(now()) @db.DateTime(3)
+  updatedAt       DateTime        @updatedAt @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, userId, feature, createdAt])
+}

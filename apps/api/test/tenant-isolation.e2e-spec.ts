@@ -53,6 +53,9 @@ const WORKSPACE_ROUTES_COVERED = [
   'POST /api/v1/creator/communities/posts/:postId/comments', 'POST /api/v1/creator/communities/posts/:postId/moderate', 'DELETE /api/v1/creator/communities/posts/:postId',
   'POST /api/v1/creator/communities/comments/:commentId/hide', 'GET /api/v1/creator/communities/reports', 'POST /api/v1/creator/communities/reports/:reportId/resolve',
   'GET /api/v1/creator/memberships', 'POST /api/v1/creator/memberships', 'PATCH /api/v1/creator/memberships/:id', 'GET /api/v1/creator/memberships/:id/members',
+  // Phase 10 — AI (cross-tenant checks in ai.e2e-spec.ts)
+  'GET /api/v1/creator/ai/usage', 'GET /api/v1/creator/ai/settings', 'PUT /api/v1/creator/ai/settings', 'POST /api/v1/creator/ai/course-outline',
+  'POST /api/v1/creator/ai/courses/:id/apply-outline', 'POST /api/v1/creator/ai/lesson-draft', 'POST /api/v1/creator/ai/quiz-questions',
   // Phase 10 — analytics & exports (cross-tenant checks in analytics.e2e-spec.ts)
   'GET /api/v1/creator/analytics/overview', 'GET /api/v1/creator/analytics/courses', 'GET /api/v1/creator/analytics/gst', 'GET /api/v1/creator/analytics/exports/gst.csv',
   'GET /api/v1/creator/analytics/exports/orders.csv', 'GET /api/v1/creator/analytics/exports/students.csv', 'GET /api/v1/creator/analytics/exports/enrollments.csv',
