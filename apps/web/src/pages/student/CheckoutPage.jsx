@@ -7,7 +7,8 @@ import { z } from 'zod';
 import { Lock, ShieldCheck, Tag, X } from 'lucide-react';
 import { academyApi } from '../../services/api/auth.js';
 import { catalogApi } from '../../services/api/learn.js';
-import { checkoutApi } from '../../services/api/commerce.js';
+import { bundlesApi, checkoutApi } from '../../services/api/commerce.js';
+import { useQueryClient } from '@tanstack/react-query';
 import { Alert } from '../../components/auth/Alert.jsx';
 import { Button, Card, CardBody, CardHeader, ErrorState, Input, Skeleton, toast } from '../../components/ui/index.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -28,20 +29,25 @@ const schema = z.object({
 const newKey = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
 export function CheckoutPage() {
-  const { slug, planId } = useParams();
+  const { slug, planId, bundleSlug } = useParams();
   const isPlan = Boolean(planId);
+  // What is being bought: a course, a membership plan, a bundle, or the whole cart (/cart/checkout).
+  const mode = isPlan ? 'plan' : bundleSlug ? 'bundle' : slug ? 'course' : 'cart';
+  const qc = useQueryClient();
   const auth = useAuth();
   const navigate = useNavigate();
   const site = useQuery({ queryKey: ['brand', 'academy'], queryFn: academyApi.site, staleTime: 5 * 60_000 });
   // A checkout sells either a course (by slug) or a membership plan (by id).
   const course = useQuery({
-    queryKey: isPlan ? ['public', 'memberships', planId] : ['catalog', slug],
-    queryFn: isPlan
+    queryKey: ['checkout', 'product', mode, planId ?? bundleSlug ?? slug ?? 'cart'],
+    queryFn: mode === 'plan'
       ? async () => {
           const p = (await membershipsApi.publicPlans()).find((x) => x.id === planId);
           if (!p) throw Object.assign(new Error('This membership is not available.'), { status: 404 });
           return { ...p, title: p.name, currency: p.currency };
         }
+      : mode === 'bundle' ? () => bundlesApi.publicGet(bundleSlug)
+      : mode === 'cart' ? async () => ({ id: 'cart', title: 'Your cart' })
       : () => catalogApi.course(slug),
     retry: false,
   });
@@ -52,10 +58,10 @@ export function CheckoutPage() {
   const [showGst, setShowGst] = useState(false);
   // One idempotency key per distinct checkout attempt; changes when the coupon changes.
   const attempt = useRef({ key: newKey(), orderId: null, coupon: null });
-  const courseId = isPlan ? undefined : course.data?.id;
-  const product = isPlan ? { membershipPlanId: planId } : { courseId };
+  const courseId = mode === 'course' ? course.data?.id : undefined;
+  const product = mode === 'plan' ? { membershipPlanId: planId } : mode === 'bundle' ? { bundleId: course.data?.id } : mode === 'cart' ? { fromCart: true } : { courseId };
   const quote = useQuery({
-    queryKey: ['checkout', 'quote', isPlan ? planId : courseId, applied],
+    queryKey: ['checkout', 'quote', mode, course.data?.id ?? planId, applied],
     queryFn: () => checkoutApi.quote({ ...product, couponCode: applied || undefined }),
     enabled: Boolean(course.data),
     retry: false,
@@ -83,7 +89,7 @@ export function CheckoutPage() {
         const order = await checkoutApi.checkout({ ...product, couponCode: applied || undefined, billing: { name: v.name, phone: v.phone || undefined, state: v.state || undefined, gstin: v.gstin || undefined }, affiliateCode: storedReferral() ?? undefined }, attempt.current.key);
         orderId = order.id;
         attempt.current.orderId = orderId;
-        if (order.status === 'PAID') return navigate(`/learn/orders/${orderId}`, { replace: true });
+        if (order.status === 'PAID') { qc.invalidateQueries({ queryKey: ['cart'] }); return navigate(`/learn/orders/${orderId}`, { replace: true }); }
       }
       const { checkout } = await checkoutApi.pay(orderId);
       const result = await openRazorpay(checkout, { color: site.data?.theme?.primaryColor });
@@ -99,11 +105,12 @@ export function CheckoutPage() {
       }
       // Hand off to the order page; it confirms with the server and polls if needed.
       await checkoutApi.confirm(orderId, result).catch(() => {});
+      qc.invalidateQueries({ queryKey: ['cart'] });
       navigate(`/learn/orders/${orderId}`, { replace: true });
     } catch (e) {
       if (e.code === 'CONFLICT' && /already have access/.test(e.message)) {
         toast.success('You already have access');
-        return navigate(isPlan ? '/learn' : `/learn/courses/${courseId}`);
+        return navigate(mode === 'course' ? `/learn/courses/${courseId}` : '/learn');
       }
       if (e.status === 409 && /expired/i.test(e.message)) attempt.current = { key: newKey(), orderId: null, coupon: applied };
       if (e.details?.[0]?.field === 'couponCode') setCouponError(e.details[0].message);
@@ -113,7 +120,8 @@ export function CheckoutPage() {
     }
   });
 
-  if (course.isError) return <div className="grid min-h-dvh place-items-center"><ErrorState title={isPlan ? 'Membership not found' : 'Course not found'} error={course.error} /></div>;
+  const noun = { plan: 'membership', bundle: 'bundle', cart: 'cart', course: 'course' }[mode];
+  if (course.isError) return <div className="grid min-h-dvh place-items-center"><ErrorState title={`${noun[0].toUpperCase()}${noun.slice(1)} not found`} error={course.error} /></div>;
   const c = course.data;
   const qd = quote.data;
   const cur = qd?.currency ?? c?.currency;
@@ -122,10 +130,10 @@ export function CheckoutPage() {
     <div className="min-h-dvh bg-surface-2" style={{ fontFamily: site.data?.theme?.fontBody }}>
       <AcademyHeader site={site.data} />
       <main className="mx-auto max-w-5xl px-4 py-8">
-        <Link to={isPlan ? '/memberships' : `/courses/${slug}`} className="text-sm text-muted hover:text-fg">← Back to {isPlan ? 'memberships' : 'course'}</Link>
+        <Link to={{ plan: '/memberships', bundle: `/bundles/${bundleSlug}`, cart: '/cart', course: `/courses/${slug}` }[mode]} className="text-sm text-muted hover:text-fg">← Back to {mode === 'plan' ? 'memberships' : noun}</Link>
         <h1 className="mt-2 mb-6 text-2xl font-semibold">Checkout</h1>
         {!c || quote.isLoading ? <Skeleton className="h-80" /> : quote.isError ? (
-          <Alert tone="error" title={`This ${isPlan ? 'membership' : 'course'} can't be bought right now`}>{quote.error.message}</Alert>
+          <Alert tone="error" title={mode === 'cart' ? "Your cart can't be checked out right now" : `This ${noun} can't be bought right now`}>{quote.error.message}{mode === 'cart' && <> <Link to="/cart" className="underline">Review your cart</Link></>}</Alert>
         ) : (
           <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
             <Card>
@@ -150,8 +158,14 @@ export function CheckoutPage() {
               <Card>
                 <CardBody className="space-y-4">
                   <div>
-                    <p className="text-xs font-medium tracking-wide text-muted uppercase">{isPlan ? 'Membership' : 'Course'}</p>
-                    <p className="mt-1 font-semibold">{c.title}</p>
+                    <p className="text-xs font-medium tracking-wide text-muted uppercase">{mode === 'cart' ? `${qd.items?.length ?? 0} item${qd.items?.length === 1 ? '' : 's'}` : mode === 'bundle' ? `Bundle · ${c.courseCount} courses` : mode === 'plan' ? 'Membership' : 'Course'}</p>
+                    {mode === 'cart' ? (
+                      <ul className="mt-2 space-y-1.5 text-sm">
+                        {(qd.items ?? []).map((i) => (
+                          <li key={`${i.kind}${i.id}`} className="flex justify-between gap-3"><span className="min-w-0">{i.title}{Number(i.discount) > 0 && <span className="block text-xs text-green-700">−{m(i.discount)}</span>}</span><span className="shrink-0 tabular-nums">{m(i.unit)}</span></li>
+                        ))}
+                      </ul>
+                    ) : <p className="mt-1 font-semibold">{c.title}</p>}
                     {isPlan && <p className="mt-1 text-xs text-muted">{c.courses?.length ?? 0} courses for one {c.interval === 'YEAR' ? 'year' : 'month'}. Paying again later extends your access; nothing renews automatically.</p>}
                   </div>
                   {applied ? (

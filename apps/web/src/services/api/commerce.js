@@ -57,3 +57,20 @@ export const platformBillingApi = {
   recordPayment: (id, reference) => http.post(`/platform/billing/invoices/${id}/record-payment`, { reference }).then(d),
   void: (id, reason) => http.post(`/platform/billing/invoices/${id}/void`, { reason }).then(d),
 };
+
+export const bundlesApi = {
+  list: () => http.get('/creator/bundles').then(d),
+  get: (id) => http.get(`/creator/bundles/${id}`).then(d),
+  create: (body) => http.post('/creator/bundles', body).then(d),
+  update: (id, body) => http.patch(`/creator/bundles/${id}`, body).then(d),
+  setStatus: (id, status) => http.post(`/creator/bundles/${id}/status`, { status }).then(d),
+  publicList: () => http.get('/public/bundles').then(d),
+  publicGet: (slug) => http.get(`/public/bundles/${slug}`).then(d),
+};
+
+export const cartApi = {
+  get: () => http.get('/learn/cart').then(d),
+  add: (body) => http.post('/learn/cart/items', body).then(d),
+  remove: (id) => http.delete(`/learn/cart/items/${id}`).then(d),
+  clear: () => http.delete('/learn/cart').then(d),
+};

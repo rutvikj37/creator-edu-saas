@@ -88,6 +88,7 @@ const WORKSPACE_ROUTES_COVERED = [
   // Phase 7 — commerce (cross-tenant behaviour is also exercised in commerce.e2e-spec.ts)
   'GET /api/v1/creator/payments/razorpay', 'PUT /api/v1/creator/payments/razorpay', 'POST /api/v1/creator/payments/razorpay/verify', 'PATCH /api/v1/creator/payments/razorpay', 'DELETE /api/v1/creator/payments/razorpay',
   'GET /api/v1/creator/coupons', 'POST /api/v1/creator/coupons', 'PATCH /api/v1/creator/coupons/:id', 'DELETE /api/v1/creator/coupons/:id',
+  'GET /api/v1/creator/bundles', 'GET /api/v1/creator/bundles/:id', 'POST /api/v1/creator/bundles', 'PATCH /api/v1/creator/bundles/:id', 'POST /api/v1/creator/bundles/:id/status',
   'GET /api/v1/creator/orders', 'GET /api/v1/creator/orders/summary', 'GET /api/v1/creator/orders/:id', 'GET /api/v1/creator/orders/:id/invoice', 'POST /api/v1/creator/orders/:id/refunds',
   'GET /api/v1/creator/transactions',
   // Phase 7 — plan billing (cross-tenant checks in billing.e2e-spec.ts)
@@ -145,6 +146,15 @@ describe('Tenant isolation (e2e)', () => {
     await authed(app, B.session).patch(`/api/v1/creator/coupons/${coupon.id}`).send({ isActive: false }).expect(404);
     await authed(app, B.session).delete(`/api/v1/creator/coupons/${coupon.id}`).expect(404);
     expect((await authed(app, B.session).get('/api/v1/creator/coupons').expect(200)).body.data).toEqual([]);
+    // Bundles: another academy cannot read, edit or publish them, nor bundle this academy's courses.
+    const ca = (await authed(app, A.session).post('/api/v1/creator/courses').send({ title: 'Iso bundle 1' }).expect(201)).body.data;
+    const cb = (await authed(app, A.session).post('/api/v1/creator/courses').send({ title: 'Iso bundle 2' }).expect(201)).body.data;
+    const bundle = (await authed(app, A.session).post('/api/v1/creator/bundles').send({ title: 'Iso pack', priceAmount: 99, courseIds: [ca.id, cb.id] }).expect(201)).body.data;
+    await authed(app, B.session).get(`/api/v1/creator/bundles/${bundle.id}`).expect(404);
+    await authed(app, B.session).patch(`/api/v1/creator/bundles/${bundle.id}`).send({ title: 'Mine' }).expect(404);
+    await authed(app, B.session).post(`/api/v1/creator/bundles/${bundle.id}/status`).send({ status: 'ARCHIVED' }).expect(404);
+    await authed(app, B.session).post('/api/v1/creator/bundles').send({ title: 'Theirs', priceAmount: 1, courseIds: [ca.id, cb.id] }).expect(422);
+    expect((await authed(app, B.session).get('/api/v1/creator/bundles').expect(200)).body.data).toEqual([]);
     // Same code is free to use in another academy.
     await authed(app, B.session).post('/api/v1/creator/coupons').send({ code: 'ALPHA20', type: 'FIXED', value: 50 }).expect(201);
     await authed(app, B.session).get('/api/v1/creator/orders/ckxxxxxxxxxxxxxxxxxxxxxxx/invoice').expect(404);

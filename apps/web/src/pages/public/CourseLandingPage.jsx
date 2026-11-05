@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { Award, BookOpen, Check, Clock, Eye, FileText, Lock, PlayCircle, Users } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { cartApi } from '../../services/api/commerce.js';
+import { Award, BookOpen, Check, Clock, Eye, FileText, Lock, PlayCircle, ShoppingCart, Users } from 'lucide-react';
 import { academyApi } from '../../services/api/auth.js';
 import { catalogApi, learnApi } from '../../services/api/learn.js';
 import { Alert } from '../../components/auth/Alert.jsx';
@@ -18,6 +19,12 @@ export function CourseLandingPage() {
   const site = useQuery({ queryKey: ['brand', 'academy'], queryFn: academyApi.site, staleTime: 5 * 60_000 });
   const q = useQuery({ queryKey: ['catalog', slug], queryFn: () => catalogApi.course(slug), retry: false });
   const mine = useQuery({ queryKey: ['learn', 'enrollments'], queryFn: learnApi.enrollments, enabled: auth.status === 'authenticated' });
+  const qc = useQueryClient();
+  const addToCart = useMutation({
+    mutationFn: () => cartApi.add({ courseId: q.data.id }),
+    onSuccess: (cart) => { qc.setQueryData(['cart'], cart); toast.success('Added to your cart', { action: { label: 'View cart', onClick: () => navigate('/cart') } }); },
+    onError: (e) => toast.error(e.message),
+  });
   const [preview, setPreview] = useState(null);
   const pv = useQuery({ queryKey: ['preview', slug, preview], queryFn: () => catalogApi.preview(slug, preview), enabled: Boolean(preview) });
   useEffect(() => { if (q.data?.seoTitle) document.title = q.data.seoTitle; }, [q.data?.seoTitle]);
@@ -63,6 +70,9 @@ export function CourseLandingPage() {
                     <Button className="w-full" size="lg" loading={enroll.isPending} onClick={cta} style={{ background: color }}>{enrolled ? 'Continue learning' : c.isFree ? (auth.status === 'authenticated' ? 'Enrol for free' : 'Sign up to enrol') : auth.status === 'authenticated' ? 'Buy now' : 'Sign up to buy'}</Button>
                   ) : (
                     <Alert tone="info">Online checkout opens once this academy enables payments.</Alert>
+                  )}
+                  {!enrolled && !c.isFree && canBuy && auth.status === 'authenticated' && (
+                    <Button className="w-full" variant="secondary" leftIcon={ShoppingCart} loading={addToCart.isPending} onClick={() => addToCart.mutate()}>Add to cart</Button>
                   )}
                   <p className="text-xs text-muted">{c.accessType === 'LIFETIME' ? 'Lifetime access' : c.accessType === 'FIXED_DAYS' ? `${c.accessDays} days of access` : 'Access until a fixed date'}</p>
                 </CardBody>

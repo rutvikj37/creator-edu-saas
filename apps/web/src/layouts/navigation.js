@@ -1,7 +1,7 @@
 import {
   Activity, Award, Banknote, BarChart3, BookOpen, Boxes, Brush, Building2, ClipboardCheck, Component,
   CreditCard, Crown, FileText, FolderTree, Globe, GraduationCap, Handshake, HeartPulse, Inbox, LayoutDashboard, LifeBuoy,
-  KeyRound, Link2, Mail, Megaphone, MessagesSquare, Palette, Percent, Plug, Radio, Receipt, ScrollText, Settings, ShieldCheck,
+  KeyRound, Layers, Link2, Mail, Megaphone, MessagesSquare, Palette, Percent, Plug, Radio, Receipt, ScrollText, Settings, ShieldCheck,
   ShoppingCart, Sparkles, Tag, Ticket, UserCog, Users, Video, Wallet,
 } from 'lucide-react';
 
@@ -50,6 +50,7 @@ export const NAV = {
         item('Videos', '/creator/videos', Video, 6, { available: true, perm: 'courses.read' }),
         item('Discussions', '/creator/discussions', MessagesSquare, 5, { available: true, perm: 'courses.read' }),
         item('Certificates', '/creator/certificates', Award, 5, { available: true, perm: 'certificates.manage' }),
+        item('Bundles', '/creator/bundles', Layers, 7, { available: true, perm: 'courses.read' }),
         item('Memberships', '/creator/memberships', Crown, 10, { available: true, perm: 'courses.manage' }),
       ],
     },

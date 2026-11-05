@@ -1618,6 +1618,9 @@ model OrderItem {
   orderId          String   @db.Char(25)
   courseId         String?  @db.Char(25)
   membershipPlanId String?  @db.Char(25)
+  bundleId         String?  @db.Char(25)
+  /// Courses this line grants, fixed at purchase (a bundle's courses; the course itself otherwise).
+  grantCourseIds   Json?
   title            String   @db.VarChar(200)
   unitAmount       Decimal  @db.Decimal(19, 4)
   discountAmount   Decimal  @default(0) @db.Decimal(19, 4)
@@ -1627,6 +1630,51 @@ model OrderItem {
 
   @@unique([tenantId, id])
   @@index([tenantId, courseId])
+  @@index([tenantId, bundleId])
+}
+
+enum BundleStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+/// Several courses sold together at one price.
+model Bundle {
+  id           String       @id @default(cuid()) @db.Char(25)
+  tenantId     String       @db.Char(25)
+  title        String       @db.VarChar(200)
+  slug         String       @db.VarChar(120)
+  description  String?      @db.VarChar(2000)
+  priceAmount  Decimal      @db.Decimal(19, 4)
+  currency     String       @db.Char(3)
+  /// Ordered course ids (2–30).
+  courseIds    Json
+  coverFileId  String?      @db.Char(25)
+  status       BundleStatus @default(DRAFT)
+  publishedAt  DateTime?    @db.DateTime(3)
+  createdById  String       @db.Char(25)
+  createdAt    DateTime     @default(now()) @db.DateTime(3)
+  updatedAt    DateTime     @updatedAt @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, slug])
+  @@index([tenantId, status])
+}
+
+/// A student's cart on one academy (server-side so it follows them across devices).
+model CartItem {
+  id        String   @id @default(cuid()) @db.Char(25)
+  tenantId  String   @db.Char(25)
+  userId    String   @db.Char(25)
+  courseId  String?  @db.Char(25)
+  bundleId  String?  @db.Char(25)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, userId, courseId])
+  @@unique([tenantId, userId, bundleId])
+  @@index([tenantId, userId, createdAt])
 }
 
 enum PaymentStatus {

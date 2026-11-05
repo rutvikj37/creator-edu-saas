@@ -4,6 +4,9 @@ import { BillingService } from '../billing/billing.service.js';
 import { CreatorPlanBillingController, PlatformBillingController } from '../billing/billing.controller.js';
 import { CreatorCouponsController, CreatorOrdersController, CreatorPaymentsController, LearnCommerceController, RazorpayWebhookController } from './commerce.controller.js';
 import { CouponsService } from './coupons.service.js';
+import { BundlesService } from './bundles.service.js';
+import { CartService } from './cart.service.js';
+import { CreatorBundlesController, LearnCartController, PublicBundlesController } from './bundles.controller.js';
 import { GatewayService } from './gateway.service.js';
 import { OrdersService } from './orders.service.js';
 import { PaymentHttp } from './providers/http.js';
@@ -14,8 +17,8 @@ const SERVICES = [PaymentHttp, ...PROVIDER_CLASSES, GatewayService, CouponsServi
 
 /** Razorpay commerce (academy sales) and SaaS plan billing: HTTP API. */
 @Module({
-  controllers: [CreatorPaymentsController, CreatorCouponsController, CreatorOrdersController, LearnCommerceController, RazorpayWebhookController, CreatorPlanBillingController, PlatformBillingController],
-  providers: SERVICES,
+  controllers: [CreatorBundlesController, PublicBundlesController, LearnCartController, CreatorPaymentsController, CreatorCouponsController, CreatorOrdersController, LearnCommerceController, RazorpayWebhookController, CreatorPlanBillingController, PlatformBillingController],
+  providers: [...SERVICES, BundlesService, CartService],
   exports: [OrdersService, GatewayService],
 })
 export class CommerceModule {}

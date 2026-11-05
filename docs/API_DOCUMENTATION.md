@@ -55,6 +55,10 @@ Status: **Phase 0 design**. Live docs will be served by Swagger at `/api/docs` (
 | 7 | `GET/POST /creator/coupons` · `PATCH/DELETE /creator/coupons/:id` | coupons.manage | Coupons (discount terms locked once used) |
 | 7 | `GET /creator/orders` · `GET /creator/orders/summary` · `GET /creator/orders/:id` · `GET /creator/orders/:id/invoice` · `GET /creator/transactions` | orders.read | Orders, ledger-based revenue summary, invoice PDF, payment attempts |
 | 7 | `POST /creator/orders/:id/refunds` | refunds.manage | Full/partial refund through Razorpay (`revokeAccess` for full refunds) |
+| 7 | `GET/POST /creator/bundles` · `GET/PATCH /creator/bundles/:id` · `POST /creator/bundles/:id/status` (`PUBLISHED`\|`DRAFT`\|`ARCHIVED`) | courses.read / courses.manage | Course bundles |
+| 7 | `GET /public/bundles` · `GET /public/bundles/:slug` | academy host | Published bundles with courses, price and worth |
+| 7 | `GET /learn/cart` · `POST /learn/cart/items` (`courseId` or `bundleId`) · `DELETE /learn/cart/items/:id` · `DELETE /learn/cart` | student | Cart (items flagged with `problem` when no longer buyable) |
+| 7 | Checkout/quote bodies take one of `courseId`, `bundleId`, `membershipPlanId` or `fromCart: true`; quote returns `items[]` with per-line `unit`, `discount`, `total` | student | Multi-line orders |
 | 7 | `POST /learn/checkout/quote` · `POST /learn/checkout` (`Idempotency-Key`) · `GET /learn/orders[/:id]` · `POST /learn/orders/:id/pay|confirm|abandon` · `GET /learn/orders/:id/invoice` | student | Checkout → Razorpay Checkout.js options → signature-verified confirmation |
 | 7 | `POST /webhooks/razorpay/:accountId` | public (X-Razorpay-Signature) | Razorpay webhooks: `payment.*`, `order.paid`, `refund.*` |
 | 7 | `GET /platform/finance/overview` · `GET /platform/finance/transactions` | platform.finance.read | Academy GMV, refunds, commission; payments across academies |

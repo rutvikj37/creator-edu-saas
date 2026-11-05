@@ -57,6 +57,8 @@ class BillingDto {
 class QuoteDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @Length(25, 25) courseId?: string;
   @ApiPropertyOptional({ description: 'Buy a membership plan instead of a course' }) @IsOptional() @IsString() @Length(25, 25) membershipPlanId?: string;
+  @ApiPropertyOptional({ description: 'Buy a course bundle' }) @IsOptional() @IsString() @Length(25, 25) bundleId?: string;
+  @ApiPropertyOptional({ description: 'Buy everything in the cart' }) @IsOptional() @IsBoolean() fromCart?: boolean;
   @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(40) couponCode?: string | null;
 }
 class CheckoutDto extends QuoteDto {
@@ -191,7 +193,7 @@ export class LearnCommerceController {
 
   @Post('checkout/quote') @HttpCode(200)
   @ApiOperation({ summary: 'Price breakdown with coupon and GST, without creating an order' })
-  quote(@Body() dto: QuoteDto, @CurrentAuth() auth: AuthContext) { return this.orders.quote(auth.userId, dto.courseId, dto.couponCode, dto.membershipPlanId); }
+  quote(@Body() dto: QuoteDto, @CurrentAuth() auth: AuthContext) { return this.orders.quote(auth.userId, dto, dto.couponCode); }
 
   @Post('checkout')
   @ApiHeader({ name: 'Idempotency-Key', required: false })

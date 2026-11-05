@@ -2,6 +2,13 @@
 
 Format: Keep a Changelog. Versions follow SemVer once Phase 1 ships.
 
+## [0.15.0] — 2026-11-05 — Cart and course bundles
+### Added
+- Course bundles: several courses at one price with the saving shown, on the catalogue and their own page; creators manage them under Bundles.
+- Cart: students add paid courses and bundles and pay for them in one Razorpay order; coupons apply to the eligible items, GST on the order, one invoice; refunds can revoke every course bought.
+### Fixed
+- Ownership checks during checkout no longer pass the array index as the current time (found while adding the cart).
+
 ## [0.14.0] — 2026-11-05 — plugNmeet live classes and webinars
 ### Added
 - plugNmeet classroom for live classes and webinars (self-hosted plugNmeet server): rooms created from the class settings (waiting room, automatic cloud recording, capacity, webinar attendee locks, whiteboard, shared notes, polls, breakout rooms), secure join tokens after the academy's access checks, attendance from plugNmeet webhooks and a per-minute sync, host end, and recordings imported into the video library (Bunny Stream) for students to watch.

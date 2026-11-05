@@ -111,6 +111,14 @@ export class CouponsService {
 
   /** Checks a code for this buyer and course. Throws a VALIDATION_FAILED on `couponCode` with a buyer-friendly reason. */
   async evaluate(code: string, courseId: string, userId: string, subtotalMinor: number, currency: string): Promise<{ id: string; code: string; rule: CouponRule }> {
+    return this.evaluateLines(code, [{ kind: 'course', id: courseId, unitMinor: subtotalMinor }], userId, currency);
+  }
+
+  /**
+   * Checks a coupon against a cart. Coupons limited to courses apply to those course lines only
+   * (bundles and memberships take unrestricted coupons); at least one line must be eligible.
+   */
+  async evaluateLines(code: string, lines: { kind: string; id: string; unitMinor: number }[], userId: string, currency: string): Promise<{ id: string; code: string; rule: CouponRule; eligible: boolean[] }> {
     const c = await this.db.coupon.findFirst({ where: { code: code.trim().toUpperCase(), deletedAt: null } });
     const now = new Date();
     if (!c || !c.isActive) throw invalid('This coupon code is not valid');
@@ -118,10 +126,12 @@ export class CouponsService {
     if (c.endsAt && c.endsAt <= now) throw invalid('This coupon has expired');
     if (c.maxRedemptions !== null && c.redemptionCount >= c.maxRedemptions) throw invalid('This coupon has been fully used');
     const ids = c.courseIds as string[] | null;
-    if (ids?.length && !ids.includes(courseId)) throw invalid('This coupon does not apply to this course');
+    const eligible = lines.map((l) => !ids?.length || (l.kind === 'course' && ids.includes(l.id)));
+    if (!eligible.some(Boolean)) throw invalid(lines.length > 1 ? 'This coupon does not apply to these items' : 'This coupon does not apply to this course');
+    const subtotalMinor = lines.reduce((s2, l) => s2 + l.unitMinor, 0);
     if (c.minOrderAmount && subtotalMinor < toMinor(c.minOrderAmount, currency)) throw invalid('Order total is below this coupon’s minimum');
     const used = await this.db.couponRedemption.count({ where: { couponId: c.id, userId } });
     if (used >= c.perUserLimit) throw invalid('You have already used this coupon');
-    return { id: c.id, code: c.code, rule: { type: c.type, value: c.type === 'PERCENT' ? Number(c.value) : toMinor(c.value, currency) } };
+    return { id: c.id, code: c.code, rule: { type: c.type, value: c.type === 'PERCENT' ? Number(c.value) : toMinor(c.value, currency) }, eligible };
   }
 }
