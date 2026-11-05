@@ -10,6 +10,8 @@ export interface EmailJob extends RenderedEmail {
   to: string;
   tenantId?: string | null;
   tag: string;
+  /** Extra headers, e.g. List-Unsubscribe for marketing email. */
+  headers?: Record<string, string>;
 }
 
 /** Enqueues transactional email; the worker delivers it (retries with backoff on SMTP failure). */

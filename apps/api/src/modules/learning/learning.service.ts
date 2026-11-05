@@ -6,6 +6,7 @@ import type { TenantPrismaClient } from '../../core/tenancy/tenant-prisma.js';
 import { TenantContext } from '../../core/tenancy/tenant-context.service.js';
 import { FilesService } from '../files/files.service.js';
 import { CertificatesService } from '../certificates/certificates.service.js';
+import { AppEvents } from '../../core/events/app-events.service.js';
 import { enrollmentExpiry, isEnrollmentUsable, progressPercent, unlockTime } from './access.js';
 
 type LessonRow = Awaited<ReturnType<TenantPrismaClient['courseLesson']['findFirst']>> & object;
@@ -20,6 +21,7 @@ export class LearningService {
     private readonly ctx: TenantContext,
     private readonly files: FilesService,
     private readonly certificates: CertificatesService,
+    private readonly events: AppEvents,
   ) {}
 
   // ── enrolment ─────────────────────────────────────────────
@@ -38,11 +40,12 @@ export class LearningService {
     const existing = await this.db.enrollment.findFirst({ where: { userId, courseId } });
     const start = new Date();
     const expiresAt = enrollmentExpiry(course, start);
-    if (existing) {
-      if (isEnrollmentUsable(existing)) return existing;
-      return this.db.enrollment.update({ where: { id: existing.id }, data: { status: 'ACTIVE', startedAt: start, expiresAt, source, grantedById } });
-    }
-    return this.db.enrollment.create({ data: { userId, courseId, source, expiresAt, grantedById } as never });
+    if (existing && isEnrollmentUsable(existing)) return existing;
+    const e = existing
+      ? await this.db.enrollment.update({ where: { id: existing.id }, data: { status: 'ACTIVE', startedAt: start, expiresAt, source, grantedById } })
+      : await this.db.enrollment.create({ data: { userId, courseId, source, expiresAt, grantedById } as never });
+    await this.events.emit('course.enrolled', { tenantId: e.tenantId, userId, courseId, source });
+    return e;
   }
 
   async enrollFree(userId: string, courseId: string) {
@@ -180,6 +183,7 @@ export class LearningService {
       where: { id: enrollmentId },
       data: { progressPercent: percent, ...(completedNow ? { completedAt: new Date(), status: 'COMPLETED' } : {}) },
     });
+    if (completedNow) await this.events.emit('course.completed', { tenantId: enrollment.tenantId, userId: enrollment.userId, courseId: enrollment.courseId });
     let certificate = null;
     if ((completedNow || updated.completedAt) && enrollment.course.certificateEnabled) {
       certificate = await this.certificates.issueFor(updated.id);

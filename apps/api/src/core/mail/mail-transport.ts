@@ -21,7 +21,7 @@ export class MailTransport {
   }
 
   async deliver(job: EmailJob): Promise<string> {
-    const info = await this.transport.sendMail({ from: this.config.get('MAIL_FROM'), to: job.to, subject: job.subject, html: job.html, text: job.text });
+    const info = await this.transport.sendMail({ from: this.config.get('MAIL_FROM'), to: job.to, subject: job.subject, html: job.html, text: job.text, headers: job.headers });
     this.logger.log({ tag: job.tag, messageId: info.messageId }, 'email sent');
     return info.messageId;
   }

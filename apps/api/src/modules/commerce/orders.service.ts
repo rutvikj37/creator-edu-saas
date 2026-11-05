@@ -13,6 +13,7 @@ import type { TenantPrismaClient } from '../../core/tenancy/tenant-prisma.js';
 import { TenantContext } from '../../core/tenancy/tenant-context.service.js';
 import { EntitlementsService } from '../subscriptions/entitlements.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
+import { AppEvents } from '../../core/events/app-events.service.js';
 import { enrollmentExpiry, isEnrollmentUsable } from '../learning/access.js';
 import { CouponsService } from './coupons.service.js';
 import { GatewayService } from './gateway.service.js';
@@ -84,6 +85,7 @@ export class OrdersService {
     private readonly config: AppConfig,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly notifications: NotificationsService,
+    private readonly events: AppEvents,
   ) {}
 
   // ── views ─────────────────────────────────────────────────
@@ -375,6 +377,7 @@ export class OrdersService {
     const { order } = done;
     const billing = order.billing as Record<string, string | null>;
     await this.audit.record({ action: 'order.paid', tenantId, actorRealm: 'SYSTEM', targetType: 'Order', targetId: order.id, after: { number: order.number, total: order.totalAmount.toString(), paymentId: paid?.result.providerPaymentId ?? null } });
+    await this.events.emit('order.paid', { tenantId, userId: order.userId, orderId: order.id, courseIds: order.items.map((i) => i.courseId), total: order.totalAmount.toString(), currency: order.currency });
     await this.notifications.notify({ userId: order.userId, tenantId, category: 'orders', title: 'Purchase confirmed', body: `You now have access to ${order.items.map((i) => i.title).join(', ')}.`, link: '/learn', brand: tenant.name, skipEmail: true }).catch(() => undefined);
     if (billing.email) {
       await this.mail.send({

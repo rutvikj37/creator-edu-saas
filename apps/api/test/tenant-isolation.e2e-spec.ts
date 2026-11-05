@@ -47,6 +47,11 @@ const WORKSPACE_ROUTES_COVERED = [
   'POST /api/v1/creator/certificates/:id/revoke', 'POST /api/v1/creator/certificates/:id/reinstate',
   // Phase 6 routes: isolation covered in video.e2e-spec.ts
   'POST /api/v1/creator/files/:id/parts', 'GET /api/v1/creator/videos', 'POST /api/v1/creator/videos', 'PATCH /api/v1/creator/videos/:id', 'GET /api/v1/creator/videos/:id/preview', 'DELETE /api/v1/creator/videos/:id',
+  // Phase 10 — contacts, campaigns, automations (cross-tenant checks in marketing.e2e-spec.ts)
+  'GET /api/v1/creator/leads', 'POST /api/v1/creator/leads/import', 'GET /api/v1/creator/leads/:id', 'PATCH /api/v1/creator/leads/:id', 'DELETE /api/v1/creator/leads/:id',
+  'GET /api/v1/creator/campaigns', 'POST /api/v1/creator/campaigns', 'GET /api/v1/creator/campaigns/:id', 'PATCH /api/v1/creator/campaigns/:id', 'POST /api/v1/creator/campaigns/:id/test',
+  'POST /api/v1/creator/campaigns/:id/schedule', 'POST /api/v1/creator/campaigns/:id/cancel',
+  'GET /api/v1/creator/automations', 'POST /api/v1/creator/automations', 'GET /api/v1/creator/automations/:id', 'PATCH /api/v1/creator/automations/:id', 'DELETE /api/v1/creator/automations/:id',
   // Phase 9 — live classes & batches (cross-tenant checks in live.e2e-spec.ts)
   'GET /api/v1/creator/live/providers', 'GET /api/v1/creator/live/classes', 'POST /api/v1/creator/live/classes', 'GET /api/v1/creator/live/classes/:id', 'PATCH /api/v1/creator/live/classes/:id',
   'POST /api/v1/creator/live/classes/:id/cancel', 'POST /api/v1/creator/live/sessions/:id/cancel', 'POST /api/v1/creator/live/sessions/:id/host', 'POST /api/v1/creator/live/sessions/:id/end',
@@ -196,6 +201,7 @@ describe('Tenant isolation (e2e)', () => {
     await authed(app, session).get('/api/v1/creator/coupons').expect(403);
     await authed(app, session).get('/api/v1/creator/billing/invoices').expect(403);
     await authed(app, session).get('/api/v1/creator/website').expect(403);
+    await authed(app, session).get('/api/v1/creator/leads').expect(403);
     await authed(app, session).post('/api/v1/creator/blog/posts').send({ title: 'x' }).expect(403);
     await authed(app, session).post('/api/v1/creator/billing/checkout').send({ planPriceId: 'ckxxxxxxxxxxxxxxxxxxxxxxx' }).expect(403);
     await authed(app, session).put('/api/v1/creator/payments/razorpay').send({ keyId: 'rzp_test_AbCdEf123456', keySecret: 'secret-secret' }).expect(403);

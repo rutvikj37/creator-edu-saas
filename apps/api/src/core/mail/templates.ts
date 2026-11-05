@@ -29,6 +29,17 @@ function layout(brand: string, heading: string, bodyHtml: string, cta?: { label:
 }
 
 export const emailTemplates = {
+  /** Marketing email: trusted HTML from richTextToHtml plus the legally required footer. */
+  campaign(p: { brand: string; subject: string; previewText?: string | null; bodyHtml: string; bodyText: string; unsubscribeUrl: string; address?: string | null }): RenderedEmail {
+    const preheader = p.previewText ? `<div style="display:none;max-height:0;overflow:hidden">${escapeHtml(p.previewText)}</div>` : '';
+    const html = `<!doctype html><html><body style="margin:0;background:#f8fafc;font-family:Inter,Arial,sans-serif;color:#0f172a">${preheader}
+  <div style="max-width:600px;margin:0 auto;padding:32px 20px">
+    <p style="font-weight:700;font-size:16px;margin:0 0 24px">${escapeHtml(p.brand)}</p>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:28px;line-height:1.6">${p.bodyHtml}</div>
+    <p style="font-size:12px;color:#94a3b8;margin-top:20px">You're receiving this because you agreed to hear from ${escapeHtml(p.brand)}.${p.address ? ` ${escapeHtml(p.address)}.` : ''}<br><a href="${escapeHtml(p.unsubscribeUrl)}" style="color:#64748b">Unsubscribe</a></p>
+  </div></body></html>`;
+    return { subject: p.subject, html, text: `${p.bodyText}\n\n—\nYou're receiving this because you agreed to hear from ${p.brand}. Unsubscribe: ${p.unsubscribeUrl}` };
+  },
   verifyEmail(p: { brand: string; name: string; url: string; code: string }): RenderedEmail {
     return {
       subject: `Verify your email for ${p.brand}`,

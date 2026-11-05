@@ -57,3 +57,40 @@ export function richTextToPlain(doc: any): string {
   const inner = (doc.content ?? []).map(richTextToPlain).join(doc.type === 'doc' ? '\n' : '');
   return ['paragraph', 'heading', 'listItem', 'blockquote', 'codeBlock'].includes(doc.type) ? `${inner}\n` : inner;
 }
+
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** HTML for emails from validated rich text. Only allow-listed nodes/marks are emitted; all text is escaped. */
+export function richTextToHtml(doc: any): string {
+  validateRichText(doc);
+  const marks = (text: string, ms: any[] = []) =>
+    ms.reduce((acc, m) => {
+      switch (m.type) {
+        case 'bold': return `<strong>${acc}</strong>`;
+        case 'italic': return `<em>${acc}</em>`;
+        case 'underline': return `<u>${acc}</u>`;
+        case 'strike': return `<s>${acc}</s>`;
+        case 'code': return `<code>${acc}</code>`;
+        case 'link': return `<a href="${esc(m.attrs.href)}" target="_blank" rel="noopener noreferrer">${acc}</a>`;
+        default: return acc;
+      }
+    }, esc(text));
+  const walk = (n: any): string => {
+    const inner = (n.content ?? []).map(walk).join('');
+    switch (n.type) {
+      case 'doc': return inner;
+      case 'text': return marks(n.text, n.marks);
+      case 'paragraph': return `<p>${inner}</p>`;
+      case 'heading': return `<h${n.attrs?.level ?? 2}>${inner}</h${n.attrs?.level ?? 2}>`;
+      case 'bulletList': return `<ul>${inner}</ul>`;
+      case 'orderedList': return `<ol>${inner}</ol>`;
+      case 'listItem': return `<li>${inner}</li>`;
+      case 'blockquote': return `<blockquote>${inner}</blockquote>`;
+      case 'codeBlock': return `<pre><code>${inner}</code></pre>`;
+      case 'hardBreak': return '<br>';
+      case 'horizontalRule': return '<hr>';
+      default: return '';
+    }
+  };
+  return walk(doc);
+}

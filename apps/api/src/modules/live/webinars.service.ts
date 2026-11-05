@@ -10,6 +10,7 @@ import type { TenantPrismaClient } from '../../core/tenancy/tenant-prisma.js';
 import { TenantContext } from '../../core/tenancy/tenant-context.service.js';
 import { academyOrigin } from '../tenants/academy-origin.js';
 import { LiveService } from './live.service.js';
+import { LeadsService } from '../marketing/leads.service.js';
 
 const fmt = (d: Date, tz: string) => new Intl.DateTimeFormat('en-IN', { dateStyle: 'full', timeStyle: 'short', timeZone: tz }).format(d);
 
@@ -23,6 +24,7 @@ export class WebinarsService {
     private readonly live: LiveService,
     private readonly mail: MailService,
     private readonly config: AppConfig,
+    private readonly leads: LeadsService,
   ) {}
 
   private async webinar(slug: string) {
@@ -56,6 +58,7 @@ export class WebinarsService {
         reg = (await this.db.webinarRegistration.findFirst({ where: { liveClassId: c.id, email } }))!;
       }
     }
+    await this.leads.capture({ email, name: input.name, source: `webinar:${slug}`.slice(0, 60), consent: input.consent, tags: [`webinar:${slug}`.slice(0, 40)], userId: reg.userId });
     // Always (re)send the ticket — registering again is how people recover a lost link.
     const { origin, name } = await academyOrigin(this.prisma, this.config, this.ctx.requireTenantId());
     const first = c.sessions[0];

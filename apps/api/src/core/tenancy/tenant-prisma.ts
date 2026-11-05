@@ -15,6 +15,7 @@ export const TENANT_MODELS = new Set<string>(['TenantMember', 'TenantSetting', '
   'PaymentGatewayAccount', 'Coupon', 'CouponRedemption', 'Order', 'OrderItem', 'Payment', 'Refund', 'LedgerEntry', 'Invoice', 'TenantSequence',
   'BillingInvoice', 'BillingPayment',
   'SiteSettings', 'SitePage', 'SitePageVersion', 'BlogPost',
+  'Lead', 'ConsentEvent', 'Campaign', 'CampaignRecipient', 'Automation', 'AutomationRun',
   'Batch', 'BatchMember', 'LiveClass', 'LiveSession', 'LiveAttendance', 'LiveAdmission', 'LivePoll', 'LivePollVote', 'LiveQuestion', 'WebinarRegistration',
 ]);
 

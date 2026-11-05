@@ -1,6 +1,7 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { ERROR_CODES } from '@ce/shared';
 import { PrismaService } from '../../../core/prisma/prisma.service.js';
+import { AppEvents } from '../../../core/events/app-events.service.js';
 import { AuditService } from '../../../core/audit/audit.service.js';
 import { AppException } from '../../../common/errors/app-exception.js';
 import { realmKeyOf, type AuthContext, type HostRealm } from '../../../core/tenancy/request-context.js';
@@ -32,6 +33,7 @@ export class AuthService {
     private readonly tenants: TenantsService,
     private readonly audit: AuditService,
     private readonly mail: MailService,
+    private readonly events: AppEvents,
   ) {}
 
   /** Creator sign-up: platform user + tenant (ONBOARDING) + owner membership + subdomain, atomically. */
@@ -66,6 +68,7 @@ export class AuthService {
     });
     const session = await this.sessions.issue(user, { tenantId: host.tenantId, mfaSetupRequired: false }, meta);
     await this.recordLogin(user.id, host.tenantId, dto.email, true, null, 'register', meta);
+    await this.events.emit('student.registered', { tenantId: host.tenantId, userId: user.id, email: user.email, name: user.fullName });
     return { user, session };
   }
 

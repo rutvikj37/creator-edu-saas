@@ -1991,3 +1991,125 @@ model PushSubscription {
 
   @@index([userId])
 }
+
+// ───────────────────────────── Marketing: leads, consent, campaigns (Phase 10) ─────────────────────────────
+
+model Lead {
+  id               String    @id @default(cuid()) @db.Char(25)
+  tenantId         String    @db.Char(25)
+  email            String    @db.VarChar(191)
+  name             String?   @db.VarChar(120)
+  phone            String?   @db.VarChar(20)
+  source           String    @db.VarChar(60)
+  tags             Json
+  marketingConsent Boolean   @default(false)
+  consentAt        DateTime? @db.DateTime(3)
+  consentSource    String?   @db.VarChar(60)
+  unsubscribedAt   DateTime? @db.DateTime(3)
+  userId           String?   @db.Char(25)
+  notes            String?   @db.VarChar(1000)
+  createdAt        DateTime  @default(now()) @db.DateTime(3)
+  updatedAt        DateTime  @updatedAt @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, email])
+  @@index([tenantId, createdAt])
+}
+
+/// Append-only proof of consent changes.
+model ConsentEvent {
+  id        String   @id @default(cuid()) @db.Char(25)
+  tenantId  String   @db.Char(25)
+  leadId    String   @db.Char(25)
+  action    String   @db.VarChar(16)
+  source    String   @db.VarChar(60)
+  ipHash    String?  @db.Char(64)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, leadId])
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+  CANCELLED
+}
+
+model Campaign {
+  id          String              @id @default(cuid()) @db.Char(25)
+  tenantId    String              @db.Char(25)
+  name        String              @db.VarChar(120)
+  subject     String              @db.VarChar(200)
+  previewText String?             @db.VarChar(200)
+  content     Json
+  segment     Json
+  status      CampaignStatus      @default(DRAFT)
+  scheduledAt DateTime?           @db.DateTime(3)
+  sentAt      DateTime?           @db.DateTime(3)
+  stats       Json?
+  createdById String              @db.Char(25)
+  createdAt   DateTime            @default(now()) @db.DateTime(3)
+  updatedAt   DateTime            @updatedAt @db.DateTime(3)
+  recipients  CampaignRecipient[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, status, createdAt])
+  @@index([status, scheduledAt])
+}
+
+model CampaignRecipient {
+  id         String   @id @default(cuid()) @db.Char(25)
+  tenantId   String   @db.Char(25)
+  campaignId String   @db.Char(25)
+  leadId     String   @db.Char(25)
+  email      String   @db.VarChar(191)
+  status     String   @db.VarChar(16)
+  createdAt  DateTime @default(now()) @db.DateTime(3)
+  campaign   Campaign @relation(fields: [tenantId, campaignId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, campaignId, leadId])
+}
+
+model Automation {
+  id          String          @id @default(cuid()) @db.Char(25)
+  tenantId    String          @db.Char(25)
+  name        String          @db.VarChar(120)
+  trigger     String          @db.VarChar(40)
+  filter      Json?
+  steps       Json
+  status      String          @default("ACTIVE") @db.VarChar(16)
+  createdById String          @db.Char(25)
+  createdAt   DateTime        @default(now()) @db.DateTime(3)
+  updatedAt   DateTime        @updatedAt @db.DateTime(3)
+  runs        AutomationRun[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, trigger, status])
+}
+
+model AutomationRun {
+  id           String     @id @default(cuid()) @db.Char(25)
+  tenantId     String     @db.Char(25)
+  automationId String     @db.Char(25)
+  dedupeKey    String     @db.VarChar(160)
+  userId       String?    @db.Char(25)
+  email        String     @db.VarChar(191)
+  name         String?    @db.VarChar(120)
+  context      Json
+  stepIndex    Int        @default(0)
+  status       String     @default("RUNNING") @db.VarChar(16)
+  nextAt       DateTime?  @db.DateTime(3)
+  log          Json
+  error        String?    @db.VarChar(500)
+  createdAt    DateTime   @default(now()) @db.DateTime(3)
+  updatedAt    DateTime   @updatedAt @db.DateTime(3)
+  automation   Automation @relation(fields: [tenantId, automationId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, automationId, dedupeKey])
+  @@index([tenantId, automationId, createdAt])
+}
