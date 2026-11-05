@@ -52,6 +52,11 @@ export const envSchema = z.object({
   LIVEKIT_URL: z.string().optional(),
   LIVEKIT_API_KEY: z.string().optional(),
   LIVEKIT_API_SECRET: z.string().optional(),
+  // plugNmeet (optional; self-hosted plugNmeet server for live classes and webinars)
+  /** Server base URL, e.g. https://meet.example.com (the plugNmeet client is served from it). */
+  PLUGNMEET_URL: z.url().optional().or(z.literal('')),
+  PLUGNMEET_API_KEY: z.string().optional(),
+  PLUGNMEET_API_SECRET: z.string().optional(),
   // Bunny Stream (primary video provider). Without these, uploads use private storage (Phase 6).
   BUNNY_STREAM_API_KEY: z.string().optional(),
   BUNNY_STREAM_LIBRARY_ID: z.string().regex(/^\d+$/).optional().or(z.literal('')),

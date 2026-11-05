@@ -14,6 +14,7 @@ import { academyApi } from '../../services/api/auth.js';
 import { applyApiErrors } from '../../utils/forms.js';
 import { formatDate } from '../../utils/format.js';
 import { AcademyHeader } from '../public/AcademyLandingPage.jsx';
+import { openClassroom, opensByUrl } from './openClassroom.js';
 
 function Joining({ error, onBack }) {
   return (
@@ -31,6 +32,24 @@ export function HostRoomPage() {
   const [confirm, setConfirm] = useState(false);
   const end = useMutation({ mutationFn: () => creatorLiveApi.end(id), onSuccess: (c) => { toast.success('Session ended'); navigate(`/creator/live/${c.id}`); }, onError: (e) => toast.error(e.message) });
   if (!join.data) return <Joining error={join.error?.message} onBack={() => navigate(-1)} />;
+  if (opensByUrl(join.data)) {
+    return (
+      <div className="grid min-h-dvh place-items-center p-6">
+        <Card className="max-w-md"><CardBody className="space-y-4 text-center">
+          <ExternalLink className="mx-auto size-8 text-muted" />
+          <p className="font-medium">Your classroom is ready.</p>
+          <div className="flex justify-center gap-2">
+            <a className="inline-flex h-10 items-center rounded-md bg-primary-600 px-5 text-sm font-medium text-on-primary" href={join.data.joinUrl} target="_blank" rel="noreferrer noopener">Enter classroom</a>
+            <Button variant="danger" onClick={() => setConfirm(true)}>End session</Button>
+          </div>
+        </CardBody></Card>
+        <Modal open={confirm} onClose={() => setConfirm(false)} title="End this session for everyone?"
+          footer={<><Button variant="secondary" onClick={() => setConfirm(false)}>Keep going</Button><Button variant="danger" loading={end.isPending} onClick={() => end.mutate()}>End session</Button></>}>
+          <p className="text-sm text-fg-2">Everyone is disconnected and attendance is finalised.</p>
+        </Modal>
+      </div>
+    );
+  }
   return (
     <>
       <LiveRoom join={join.data} title="Hosting" host sessionId={id} api={participantApi('host', id)} onLeave={() => navigate('/creator/live')}
@@ -48,8 +67,9 @@ export function StudentRoomPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const join = useQuery({ queryKey: ['live', 'join', id], queryFn: () => learnLiveApi.join(id), retry: false, staleTime: Infinity, gcTime: 0 });
-  if (join.data?.provider === 'EXTERNAL') {
-    return <div className="grid min-h-dvh place-items-center p-6"><Card className="max-w-md"><CardBody className="space-y-4 text-center"><ExternalLink className="mx-auto size-8 text-muted" /><p className="font-medium">This class runs on an external meeting app.</p><a className="inline-flex h-10 items-center rounded-md bg-primary-600 px-5 text-sm font-medium text-on-primary" href={join.data.joinUrl} target="_blank" rel="noreferrer noopener">Open meeting</a></CardBody></Card></div>;
+  if (opensByUrl(join.data)) {
+    const pnm = join.data.provider === 'PLUGNMEET';
+    return <div className="grid min-h-dvh place-items-center p-6"><Card className="max-w-md"><CardBody className="space-y-4 text-center"><ExternalLink className="mx-auto size-8 text-muted" /><p className="font-medium">{pnm ? 'Your live classroom is ready.' : 'This class runs on an external meeting app.'}</p><a className="inline-flex h-10 items-center rounded-md bg-primary-600 px-5 text-sm font-medium text-on-primary" href={join.data.joinUrl} {...(pnm ? {} : { target: '_blank', rel: 'noreferrer noopener' })}>{pnm ? 'Enter classroom' : 'Open meeting'}</a></CardBody></Card></div>;
   }
   if (!join.data) return <Joining error={join.error?.message} onBack={() => navigate('/learn/live')} />;
   return <LiveRoom join={join.data} title="Live class" sessionId={id} api={participantApi('student', id)} onLeave={() => navigate('/learn/live')} />;
@@ -62,7 +82,7 @@ export function StudentLivePage() {
   const recordings = useQuery({ queryKey: ['learn', 'live', 'recordings'], queryFn: learnLiveApi.recordings });
   const [playing, setPlaying] = useState(null);
   const play = useMutation({ mutationFn: learnLiveApi.recording, onSuccess: (r) => setPlaying(r), onError: (e) => toast.error(e.message) });
-  const join = useMutation({ mutationFn: learnLiveApi.join, onSuccess: (r, id) => (r.provider === 'EXTERNAL' ? window.open(r.joinUrl, '_blank', 'noopener') : navigate(`/learn/live/${id}`)), onError: (e) => toast.error(e.message) });
+  const join = useMutation({ mutationFn: learnLiveApi.join, onSuccess: (r, id) => (opensByUrl(r) ? openClassroom(r) : navigate(`/learn/live/${id}`)), onError: (e) => toast.error(e.message) });
   return (
     <>
       <PageHeader title="Live classes" description="Join live sessions and watch recordings." breadcrumbs={[{ label: 'Live classes' }]} />
@@ -95,7 +115,9 @@ export function StudentLivePage() {
         </CardBody>
       </Card>
       <Modal open={Boolean(playing)} onClose={() => setPlaying(null)} title={playing?.title} size="xl">
-        {playing && <video src={playing.url} controls playsInline controlsList="nodownload" className="aspect-video w-full rounded-lg bg-black" />}
+        {playing && (playing.kind === 'iframe'
+          ? <iframe src={playing.url} title={playing.title} className="aspect-video w-full rounded-lg bg-black" allow="accelerometer; gyroscope; encrypted-media; picture-in-picture; fullscreen" allowFullScreen />
+          : <video src={playing.url} controls playsInline controlsList="nodownload" className="aspect-video w-full rounded-lg bg-black" />)}
       </Modal>
     </>
   );
@@ -162,7 +184,7 @@ export function TicketPage() {
   const site = useQuery({ queryKey: ['brand', 'academy'], queryFn: academyApi.site, staleTime: 5 * 60_000 });
   const t = useQuery({ queryKey: ['ticket', code], queryFn: () => webinarApi.ticket(code), retry: false, refetchInterval: 60_000 });
   const [session, setSession] = useState(null);
-  const join = useMutation({ mutationFn: (sid) => webinarApi.join(code, sid), onSuccess: (r, sid) => (r.provider === 'EXTERNAL' ? window.open(r.joinUrl, '_blank', 'noopener') : setSession({ id: sid, join: r })), onError: (e) => toast.error(e.message) });
+  const join = useMutation({ mutationFn: (sid) => webinarApi.join(code, sid), onSuccess: (r, sid) => (opensByUrl(r) ? openClassroom(r) : setSession({ id: sid, join: r })), onError: (e) => toast.error(e.message) });
   if (session) return <LiveRoom join={session.join} title={t.data?.webinar.title} sessionId={session.id} api={participantApi('ticket', session.id, code)} onLeave={() => setSession(null)} />;
   if (t.isError) return <div className="grid min-h-dvh place-items-center"><ErrorState title="Ticket not found" error={t.error} /></div>;
   return (

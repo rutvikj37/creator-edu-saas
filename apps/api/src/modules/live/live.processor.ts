@@ -13,8 +13,10 @@ import { TenantContext } from '../../core/tenancy/tenant-context.service.js';
 import { academyOrigin } from '../tenants/academy-origin.js';
 import { LiveService } from './live.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
+import { LiveRecordingsService } from './live-recordings.service.js';
+import { PlugNmeetService } from './plugnmeet.service.js';
 
-export const LIVE_JOBS = { REMINDERS: 'live-reminders', MAINTAIN: 'live-maintain' } as const;
+export const LIVE_JOBS = { REMINDERS: 'live-reminders', MAINTAIN: 'live-maintain', PNM_SYNC: 'live-plugnmeet-sync', PNM_IMPORT: 'live-plugnmeet-import' } as const;
 const REMINDERS = [
   { key: '24h', ms: 24 * 3600_000, label: 'tomorrow' },
   { key: '1h', ms: 3600_000, label: 'in 1 hour' },
@@ -85,14 +87,46 @@ export class LiveJobs {
   }
 }
 
+/** plugNmeet: attendance/room reconciliation for running sessions and recording imports. */
+@Injectable()
+export class PlugNmeetJobs {
+  private readonly logger = new Logger(PlugNmeetJobs.name);
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ctx: TenantContext,
+    private readonly live: LiveService,
+    private readonly pnm: PlugNmeetService,
+    private readonly recordings: LiveRecordingsService,
+    @InjectQueue(QUEUES.LIVE) private readonly queue: Queue,
+  ) {}
+
+  async sync(now = new Date()) {
+    if (!this.pnm.isConfigured()) return { synced: 0, queued: 0 };
+    const running = await this.prisma.liveSession.findMany({ where: { status: 'LIVE', liveClass: { provider: 'PLUGNMEET' } }, select: { id: true, tenantId: true }, take: 200 });
+    let synced = 0;
+    for (const s of running) {
+      await this.ctx.run(s.tenantId, () => this.live.syncPlugNmeetSession(s.id, now)).then(() => synced++, (e) => this.logger.warn(`plugNmeet sync ${s.id}: ${(e as Error).message}`));
+    }
+    const rows = await this.recordings.discover(now);
+    for (const id of rows) await this.queue.add(LIVE_JOBS.PNM_IMPORT, { id }, { jobId: `pnm-import-${id}`, attempts: 5, backoff: { type: 'exponential', delay: 60_000 }, removeOnComplete: 1000, removeOnFail: 1000 });
+    return { synced, queued: rows.length };
+  }
+
+  importRecording(job: Job<{ id: string }>) {
+    return this.recordings.import(job.data.id, job.attemptsMade + 1 >= (job.opts.attempts ?? 1));
+  }
+}
+
 @Processor(QUEUES.LIVE)
 export class LiveProcessor extends WorkerHost {
-  constructor(private readonly jobs: LiveJobs) {
+  constructor(private readonly jobs: LiveJobs, private readonly pnmJobs: PlugNmeetJobs) {
     super();
   }
   async process(job: Job) {
     if (job.name === LIVE_JOBS.REMINDERS) return this.jobs.sendReminders();
     if (job.name === LIVE_JOBS.MAINTAIN) return this.jobs.maintain();
+    if (job.name === LIVE_JOBS.PNM_SYNC) return this.pnmJobs.sync();
+    if (job.name === LIVE_JOBS.PNM_IMPORT) return this.pnmJobs.importRecording(job as Job<{ id: string }>);
     throw new Error(`Unknown live job: ${job.name}`);
   }
 }
@@ -103,5 +137,6 @@ export class LiveScheduler implements OnApplicationBootstrap {
   async onApplicationBootstrap() {
     await this.queue.upsertJobScheduler(LIVE_JOBS.REMINDERS, { every: 60_000 }, { name: LIVE_JOBS.REMINDERS });
     await this.queue.upsertJobScheduler(LIVE_JOBS.MAINTAIN, { every: 30 * 60_000 }, { name: LIVE_JOBS.MAINTAIN });
+    await this.queue.upsertJobScheduler(LIVE_JOBS.PNM_SYNC, { every: 60_000 }, { name: LIVE_JOBS.PNM_SYNC });
   }
 }

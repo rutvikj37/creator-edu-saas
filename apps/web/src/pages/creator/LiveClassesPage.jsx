@@ -15,6 +15,7 @@ import { PLATFORM_ROOT } from '../../utils/host.js';
 import { applyApiErrors } from '../../utils/forms.js';
 import { saveBlob } from '../../utils/download.js';
 import { formatDate } from '../../utils/format.js';
+import { openClassroom, opensByUrl, providerLabel } from '../live/openClassroom.js';
 
 const DAYS = [['MO', 'Mon'], ['TU', 'Tue'], ['WE', 'Wed'], ['TH', 'Thu'], ['FR', 'Fri'], ['SA', 'Sat'], ['SU', 'Sun']];
 const toLocalInput = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
@@ -24,7 +25,7 @@ const schema = z
     kind: z.enum(['CLASS', 'WEBINAR']),
     title: z.string().trim().min(1, 'Give it a title').max(200),
     description: z.string().max(2000).optional(),
-    provider: z.enum(['LIVEKIT', 'EXTERNAL']),
+    provider: z.enum(['PLUGNMEET', 'LIVEKIT', 'EXTERNAL']),
     externalUrl: z.string().trim().optional(),
     audience: z.enum(['COURSE', 'BATCH', 'ALL_STUDENTS', 'REGISTRANTS']),
     courseId: z.string().optional(),
@@ -53,12 +54,18 @@ function ScheduleForm({ kind, providers, onDone }) {
   const form = useForm({
     resolver: zodResolver(schema),
     defaultValues: {
-      kind, title: '', description: '', provider: providers.livekit ? 'LIVEKIT' : 'EXTERNAL', externalUrl: '', audience: kind === 'WEBINAR' ? 'REGISTRANTS' : 'ALL_STUDENTS', courseId: '', batchId: '',
+      kind, title: '', description: '', provider: providers.plugnmeet ? 'PLUGNMEET' : providers.livekit ? 'LIVEKIT' : 'EXTERNAL', externalUrl: '', audience: kind === 'WEBINAR' ? 'REGISTRANTS' : 'ALL_STUDENTS', courseId: '', batchId: '',
       startsAt: toLocalInput(new Date(Date.now() + 24 * 3600_000)), durationMinutes: 60, repeat: false, byDay: [], endMode: 'count', count: 8, until: '', capacity: '', waitingRoom: false, recordSessions: false,
     },
   });
   const { register, watch, setValue, formState: { errors, isSubmitting } } = form;
   const v = watch();
+  const choices = [
+    ...(providers.plugnmeet ? [{ value: 'PLUGNMEET', label: 'plugNmeet classroom', hint: kind === 'WEBINAR' ? 'Video, screen share, chat, polls, Q&A; attendees watch' : 'Video, whiteboard, screen share, chat, polls, breakout rooms' }] : []),
+    ...(providers.livekit || !providers.plugnmeet ? [{ value: 'LIVEKIT', label: 'Built-in classroom', hint: providers.livekit ? 'Video, screen share, chat, polls, attendance' : 'Not set up on this platform yet', disabled: !providers.livekit }] : []),
+    { value: 'EXTERNAL', label: 'Meeting link', hint: 'Zoom, Google Meet or Teams' },
+  ];
+  const canRecord = v.provider === 'PLUGNMEET' ? providers.plugnmeetRecording : providers.livekitRecording ?? providers.recording;
   const submit = form.handleSubmit(async (x) => {
     try {
       const body = {
@@ -66,7 +73,7 @@ function ScheduleForm({ kind, providers, onDone }) {
         audience: x.audience, courseId: x.audience === 'COURSE' ? x.courseId : undefined, batchId: x.audience === 'BATCH' ? x.batchId : undefined,
         startsAt: new Date(x.startsAt).toISOString(), durationMinutes: x.durationMinutes, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         recurrence: x.repeat ? { freq: 'WEEKLY', byDay: x.byDay, ...(x.endMode === 'count' ? { count: x.count } : { until: x.until }) } : null,
-        capacity: x.capacity === '' ? null : x.capacity, waitingRoom: x.provider === 'LIVEKIT' && x.waitingRoom, recordSessions: x.provider === 'LIVEKIT' && x.recordSessions,
+        capacity: x.capacity === '' ? null : x.capacity, waitingRoom: x.provider !== 'EXTERNAL' && x.waitingRoom, recordSessions: x.provider !== 'EXTERNAL' && x.recordSessions,
       };
       const created = await creatorLiveApi.create(body);
       toast.success(kind === 'WEBINAR' ? 'Webinar scheduled' : 'Live class scheduled');
@@ -82,15 +89,13 @@ function ScheduleForm({ kind, providers, onDone }) {
       <Textarea label="Description" rows={2} {...register('description')} />
       <Field label="Classroom">
         {() => (
-          <div className="grid gap-2 sm:grid-cols-2">
-            <label className={`flex cursor-pointer gap-2 rounded-lg border p-3 text-sm ${v.provider === 'LIVEKIT' ? 'border-primary-500 ring-1 ring-primary-500' : 'border-line'} ${providers.livekit ? '' : 'cursor-not-allowed opacity-50'}`}>
-              <input type="radio" value="LIVEKIT" disabled={!providers.livekit} {...register('provider')} className="mt-1" />
-              <span><span className="font-medium">Built-in classroom</span><span className="block text-xs text-muted">{providers.livekit ? 'Video, screen share, chat, polls, attendance' : 'Not set up on this platform yet'}</span></span>
-            </label>
-            <label className={`flex cursor-pointer gap-2 rounded-lg border p-3 text-sm ${v.provider === 'EXTERNAL' ? 'border-primary-500 ring-1 ring-primary-500' : 'border-line'}`}>
-              <input type="radio" value="EXTERNAL" {...register('provider')} className="mt-1" />
-              <span><span className="font-medium">Meeting link</span><span className="block text-xs text-muted">Zoom, Google Meet or Teams</span></span>
-            </label>
+          <div className={`grid gap-2 ${choices.length > 2 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+            {choices.map((o) => (
+              <label key={o.value} className={`flex cursor-pointer gap-2 rounded-lg border p-3 text-sm ${v.provider === o.value ? 'border-primary-500 ring-1 ring-primary-500' : 'border-line'} ${o.disabled ? 'cursor-not-allowed opacity-50' : ''}`}>
+                <input type="radio" value={o.value} disabled={o.disabled} {...register('provider')} className="mt-1" />
+                <span><span className="font-medium">{o.label}</span><span className="block text-xs text-muted">{o.hint}</span></span>
+              </label>
+            ))}
           </div>
         )}
       </Field>
@@ -123,10 +128,10 @@ function ScheduleForm({ kind, providers, onDone }) {
       <div className="grid gap-4 sm:grid-cols-2">
         <Input label={kind === 'WEBINAR' ? 'Seats' : 'Capacity'} type="number" min={1} placeholder="No limit" {...register('capacity')} />
       </div>
-      {v.provider === 'LIVEKIT' && (
+      {v.provider !== 'EXTERNAL' && (
         <div className="space-y-2">
-          <Checkbox label="Waiting room" description="You admit each participant before they can see and hear the class." {...register('waitingRoom')} />
-          <Checkbox label="Record sessions" description={providers.recording ? 'Recordings are added to your video library.' : 'Needs S3 storage on this platform.'} disabled={!providers.recording} {...register('recordSessions')} />
+          <Checkbox label="Waiting room" description={v.provider === 'PLUGNMEET' ? 'You let each participant in from inside the classroom.' : 'You admit each participant before they can see and hear the class.'} {...register('waitingRoom')} />
+          <Checkbox label="Record sessions" description={!canRecord ? 'Needs S3 storage on this platform.' : v.provider === 'PLUGNMEET' ? 'Recorded automatically; the recording is added to your video library after the session.' : 'Recordings are added to your video library.'} disabled={!canRecord} {...register('recordSessions')} />
           {errors.recordSessions && <p className="text-xs text-red-600">{errors.recordSessions.message}</p>}
         </div>
       )}
@@ -148,13 +153,13 @@ export function LiveClassesPage() {
     <>
       <PageHeader title="Live classes & webinars" description="Teach live in the built-in classroom or with your own Zoom/Meet link." breadcrumbs={[{ label: 'Live' }]}
         actions={<Button leftIcon={Plus} onClick={() => setOpen(true)} disabled={!providers.data}>{kind === 'WEBINAR' ? 'New webinar' : 'Schedule class'}</Button>} />
-      {providers.data && !providers.data.livekit && <Alert tone="info" className="mb-4">The built-in classroom isn't set up on this platform yet — you can still schedule classes with a Zoom, Meet or Teams link.</Alert>}
+      {providers.data && !providers.data.livekit && !providers.data.plugnmeet && <Alert tone="info" className="mb-4">The built-in classroom isn't set up on this platform yet — you can still schedule classes with a Zoom, Meet or Teams link.</Alert>}
       <Tabs className="mb-4" value={kind} onChange={setKind} tabs={[{ value: 'CLASS', label: 'Classes' }, { value: 'WEBINAR', label: 'Webinars' }]} />
       <Card>
         <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data ?? []} onRowClick={(r) => navigate(`/creator/live/${r.id}`)}
           empty={<EmptyState icon={Radio} title={kind === 'WEBINAR' ? 'No webinars yet' : 'No live classes yet'} description={kind === 'WEBINAR' ? 'Run a free webinar with a public registration page.' : 'Schedule a one-off or weekly class.'} action={<Button size="sm" leftIcon={Plus} onClick={() => setOpen(true)} disabled={!providers.data}>Create</Button>} />}
           columns={[
-            { key: 'title', header: 'Title', cell: (r) => <div><p className="font-medium text-fg">{r.title}</p><p className="text-xs text-muted">{r.provider === 'LIVEKIT' ? 'Built-in classroom' : 'Meeting link'}{r.recurrence ? ' · weekly' : ''}</p></div> },
+            { key: 'title', header: 'Title', cell: (r) => <div><p className="font-medium text-fg">{r.title}</p><p className="text-xs text-muted">{providerLabel(r.provider)}{r.recurrence ? ' · weekly' : ''}</p></div> },
             { key: 'next', header: 'Next session', cell: (r) => (r.nextSession ? formatDate(r.nextSession.startsAt, { withTime: true }) : '—') },
             { key: 'audience', header: 'Audience', cell: (r) => ({ ALL_STUDENTS: 'All students', COURSE: 'Course', BATCH: 'Batch', REGISTRANTS: 'Registrants' })[r.audience] },
             { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.status} /> },
@@ -202,7 +207,7 @@ export function LiveClassDetailPage() {
   const cancel = useMutation({ mutationFn: () => creatorLiveApi.cancel(id), onSuccess: (d) => { set(d); setConfirmCancel(false); toast.success('Cancelled'); }, onError: (e) => toast.error(e.message) });
   const hostSession = useMutation({
     mutationFn: creatorLiveApi.host,
-    onSuccess: (r, sessionId) => (r.provider === 'EXTERNAL' ? window.open(r.joinUrl, '_blank', 'noopener') : navigate(`/creator/live/sessions/${sessionId}/room`)),
+    onSuccess: (r, sessionId) => (opensByUrl(r) ? openClassroom(r) : navigate(`/creator/live/sessions/${sessionId}/room`)),
     onError: (e) => toast.error(e.message),
   });
   const recording = useMutation({ mutationFn: creatorLiveApi.recording, onSuccess: (r) => window.open(r.url, '_blank', 'noopener'), onError: (e) => toast.error(e.message) });
@@ -241,7 +246,7 @@ export function LiveClassDetailPage() {
           <Card>
             <CardHeader title="Details" />
             <CardBody className="space-y-2 text-sm">
-              <p><span className="text-muted">Classroom:</span> {c.provider === 'LIVEKIT' ? 'Built-in' : 'Meeting link'}</p>
+              <p><span className="text-muted">Classroom:</span> {providerLabel(c.provider)}</p>
               {c.externalUrl && <p className="break-all"><span className="text-muted">Link:</span> <a className="text-primary-600 underline" href={c.externalUrl} target="_blank" rel="noreferrer noopener">{c.externalUrl}</a></p>}
               <p><span className="text-muted">Time zone:</span> {c.timezone}</p>
               {c.capacity && <p><span className="text-muted">Capacity:</span> {c.capacity}</p>}

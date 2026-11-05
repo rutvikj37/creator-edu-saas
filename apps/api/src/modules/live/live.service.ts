@@ -1,5 +1,5 @@
 import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import type { Redis } from 'ioredis';
 import { ERROR_CODES } from '@ce/shared';
 import { AppException } from '../../common/errors/app-exception.js';
@@ -14,6 +14,9 @@ import { TenantContext } from '../../core/tenancy/tenant-context.service.js';
 import { isEnrollmentUsable } from '../learning/access.js';
 import { isValidTimeZone } from '../../common/time/timezone.js';
 import { type LiveGrant, LiveKitService } from './livekit.service.js';
+import { PlugNmeetError, PlugNmeetService } from './plugnmeet.service.js';
+import { VIDEO_PROVIDER, type VideoProvider } from '../videos/providers/video-provider.interface.js';
+import { academyOrigin } from '../tenants/academy-origin.js';
 import { MATERIALIZE_DAYS, mergedSeconds, occurrences, type Recurrence, validRecurrence } from './recurrence.js';
 
 const DAY = 86_400_000;
@@ -28,7 +31,7 @@ export interface ClassInput {
   kind?: 'CLASS' | 'WEBINAR';
   title?: string;
   description?: string | null;
-  provider?: 'LIVEKIT' | 'EXTERNAL';
+  provider?: 'LIVEKIT' | 'EXTERNAL' | 'PLUGNMEET';
   externalUrl?: string | null;
   audience?: 'COURSE' | 'BATCH' | 'ALL_STUDENTS' | 'REGISTRANTS';
   courseId?: string | null;
@@ -61,10 +64,14 @@ export class LiveService {
     private readonly audit: AuditService,
     private readonly config: AppConfig,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
+    private readonly pnm: PlugNmeetService,
+    @Inject(VIDEO_PROVIDER) private readonly videos: VideoProvider,
   ) {}
 
   providers() {
-    return { livekit: this.livekit.isConfigured(), external: true, recording: this.livekit.isConfigured() && this.storage.driver === 's3' };
+    const livekitRecording = this.livekit.isConfigured() && this.storage.driver === 's3';
+    const plugnmeet = this.pnm.isConfigured();
+    return { livekit: this.livekit.isConfigured(), plugnmeet, external: true, recording: livekitRecording || plugnmeet, livekitRecording, plugnmeetRecording: plugnmeet };
   }
 
   // ── classes ───────────────────────────────────────────────
@@ -75,6 +82,7 @@ export class LiveService {
     const audience = input.audience ?? current?.audience ?? (kind === 'WEBINAR' ? 'REGISTRANTS' : undefined);
     if (input.title !== undefined && (!input.title.trim() || input.title.trim().length > 200)) errors.push({ field: 'title', message: '1–200 characters' });
     if (provider === 'LIVEKIT' && !this.livekit.isConfigured()) errors.push({ field: 'provider', message: 'The built-in classroom is not set up on this platform yet. Use a meeting link instead.' });
+    if (provider === 'PLUGNMEET' && !this.pnm.isConfigured()) errors.push({ field: 'provider', message: 'The plugNmeet classroom is not set up on this platform yet. Use a meeting link instead.' });
     if (provider === 'EXTERNAL' && input.externalUrl !== undefined && !EXTERNAL_URL.test(input.externalUrl ?? '')) errors.push({ field: 'externalUrl', message: 'Paste your Zoom, Google Meet or Teams link (https://…)' });
     if (kind === 'WEBINAR' && audience !== 'REGISTRANTS') errors.push({ field: 'audience', message: 'Webinars are for registered attendees' });
     if (kind === 'CLASS' && audience === 'REGISTRANTS') errors.push({ field: 'audience', message: 'Choose who can attend this class' });
@@ -87,7 +95,7 @@ export class LiveService {
     if (input.startsAt !== undefined && Number.isNaN(Date.parse(input.startsAt))) errors.push({ field: 'startsAt', message: 'Choose a start time' });
     if (input.timezone !== undefined && !isValidTimeZone(input.timezone)) errors.push({ field: 'timezone', message: 'Unknown time zone' });
     if (input.recurrence !== undefined && !validRecurrence(input.recurrence)) errors.push({ field: 'recurrence', message: 'Pick weekdays and an end (date or number of sessions)' });
-    if (input.recordSessions && !this.providers().recording) errors.push({ field: 'recordSessions', message: 'Recording needs the built-in classroom with S3 storage configured' });
+    if (input.recordSessions && provider === 'LIVEKIT' && !this.providers().livekitRecording) errors.push({ field: 'recordSessions', message: 'Recording needs the built-in classroom with S3 storage configured' });
     if (input.recordSessions && provider === 'EXTERNAL') errors.push({ field: 'recordSessions', message: 'Meeting-link classes are recorded in Zoom/Meet itself' });
     if (input.waitingRoom && provider === 'EXTERNAL') errors.push({ field: 'waitingRoom', message: 'Use the waiting room in Zoom/Meet for meeting-link classes' });
     if (input.hostUserId) {
@@ -251,6 +259,7 @@ export class LiveService {
     if (!(await this.mayAttend(c, who.userId, who.registrationId))) throw AppException.forbidden(c.kind === 'WEBINAR' ? 'Register for this webinar to join.' : 'This live class is for enrolled students.');
     this.windowCheck(s, false);
     const identity = who.registrationId ? `reg_${who.registrationId}` : `usr_${who.userId}`;
+    if (c.provider === 'PLUGNMEET') return this.pnmJoin(s, { identity, name: who.name, admin: false, waitForApproval: c.waitingRoom });
     if (c.provider === 'EXTERNAL') {
       await this.db.liveAttendance.create({ data: { sessionId: s.id, identity, userId: who.userId, registrationId: who.registrationId, displayName: who.name.slice(0, 120), role: 'attendee', source: 'click', joinedAt: new Date(), leftAt: new Date() } as never });
       return { provider: 'EXTERNAL' as const, joinUrl: c.externalUrl! };
@@ -292,6 +301,11 @@ export class LiveService {
     const c = s.liveClass;
     this.windowCheck(s, true);
     if (c.provider === 'EXTERNAL') return { provider: 'EXTERNAL' as const, joinUrl: c.externalUrl! };
+    if (c.provider === 'PLUGNMEET') {
+      const out = await this.pnmJoin(s, { identity: `host_${actor.userId}`, name: actor.name, admin: true, waitForApproval: false });
+      if (s.status === 'SCHEDULED') await this.db.liveSession.update({ where: { id: s.id }, data: { status: 'LIVE', startedAt: new Date(), ...(c.recordSessions ? { recordingStatus: 'RECORDING' } : {}) } });
+      return out;
+    }
     await this.ensureRoom(s, c.capacity);
     if (s.status === 'SCHEDULED') {
       await this.db.liveSession.update({ where: { id: s.id }, data: { status: 'LIVE', startedAt: new Date() } });
@@ -327,6 +341,12 @@ export class LiveService {
       }
       await this.livekit.deleteRoom(s.roomName).catch((e) => this.logger.warn({ err: (e as Error).message }, 'deleteRoom failed'));
       await this.redis.del(`live:room:${s.roomName}`);
+    }
+    if (s.liveClass.provider === 'PLUGNMEET') {
+      if (this.pnm.isConfigured()) await this.pnm.endRoom(s.roomName).catch((e) => this.logger.warn({ err: (e as Error).message }, 'plugNmeet endRoom failed'));
+      await this.redis.del(`live:pnm:${s.roomName}`);
+      // The worker imports what plugNmeet recorded once its recorder has finished the files.
+      if (s.liveClass.recordSessions && s.status === 'LIVE' && s.recordingStatus !== 'READY') await this.db.liveSession.update({ where: { id: s.id }, data: { recordingStatus: 'PROCESSING' } });
     }
     await this.db.liveSession.update({ where: { id: s.id }, data: { status: 'ENDED', endedAt: now, startedAt: s.startedAt ?? now } });
     await this.db.liveAttendance.updateMany({ where: { sessionId: s.id, leftAt: null }, data: { leftAt: now } });
@@ -471,6 +491,144 @@ export class LiveService {
     await this.db.liveSession.update({ where: { id: s.id }, data: { recordingStatus: 'READY', videoAssetId: video.id } });
   }
 
+  // ── plugNmeet ─────────────────────────────────────────────
+  private unavailable(e: unknown): never {
+    this.logger.error({ err: (e as Error).message }, 'plugNmeet call failed');
+    throw new AppException(ERROR_CODES.INTEGRATION_NOT_CONFIGURED, 'The live classroom is unavailable right now. Please try again shortly.', HttpStatus.SERVICE_UNAVAILABLE);
+  }
+
+  /** Room options from the class; the webhook URL carries a per-session secret only plugNmeet learns. */
+  private async pnmRoom(s: { id: string; roomName: string; tenantId: string; liveClass: { title: string; kind: string; waitingRoom: boolean; recordSessions: boolean; capacity: number | null; description: string | null } }) {
+    const { origin } = await academyOrigin(this.prisma, this.config, s.tenantId);
+    return {
+      roomId: s.roomName, title: s.liveClass.title, webinar: s.liveClass.kind === 'WEBINAR', waitingRoom: s.liveClass.waitingRoom, record: s.liveClass.recordSessions,
+      maxParticipants: s.liveClass.capacity ? s.liveClass.capacity + 5 : null,
+      webhookUrl: `${this.config.get('API_PUBLIC_URL').replace(/\/+$/, '')}/api/v1/webhooks/plugnmeet/${s.id}/${this.pnm.webhookToken(s.id)}`,
+      logoutUrl: `${origin}/learn/live`,
+    };
+  }
+
+  /** Creates the plugNmeet room when it is not running (plugNmeet closes empty rooms by itself). */
+  private async pnmEnsureRoom(s: Parameters<LiveService['pnmRoom']>[0]) {
+    const key = `live:pnm:${s.roomName}`;
+    if (await this.redis.get(key)) return;
+    if (!(await this.pnm.isRoomActive(s.roomName))) {
+      // One creator at a time per room; others wait for it to come up.
+      if (await this.redis.set(`${key}:lock`, '1', 'EX', 20, 'NX')) {
+        try {
+          if (!(await this.pnm.isRoomActive(s.roomName))) await this.pnm.createRoom(await this.pnmRoom(s));
+        } finally {
+          await this.redis.del(`${key}:lock`);
+        }
+      } else {
+        for (let i = 0; i < 10 && !(await this.pnm.isRoomActive(s.roomName)); i++) await new Promise((r) => setTimeout(r, 500));
+      }
+    }
+    await this.redis.set(key, '1', 'EX', 60);
+  }
+
+  private async pnmJoin(s: Parameters<LiveService['pnmRoom']>[0] & { liveClass: { id: string } }, user: { identity: string; name: string; admin: boolean; waitForApproval: boolean }) {
+    if (!this.pnm.isConfigured()) throw new AppException(ERROR_CODES.INTEGRATION_NOT_CONFIGURED, 'The live classroom is not set up on this platform.', HttpStatus.SERVICE_UNAVAILABLE);
+    if (!user.admin && s.liveClass.capacity) {
+      const present = await this.db.liveAttendance.findMany({ where: { sessionId: s.id, leftAt: null, role: { not: 'host' } }, distinct: ['identity'], select: { identity: true } });
+      if (present.length >= s.liveClass.capacity && !present.some((p) => p.identity === user.identity)) throw AppException.conflict('This session is full.');
+    }
+    try {
+      await this.pnmEnsureRoom(s);
+      const token = await this.pnm.joinToken(s.roomName, user);
+      return { provider: 'PLUGNMEET' as const, joinUrl: this.pnm.clientUrl(token), role: user.admin ? ('host' as const) : ('attendee' as const) };
+    } catch (e) {
+      if (e instanceof PlugNmeetError) this.unavailable(e);
+      throw e;
+    }
+  }
+
+  /**
+   * plugNmeet webhook. Authenticated by the per-session secret in the URL (HMAC of the session id
+   * with the API secret, compared in constant time); events are deduplicated by id.
+   */
+  async handlePlugNmeetWebhook(sessionId: string, token: string, rawBody: string) {
+    const s = await this.prisma.liveSession.findUnique({ where: { id: sessionId.slice(0, 25) }, include: { liveClass: { select: { provider: true, recordSessions: true } } } });
+    if (!s || s.liveClass.provider !== 'PLUGNMEET' || !this.pnm.verifyWebhookToken(s.id, token)) throw new AppException(ERROR_CODES.UNAUTHENTICATED, 'Invalid webhook', HttpStatus.UNAUTHORIZED);
+    let e: { event?: string; id?: string; createdAt?: string | number; room?: { roomId?: string }; participant?: { identity?: string; name?: string; joinedAt?: string | number } };
+    try {
+      e = JSON.parse(rawBody);
+    } catch {
+      throw AppException.validation([{ field: 'body', message: 'Invalid JSON' }]);
+    }
+    const dedup = e.id ? String(e.id).slice(0, 100) : createHash('sha256').update(rawBody).digest('hex');
+    if (!(await this.redis.set(`live:pnm:evt:${dedup}`, '1', 'EX', 7 * 86_400, 'NX'))) return { received: true, duplicate: true };
+    if (e.room?.roomId && e.room.roomId !== s.roomName) return { received: true, ignored: true };
+    const unix = (v: unknown) => (Number(v) > 0 ? new Date(Number(v) * 1000) : null);
+    const at = unix(e.createdAt) ?? new Date();
+    await this.ctx.run(s.tenantId, async () => {
+      switch (e.event) {
+        case 'room_started':
+          if (s.status === 'SCHEDULED') await this.db.liveSession.update({ where: { id: s.id }, data: { status: 'LIVE', startedAt: at } });
+          return;
+        case 'room_finished':
+          await this.finishSession(s.id, at);
+          return;
+        case 'participant_joined':
+          if (e.participant?.identity) await this.openAttendance(s.id, e.participant.identity, unix(e.participant.joinedAt) ?? at);
+          return;
+        case 'participant_left':
+          if (e.participant?.identity) await this.closeAttendance(s.id, e.participant.identity, at);
+          return;
+        case 'start_recording':
+          if (s.liveClass.recordSessions) await this.db.liveSession.update({ where: { id: s.id }, data: { recordingStatus: 'RECORDING' } });
+          return;
+        case 'end_recording':
+        case 'recording_proceeded':
+          // The worker lists the recordings through the API and imports new ones.
+          if (s.recordingStatus !== 'READY') await this.db.liveSession.update({ where: { id: s.id }, data: { recordingStatus: 'PROCESSING' } });
+          return;
+        default:
+      }
+    });
+    return { received: true };
+  }
+
+  private async openAttendance(sessionId: string, identity: string, joinedAt: Date) {
+    if (await this.db.liveAttendance.findFirst({ where: { sessionId, identity, leftAt: null } })) return;
+    const { userId, registrationId, role } = this.parseIdentity(identity);
+    const name = await this.displayName(userId, registrationId);
+    await this.db.liveAttendance.create({ data: { sessionId, identity, userId, registrationId, displayName: name, role, source: 'plugnmeet', joinedAt } as never });
+  }
+
+  private async closeAttendance(sessionId: string, identity: string, at: Date) {
+    const open = await this.db.liveAttendance.findFirst({ where: { sessionId, identity, leftAt: null }, orderBy: { joinedAt: 'desc' } });
+    if (open) await this.db.liveAttendance.update({ where: { id: open.id }, data: { leftAt: at < open.joinedAt ? open.joinedAt : at } });
+  }
+
+  /** Room closed on plugNmeet: session over, attendance final, recordings to collect. */
+  private async finishSession(sessionId: string, at: Date) {
+    const s = await this.db.liveSession.findFirst({ where: { id: sessionId }, include: { liveClass: true } });
+    if (!s || s.status === 'ENDED' || s.status === 'CANCELLED') return;
+    await this.db.liveSession.update({ where: { id: s.id }, data: { status: 'ENDED', endedAt: at, startedAt: s.startedAt ?? at, ...(s.liveClass.recordSessions && s.recordingStatus !== 'READY' ? { recordingStatus: 'PROCESSING' } : {}) } });
+    await this.db.liveAttendance.updateMany({ where: { sessionId: s.id, leftAt: null }, data: { leftAt: at } });
+    await this.redis.del(`live:pnm:${s.roomName}`);
+  }
+
+  /**
+   * Reconciles a running plugNmeet session with the room's participant list (covers missed
+   * webhooks). Ends the session when the room has closed.
+   */
+  async syncPlugNmeetSession(sessionId: string, now = new Date()) {
+    const s = await this.db.liveSession.findFirst({ where: { id: sessionId, status: 'LIVE' } });
+    if (!s) return;
+    const people = await this.pnm.participants(s.roomName);
+    if (people === null) {
+      // Allow time for the host's first join before treating "no room" as closed.
+      if ((s.startedAt ?? s.startsAt).getTime() < now.getTime() - 5 * 60_000) await this.finishSession(s.id, now);
+      return;
+    }
+    const present = new Set(people.map((p) => p.identity));
+    for (const p of people) await this.openAttendance(s.id, p.identity, p.joinedAt ?? now);
+    const open = await this.db.liveAttendance.findMany({ where: { sessionId: s.id, leftAt: null } });
+    for (const r of open) if (!present.has(r.identity)) await this.db.liveAttendance.update({ where: { id: r.id }, data: { leftAt: now } });
+  }
+
   // ── student views ─────────────────────────────────────────
   async upcomingFor(userId: string) {
     const sessions = await this.db.liveSession.findMany({
@@ -499,9 +657,14 @@ export class LiveService {
     if (!who.staff && !(await this.mayAttend(s.liveClass, who.userId, who.registrationId))) throw AppException.forbidden('You are not part of this session.');
     if (s.recordingStatus !== 'READY' || !s.videoAssetId) throw AppException.notFound('No recording for this session');
     const v = await this.db.videoAsset.findFirst({ where: { id: s.videoAssetId } });
+    if (v?.provider === 'BUNNY') {
+      if (v.status !== 'READY' || !v.providerAssetId) throw AppException.conflict('The recording is still being processed. Try again in a few minutes.');
+      const p = this.videos.authorizePlayback(v.providerAssetId, 4 * 3600);
+      return { kind: 'iframe' as const, url: p.url, title: v.title, durationSeconds: v.durationSeconds };
+    }
     const f = v?.sourceFileId && (await this.db.fileAsset.findFirst({ where: { id: v.sourceFileId } }));
     if (!f) throw AppException.notFound('No recording for this session');
-    return { url: await this.storage.downloadUrl(f, f.fileName, apiOrigin, 4 * 3600), title: v!.title, durationSeconds: v!.durationSeconds };
+    return { kind: 'file' as const, url: await this.storage.downloadUrl(f, f.fileName, apiOrigin, 4 * 3600), title: v!.title, durationSeconds: v!.durationSeconds };
   }
 
   // ── audience (for reminders) ──────────────────────────────

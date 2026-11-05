@@ -64,7 +64,43 @@ describe('LiveClassesPage', () => {
   });
 });
 
+describe('LiveClassesPage with plugNmeet', () => {
+  it('defaults to the plugNmeet classroom and sends waiting room / recording', async () => {
+    creatorLiveApi.providers.mockResolvedValue({ livekit: false, plugnmeet: true, external: true, recording: true, livekitRecording: false, plugnmeetRecording: true });
+    creatorLiveApi.classes.mockResolvedValue([{ id: 'k1', title: 'Algebra live', provider: 'PLUGNMEET', audience: 'ALL_STUDENTS', status: 'ACTIVE' }]);
+    creatorLiveApi.create.mockResolvedValue({ id: 'new2' });
+    wrap(<LiveClassesPage />);
+    expect((await screen.findAllByText('plugNmeet classroom'))[0]).toBeInTheDocument(); // list label
+    expect(screen.queryByText(/built-in classroom isn't set up/)).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Schedule class' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('radio', { name: /plugNmeet classroom/ })).toBeChecked();
+    expect(within(dialog).queryByRole('radio', { name: /Built-in classroom/ })).toBeNull(); // LiveKit not set up: not offered
+    expect(within(dialog).queryByLabelText('Meeting link')).toBeNull();
+    await userEvent.type(within(dialog).getByLabelText(/^Title/), 'Algebra live');
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: /Waiting room/ }));
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: /Record sessions/ }));
+    expect(within(dialog).getByText(/added to your video library after the session/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Schedule' }));
+    await waitFor(() => expect(creatorLiveApi.create).toHaveBeenCalled());
+    expect(creatorLiveApi.create.mock.calls[0][0]).toMatchObject({ provider: 'PLUGNMEET', waitingRoom: true, recordSessions: true });
+    expect(creatorLiveApi.create.mock.calls[0][0].externalUrl).toBeUndefined();
+  });
+});
+
 describe('StudentLivePage', () => {
+  it('opens the plugNmeet classroom from Join', async () => {
+    learnLiveApi.upcoming.mockResolvedValue([{ id: 's1', startsAt: new Date().toISOString(), status: 'LIVE', joinOpensAt: new Date(Date.now() - 60_000).toISOString(), liveClass: { title: 'Algebra live' } }]);
+    learnLiveApi.join.mockResolvedValue({ provider: 'PLUGNMEET', joinUrl: 'https://meet.example.test/?access_token=abc', role: 'attendee' });
+    const tab = { opener: 'x' };
+    const open = vi.spyOn(window, 'open').mockReturnValue(tab);
+    wrap(<StudentLivePage />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Join' }));
+    await waitFor(() => expect(open).toHaveBeenCalledWith('https://meet.example.test/?access_token=abc', '_blank'));
+    expect(tab.opener).toBeNull();
+    open.mockRestore();
+  });
+
   it('enables Join only once the session opens', async () => {
     const soon = new Date(Date.now() + 5 * 60_000).toISOString();
     const later = new Date(Date.now() + 3 * 86_400_000).toISOString();

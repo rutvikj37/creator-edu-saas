@@ -110,6 +110,9 @@ importers:
       pino-http:
         specifier: ^11.0.0
         version: 11.0.0
+      plugnmeet-sdk-js:
+        specifier: 2.3.0
+        version: 2.3.0
       qrcode:
         specifier: ^1.5.4
         version: 1.5.4
@@ -516,6 +519,9 @@ packages:
 
   '@bufbuild/protobuf@1.10.1':
     resolution: {integrity: sha512-wJ8ReQbHxsAfXhrf9ixl0aYbZorRuOWpBNzm8pL8ftmSxQx/wnJD5Eg861NwJU/czy2VXFIebCeZnZrI9rktIQ==}
+
+  '@bufbuild/protobuf@2.16.0':
+    resolution: {integrity: sha512-FWa0sPlqYGJgpTs6OxBRcL/AW4JT0OIO+W1ajerluoTVh8CV0B7XM1qsNCRgnkSCkRCgOICKHRQlY17jrsm0+Q==}
 
   '@bunny.net/openapi-client@0.3.1':
     resolution: {integrity: sha512-88n2zd9KjTC9RaKgaZ3EfnIKK9PTi8z8yXHW6GXTM3vIu5c0lVboNWycbTQ4YpCJaIQF1G/8imlTD//Y6nsj/w==}
@@ -3743,6 +3749,16 @@ packages:
   pkg-types@2.4.0:
     resolution: {integrity: sha512-07Fys7iVx0X6TcviMOgogM1Lk33ZyqOezMnU79S+kffWqwolG/5W9V8EgQSeYCIfFTYVgssRbnH630Oa2+soBA==}
 
+  plugnmeet-protocol-js@1.6.3:
+    resolution: {integrity: sha512-U9aCFEbJn+aLCFrNAIiLc4673Htn+bztsLcbjpkQ0VErPKyBOFwXelYXz+wU7wsOymPoK2HmgvrC3t+wlcmjKg==}
+    engines: {node: '>=22.7'}
+    peerDependencies:
+      '@bufbuild/protobuf': ^2.13.0
+
+  plugnmeet-sdk-js@2.3.0:
+    resolution: {integrity: sha512-Lcifosvp5d8PlqyliKhCxTwcksyThZl6aANjsc9SKKY+6zD2XRYYLLi+Bt0yfyeus8GplDADc9H8gFIOeYxKIQ==}
+    engines: {node: '>=22.7'}
+
   pluralize@8.0.0:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
@@ -4935,6 +4951,8 @@ snapshots:
       css-tree: 3.2.1
 
   '@bufbuild/protobuf@1.10.1': {}
+
+  '@bufbuild/protobuf@2.16.0': {}
 
   '@bunny.net/openapi-client@0.3.1':
     dependencies:
@@ -7909,6 +7927,20 @@ snapshots:
       confbox: 0.3.2
       exsolve: 1.2.0
       pathe: 2.0.3
+
+  plugnmeet-protocol-js@1.6.3(@bufbuild/protobuf@2.16.0):
+    dependencies:
+      '@bufbuild/protobuf': 2.16.0
+
+  plugnmeet-sdk-js@2.3.0:
+    dependencies:
+      '@bufbuild/protobuf': 2.16.0
+      axios: 1.21.0
+      form-data: 4.0.6
+      plugnmeet-protocol-js: 1.6.3(@bufbuild/protobuf@2.16.0)
+    transitivePeerDependencies:
+      - debug
+      - supports-color
 
   pluralize@8.0.0: {}
 

@@ -1981,6 +1981,7 @@ model BatchMember {
 enum LiveProvider {
   LIVEKIT
   EXTERNAL
+  PLUGNMEET
 }
 
 enum LiveKind {
@@ -2063,11 +2064,41 @@ model LiveSession {
   updatedAt       DateTime          @updatedAt @db.DateTime(3)
   liveClass       LiveClass         @relation(fields: [tenantId, liveClassId], references: [tenantId, id], onDelete: Cascade)
   attendance      LiveAttendance[]
+  recordings      LiveRecording[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, liveClassId, startsAt])
   @@index([status, startsAt])
   @@index([tenantId, startsAt])
+}
+
+enum LiveRecordingStatus {
+  IMPORTING
+  READY
+  FAILED
+}
+
+/// A recording made by the live provider (plugNmeet), imported once into the video library.
+model LiveRecording {
+  id                  String              @id @default(cuid()) @db.Char(25)
+  tenantId            String              @db.Char(25)
+  sessionId           String              @db.Char(25)
+  /// plugNmeet record id.
+  providerRecordingId String              @db.VarChar(191)
+  sizeBytes           BigInt?
+  recordedAt          DateTime?           @db.DateTime(3)
+  status              LiveRecordingStatus @default(IMPORTING)
+  attempts            Int                 @default(0)
+  videoAssetId        String?             @db.Char(25)
+  error               String?             @db.VarChar(500)
+  createdAt           DateTime            @default(now()) @db.DateTime(3)
+  updatedAt           DateTime            @updatedAt @db.DateTime(3)
+  session             LiveSession         @relation(fields: [tenantId, sessionId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([providerRecordingId])
+  @@index([tenantId, sessionId])
+  @@index([status, updatedAt])
 }
 
 /// One join→leave interval. Several per person when they reconnect; merged for attendance %.

@@ -13,7 +13,7 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 | 6 Video (no DRM — scope set by owner 2026-11-05) | video library, direct + multipart uploads, signed playback sessions, resume, auto-complete, concurrent-stream limit, revocation | student plays an attached video; unauthorized playback denied | ✅ 2026-11-05 |
 | 7 Commerce (Razorpay only — owner decision 2026-11-05) | Razorpay gateway per academy, checkout, coupons, GST, orders, webhooks, reconciliation, refunds, invoices, ledger, commission recording, finance views | paid checkout → access → invoice → refund, verified against Razorpay's API contract | ✅ 2026-11-05 |
 | 8 Website | **owner decision 2026-11-05: two options per academy — connect an existing external website, or an AI-generated landing page** (from profile, courses, industry); block pages, versions, previews, SEO title/description; **domains: free branded subdomain and/or own domain** + TLS | creator publishes a landing page or links an own website | 🟨 landing page + external website + drag-and-drop page builder + domains done; blog UI, sitemap/robots.txt and TLS pending |
-| 9 Live learning | LiveKit built-in classroom (primary) + meeting-link classes (Zoom/Meet/Teams URL), scheduling, weekly recurrence, waiting room, chat (LiveKit), polls/Q&A, attendance, recordings, webinars, batches | live class with attendance recorded | ✅ 2026-11-05 (live A/V not verifiable here) |
+| 9 Live learning | plugNmeet classroom (primary, owner decision 2026-11-05) + LiveKit built-in classroom + meeting-link classes (Zoom/Meet/Teams URL), scheduling, weekly recurrence, waiting room, chat (LiveKit), polls/Q&A, attendance, recordings, webinars, batches | live class with attendance recorded | ✅ 2026-11-05 (live A/V not verifiable here) |
 | 10 Growth & advanced | notifications (email/SMS/WhatsApp/web-push), campaigns, automations, leads, consent, affiliates, communities, memberships, advanced analytics + exports, AI features with credits | module tests + e2e | ✅ 2026-11-05 (SMS/WhatsApp, web push and live AI not verifiable here) |
 | 11 Quality & production | security audit, load tests, query optimisation, backups/restore drill, Nginx/PM2/AWS config, runbooks | release checklist signed off | ⬜ |
 
@@ -119,7 +119,13 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 
 **Next**: themes/templates, block page builder with versions and preview, header/footer/navigation, blog, SEO meta + sitemap, automated TLS for verified own domains.
 
-## Phase 9 — Live learning (✅ complete)
+## Phase 9 — Live learning (✅ complete; plugNmeet added 2026-11-05)
+
+**plugNmeet (owner decision 2026-11-05: "We integrate plug n meet for live classes and webinars")** — a full integration, not a link. Details and the items to confirm on a real server: [LIVE_CLASSES.md](LIVE_CLASSES.md#plugnmeet-self-hosted-platform-provided).
+- **API**: new provider `PLUGNMEET` (config `PLUGNMEET_URL/API_KEY/API_SECRET`) using the official `plugnmeet-sdk-js` (HMAC-signed calls) · room created from the class settings on first join (waiting room, auto cloud recording, capacity, webinar attendee locks, chat/whiteboard/notepad/polls/breakout rooms) · join tokens after our access checks, with our identities so attendance maps to students and webinar registrants · host start/end (`endRoom`) · per-session webhook URL with an HMAC secret; join/leave attendance, room start/finish, recording events; duplicates ignored · worker sync every minute: attendance from the live participant list, rooms that closed without a webhook end the session · recordings listed through the API and imported once each into Bunny Stream (or private storage), retried 5×, then playable by students allowed to attend (Bunny token player).
+- **Web**: plugNmeet classroom offered first in the schedule form (classes and webinars) with waiting room and recording · Join/Start open the plugNmeet classroom (new tab, same tab if pop-ups are blocked; it returns to Live classes on leave) · recordings play in the Bunny player.
+- **Verification**: API e2e 114 ✅ (new plugNmeet suite against a local plugNmeet server that checks the SDK's real signatures and protocol shapes: room settings, join tokens and roles, access before any plugNmeet call, forged/duplicate/foreign-room webhooks, attendance from webhooks and from sync, capacity, end, webinar locks and ticket join, unreachable server → 503, room closed by plugNmeet, recording discovery → Bunny upload with exact bytes, retry and final failure, chunked download spooling, wrong API secret refused) · API unit 103 ✅ · web 108 ✅ · dev API and worker boot with the new wiring.
+- **Not verified here**: a real plugNmeet server (none configured; this environment cannot reach one). Before production: deploy plugNmeet, set the three variables, run one class with two browsers, and confirm the items listed in LIVE_CLASSES.md.
 
 **Scope decision**: LiveKit is the full provider (embedded classroom, platform-provided account gated by the plan's `live_classes` feature). Zoom, Google Meet and Teams are supported as **meeting links** the creator pastes (click-to-join attendance); their full APIs need a Zoom Marketplace app / Google Workspace credentials and can be added later.
 
@@ -191,3 +197,4 @@ Bunny Stream as primary video host (direct TUS uploads, webhook + API-verified p
 - 2026-11-05 — Video management module (Bunny Stream, Google Drive backups, usage) completed.
 - 2026-11-05 — Academy website: own external website or AI landing page.
 - 2026-11-05 — Website drag-and-drop page builder.
+- 2026-11-05 — plugNmeet integration for live classes and webinars.

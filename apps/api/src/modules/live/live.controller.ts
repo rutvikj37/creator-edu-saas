@@ -20,7 +20,7 @@ class ClassDto {
   @ApiPropertyOptional({ enum: ['CLASS', 'WEBINAR'] }) @IsOptional() @IsIn(['CLASS', 'WEBINAR']) kind?: 'CLASS' | 'WEBINAR';
   @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(200) title?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(2000) description?: string | null;
-  @ApiPropertyOptional({ enum: ['LIVEKIT', 'EXTERNAL'] }) @IsOptional() @IsIn(['LIVEKIT', 'EXTERNAL']) provider?: 'LIVEKIT' | 'EXTERNAL';
+  @ApiPropertyOptional({ enum: ['LIVEKIT', 'EXTERNAL', 'PLUGNMEET'] }) @IsOptional() @IsIn(['LIVEKIT', 'EXTERNAL', 'PLUGNMEET']) provider?: 'LIVEKIT' | 'EXTERNAL' | 'PLUGNMEET';
   @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(500) externalUrl?: string | null;
   @ApiPropertyOptional({ enum: ['COURSE', 'BATCH', 'ALL_STUDENTS', 'REGISTRANTS'] }) @IsOptional() @IsIn(['COURSE', 'BATCH', 'ALL_STUDENTS', 'REGISTRANTS']) audience?: 'COURSE' | 'BATCH' | 'ALL_STUDENTS' | 'REGISTRANTS';
   @ApiPropertyOptional() @IsOptional() @IsString() @Length(25, 25) courseId?: string | null;
@@ -36,7 +36,7 @@ class ClassDto {
 }
 class CreateClassDto extends ClassDto {
   @ApiProperty() @Transform(trim) @IsString() @Length(1, 200) declare title: string;
-  @ApiProperty({ enum: ['LIVEKIT', 'EXTERNAL'] }) @IsIn(['LIVEKIT', 'EXTERNAL']) declare provider: 'LIVEKIT' | 'EXTERNAL';
+  @ApiProperty({ enum: ['LIVEKIT', 'EXTERNAL', 'PLUGNMEET'] }) @IsIn(['LIVEKIT', 'EXTERNAL', 'PLUGNMEET']) declare provider: 'LIVEKIT' | 'EXTERNAL' | 'PLUGNMEET';
   @ApiProperty() @IsDateString() declare startsAt: string;
   @ApiProperty() @IsInt() @Min(5) @Max(600) declare durationMinutes: number;
 }
@@ -296,5 +296,19 @@ export class LiveKitWebhookController {
   @ApiOperation({ summary: 'LiveKit webhook (Authorization: JWT signed with the API secret, sha256 of body)' })
   receive(@Req() req: Request & { rawBody?: Buffer }, @Headers('authorization') auth?: string) {
     return this.live.handleWebhook(req.rawBody?.toString('utf8') ?? '', auth);
+  }
+}
+
+// ── plugNmeet webhooks ──────────────────────────────────────
+@ApiTags('Webhooks')
+@Public()
+@Controller({ path: 'webhooks/plugnmeet', version: '1' })
+export class PlugNmeetWebhookController {
+  constructor(private readonly live: LiveService) {}
+
+  @Post(':sessionId/:token') @HttpCode(200)
+  @ApiOperation({ summary: 'plugNmeet room webhook (set per room; the URL carries a per-session secret)' })
+  receive(@Param('sessionId') sessionId: string, @Param('token') token: string, @Req() req: Request & { rawBody?: Buffer }) {
+    return this.live.handlePlugNmeetWebhook(sessionId, token.slice(0, 64), req.rawBody?.toString('utf8') ?? '');
   }
 }

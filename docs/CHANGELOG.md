@@ -2,6 +2,12 @@
 
 Format: Keep a Changelog. Versions follow SemVer once Phase 1 ships.
 
+## [0.14.0] — 2026-11-05 — plugNmeet live classes and webinars
+### Added
+- plugNmeet classroom for live classes and webinars (self-hosted plugNmeet server): rooms created from the class settings (waiting room, automatic cloud recording, capacity, webinar attendee locks, whiteboard, shared notes, polls, breakout rooms), secure join tokens after the academy's access checks, attendance from plugNmeet webhooks and a per-minute sync, host end, and recordings imported into the video library (Bunny Stream) for students to watch.
+### Changed
+- Recording playback for live sessions supports Bunny-hosted recordings (token-signed player).
+
 ## [0.13.0] — 2026-11-05 — Website drag-and-drop page builder
 ### Added
 - Full-screen page builder for the home page and extra pages: drag blocks from a palette, reorder, hide, duplicate, delete, edit every field in an inspector, undo/redo, desktop/mobile preview, page settings and SEO, save, preview, publish, unpublish and version restore, with an unsaved-changes guard.

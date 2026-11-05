@@ -3,7 +3,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { createHmac } from 'node:crypto';
 import { mkdir, open, rm, stat, writeFile } from 'node:fs/promises';
 export { stat as statFile };
-import { createReadStream } from 'node:fs';
+import { createReadStream, createWriteStream } from 'node:fs';
+import { pipeline } from 'node:stream/promises';
 import { dirname, resolve, sep } from 'node:path';
 import { AbortMultipartUploadCommand, CompleteMultipartUploadCommand, CreateMultipartUploadCommand, DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client, UploadPartCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -83,6 +84,17 @@ export class StorageService {
     const p = this.localPath(key);
     await mkdir(dirname(p), { recursive: true });
     await writeFile(p, data);
+  }
+
+  /** Streams a server-side file into private storage (S3 single PUT needs the exact size; ≤ 5 GB). */
+  async putStream(key: string, body: Readable, size: number, contentType: string) {
+    if (this.driver === 'local') {
+      const p = this.localPath(key);
+      await mkdir(dirname(p), { recursive: true });
+      await pipeline(body, createWriteStream(p));
+      return;
+    }
+    await this.s3!.send(new PutObjectCommand({ Bucket: this.bucketFor(false), Key: key, Body: body, ContentLength: size, ContentType: contentType }));
   }
 
   localReadStream(key: string, range?: { start: number; end: number }) {
