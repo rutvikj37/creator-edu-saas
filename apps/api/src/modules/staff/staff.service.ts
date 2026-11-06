@@ -30,7 +30,13 @@ export class StaffService {
     private readonly audit: AuditService,
   ) {}
 
-  private role(key: string) {
+  /** A built-in staff role, or one of this academy's custom roles. */
+  private async role(key: string) {
+    if (key.startsWith('custom_')) {
+      const r = await this.prisma.role.findFirst({ where: { key, tenantId: this.ctx.requireTenantId(), isSystem: false } });
+      if (!r) throw AppException.validation([{ field: 'roleKey', message: 'Choose a staff role' }]);
+      return r;
+    }
     if (!ASSIGNABLE_ROLES.includes(key as never)) throw AppException.validation([{ field: 'roleKey', message: 'Choose a staff role' }]);
     return this.prisma.role.findUniqueOrThrow({ where: { uniqueKey: `system:${key}` } });
   }
@@ -44,13 +50,23 @@ export class StaffService {
     return {
       members,
       invitations: invitations.map(({ tokenHash, ...i }) => ({ ...i, role: roles.find((r) => r.id === i.roleId) })),
-      assignableRoles: (await this.prisma.role.findMany({ where: { uniqueKey: { in: ASSIGNABLE_ROLES.map((k) => `system:${k}`) } }, select: { key: true, name: true } })),
+      assignableRoles: (await this.prisma.role.findMany({ where: { OR: [{ uniqueKey: { in: ASSIGNABLE_ROLES.map((k) => `system:${k}`) } }, { tenantId: this.ctx.requireTenantId(), isSystem: false }] }, select: { key: true, name: true, isSystem: true }, orderBy: [{ isSystem: 'desc' }, { name: 'asc' }] })).map((r) => ({ key: r.key, name: r.name, custom: !r.isSystem })),
     };
+  }
+
+  /** Nobody can hand out (or take) a role with permissions they do not have themselves. */
+  private async assertCanAssign(roleId: string, actorUserId: string) {
+    const tenantId = this.ctx.requireTenantId();
+    const mine = await this.authz.permissions({ userId: actorUserId, realm: 'PLATFORM', tenantId });
+    const perms = await this.prisma.rolePermission.findMany({ where: { roleId }, select: { permission: { select: { key: true } } } });
+    const above = perms.map((p) => p.permission.key).filter((k) => !mine.has(k));
+    if (above.length) throw AppException.forbidden('This role has permissions you do not have, so you cannot assign it.');
   }
 
   async invite(email: string, roleKey: string, actorUserId: string, origin: string) {
     const tenantId = this.ctx.requireTenantId();
     const role = await this.role(roleKey);
+    await this.assertCanAssign(role.id, actorUserId);
     const [members, pending] = await Promise.all([
       this.db.tenantMember.count({ where: { status: 'ACTIVE' } }),
       this.db.staffInvitation.count({ where: { acceptedAt: null, revokedAt: null, expiresAt: { gt: new Date() } } }),
@@ -93,6 +109,8 @@ export class StaffService {
   async changeRole(memberId: string, roleKey: string, actorUserId: string) {
     const m = await this.member(memberId);
     const role = await this.role(roleKey);
+    await this.assertCanAssign(role.id, actorUserId);
+    await this.assertCanAssign(m.roleId, actorUserId); // cannot demote someone who holds more than you
     await this.db.tenantMember.update({ where: { id: memberId }, data: { roleId: role.id } });
     await this.authz.invalidate(m.userId);
     await this.audit.record({ action: 'staff.role_change', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'TenantMember', targetId: memberId, before: { role: m.role.key }, after: { role: roleKey } });

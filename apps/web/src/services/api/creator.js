@@ -36,6 +36,14 @@ export const coursesApi = {
   removeLesson: (id, lid) => http.delete(`/creator/courses/${id}/lessons/${lid}`).then(d),
 };
 
+export const rolesApi = {
+  list: () => http.get('/creator/roles').then((r) => r.data),
+  catalog: () => http.get('/creator/roles/permissions').then((r) => r.data),
+  create: (body) => http.post('/creator/roles', body).then((r) => r.data),
+  update: (id, body) => http.patch(`/creator/roles/${id}`, body).then((r) => r.data),
+  remove: (id) => http.delete(`/creator/roles/${id}`).then((r) => r.data),
+};
+
 export const staffApi = {
   list: () => http.get('/creator/staff').then(d),
   invite: (body) => http.post('/creator/staff/invitations', body).then(d),

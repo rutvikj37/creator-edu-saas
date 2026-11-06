@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Req, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiProperty, ApiTags } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEmail, IsString, Length, MaxLength, MinLength } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsEmail, IsOptional, IsString, Length, MaxLength, MinLength } from 'class-validator';
 import type { Response } from 'express';
 import { PERMISSIONS } from '@ce/shared';
 import { ClientMetaParam, CurrentAuth, RequirePermissions, RequireRealm, TenantScoped } from '../../common/decorators/auth.decorators.js';
@@ -15,6 +15,7 @@ import { AuthService } from '../auth/services/auth.service.js';
 import { setSessionCookies } from '../auth/auth.cookies.js';
 import type { ClientMeta } from '../auth/services/session.service.js';
 import { StaffService } from './staff.service.js';
+import { RolesService } from './roles.service.js';
 
 class InviteDto {
   @ApiProperty() @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value)) @IsEmail({}, { message: 'Enter a valid email address' }) email: string;
@@ -22,6 +23,14 @@ class InviteDto {
 }
 class RoleDto {
   @ApiProperty() @IsString() roleKey: string;
+}
+class CreateRoleDto {
+  @ApiProperty() @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value)) @IsString() @Length(1, 60) name: string;
+  @ApiProperty({ type: [String] }) @IsArray() @ArrayMaxSize(50) @IsString({ each: true }) permissions: string[];
+}
+class UpdateRoleDto {
+  @ApiProperty({ required: false }) @IsOptional() @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value)) @IsString() @Length(1, 60) name?: string;
+  @ApiProperty({ required: false, type: [String] }) @IsOptional() @IsArray() @ArrayMaxSize(50) @IsString({ each: true }) permissions?: string[];
 }
 class TokenBody {
   @ApiProperty() @IsString() @Length(20, 200) token: string;
@@ -107,4 +116,28 @@ export class InvitationsController {
     setSessionCookies(res, session.refreshToken, session.refreshExpiresAt, this.config.isProduction);
     return { accessToken: session.accessToken, expiresIn: session.expiresIn };
   }
+}
+
+@ApiTags('Creator · Staff')
+@ApiBearerAuth()
+@TenantScoped('workspace')
+@RequirePermissions(PERMISSIONS.STAFF_MANAGE)
+@Controller({ path: 'creator/roles', version: '1' })
+export class RolesController {
+  constructor(private readonly roles: RolesService) {}
+
+  @Get()
+  list() { return this.roles.list(); }
+
+  @Get('permissions')
+  catalog() { return this.roles.catalog(); }
+
+  @Post()
+  create(@Body() dto: CreateRoleDto, @CurrentAuth() auth: AuthContext) { return this.roles.create(dto, auth.userId); }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() dto: UpdateRoleDto, @CurrentAuth() auth: AuthContext) { return this.roles.update(id, dto, auth.userId); }
+
+  @Delete(':id')
+  remove(@Param('id') id: string, @CurrentAuth() auth: AuthContext) { return this.roles.remove(id, auth.userId); }
 }

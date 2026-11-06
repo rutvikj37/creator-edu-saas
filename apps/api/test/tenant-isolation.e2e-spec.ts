@@ -88,6 +88,7 @@ const WORKSPACE_ROUTES_COVERED = [
   // Phase 7 — commerce (cross-tenant behaviour is also exercised in commerce.e2e-spec.ts)
   'GET /api/v1/creator/payments/razorpay', 'PUT /api/v1/creator/payments/razorpay', 'POST /api/v1/creator/payments/razorpay/verify', 'PATCH /api/v1/creator/payments/razorpay', 'DELETE /api/v1/creator/payments/razorpay',
   'GET /api/v1/creator/coupons', 'POST /api/v1/creator/coupons', 'PATCH /api/v1/creator/coupons/:id', 'DELETE /api/v1/creator/coupons/:id',
+  'GET /api/v1/creator/roles', 'GET /api/v1/creator/roles/permissions', 'POST /api/v1/creator/roles', 'PATCH /api/v1/creator/roles/:id', 'DELETE /api/v1/creator/roles/:id', // isolation asserted in custom-roles.e2e-spec.ts
   'GET /api/v1/creator/products', 'GET /api/v1/creator/products/:id', 'GET /api/v1/creator/products/:id/buyers', 'POST /api/v1/creator/products', 'PATCH /api/v1/creator/products/:id', 'POST /api/v1/creator/products/:id/status', // isolation asserted in digital-products.e2e-spec.ts
   'GET /api/v1/creator/live/integrations', 'POST /api/v1/creator/live/integrations/:provider/connect', 'DELETE /api/v1/creator/live/integrations/:provider', // isolation asserted in zoom-meet.e2e-spec.ts
   'GET /api/v1/creator/question-bank', 'GET /api/v1/creator/question-bank/tags', 'POST /api/v1/creator/question-bank', 'PUT /api/v1/creator/question-bank/:id', 'DELETE /api/v1/creator/question-bank/:id', // isolation asserted in question-bank.e2e-spec.ts
