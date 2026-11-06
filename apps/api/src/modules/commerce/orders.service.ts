@@ -69,10 +69,23 @@ export interface CheckoutInput extends ProductRef {
   couponCode?: string | null;
   /** Referral code from an affiliate link (?ref=). Invalid or self-referral codes are ignored. */
   affiliateCode?: string | null;
+  /** First-touch attribution from the site tracker: visitorId, source, medium, campaign, referrerHost, landingPath. */
+  attribution?: Record<string, unknown> | null;
   billing: BillingInput;
 }
 
 type Tx = Parameters<Parameters<TenantPrismaClient['$transaction']>[0]>[0];
+
+/** Keeps only known attribution fields, as short lower-case strings. */
+export function cleanAttribution(a: Record<string, unknown> | null | undefined) {
+  if (!a || typeof a !== 'object') return undefined;
+  const out: Record<string, string> = {};
+  for (const [k, max] of [['visitorId', 40], ['source', 100], ['medium', 100], ['campaign', 150], ['referrerHost', 191], ['landingPath', 255]] as const) {
+    const v = a[k];
+    if (typeof v === 'string' && v.trim()) out[k] = k === 'visitorId' || k === 'landingPath' ? v.trim().slice(0, max) : v.trim().toLowerCase().slice(0, max);
+  }
+  return Object.keys(out).length ? out : undefined;
+}
 
 /** Courses an order unlocks: each line's fixed grant list (bundles), or its course. */
 export function grantedCourses(items: { courseId: string | null; grantCourseIds?: unknown }[]) {
@@ -315,7 +328,7 @@ export class OrdersService {
           number: `ORD-${String(n).padStart(6, '0')}`, userId, currency: cur,
           subtotalAmount: fromMinor(q.subtotal, cur), discountAmount: fromMinor(q.discount, cur), taxAmount: fromMinor(q.tax, cur), totalAmount: fromMinor(q.total, cur),
           taxRate: tax?.rate ?? null, taxInclusive: tax?.inclusive ?? true, couponId: coupon?.id ?? null, couponCode: coupon?.code ?? null,
-          billing, idempotencyKey: idempotencyKey ?? null, expiresAt: new Date(Date.now() + ORDER_TTL_MS), affiliateId,
+          billing, idempotencyKey: idempotencyKey ?? null, expiresAt: new Date(Date.now() + ORDER_TTL_MS), affiliateId, attribution: cleanAttribution(input.attribution),
         } as never,
       });
       for (const [i, l] of lines.entries()) {

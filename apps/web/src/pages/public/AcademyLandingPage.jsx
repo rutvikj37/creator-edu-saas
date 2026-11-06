@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router';
 import { captureReferral } from '../../services/api/affiliates.js';
+import { captureAttribution, track } from '../../utils/tracker.js';
 import { useQuery } from '@tanstack/react-query';
 import { BookOpen, Layers, ShoppingCart, Users } from 'lucide-react';
 import { bundlesApi, cartApi, productsApi } from '../../services/api/commerce.js';
@@ -29,6 +30,10 @@ export function AcademyHeader({ site, nav }) {
   useEffect(() => {
     if (location.search.includes('ref=')) captureReferral(location.search, location.pathname);
   }, [location.search, location.pathname]);
+  useEffect(() => {
+    captureAttribution(location.search, location.pathname);
+    track('page_view', location.pathname);
+  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <header className="border-b border-line bg-surface">
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4">

@@ -11,7 +11,7 @@ import { coursesApi } from '../../services/api/creator.js';
 import { saveBlob } from '../../utils/download.js';
 import { formatMoney, formatNumber } from '../../utils/format.js';
 
-const TABS = [{ value: 'overview', label: 'Overview' }, { value: 'courses', label: 'Courses' }, { value: 'gst', label: 'GST report' }, { value: 'exports', label: 'Exports' }];
+const TABS = [{ value: 'overview', label: 'Overview' }, { value: 'conversions', label: 'Conversions' }, { value: 'courses', label: 'Courses' }, { value: 'gst', label: 'GST report' }, { value: 'exports', label: 'Exports' }];
 const PRESETS = [{ label: '7 days', days: 7 }, { label: '30 days', days: 30 }, { label: '90 days', days: 90 }, { label: '12 months', days: 365 }];
 
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -205,6 +205,83 @@ function ExportsTab({ range }) {
   );
 }
 
+const pct = (v) => (v === null || v === undefined ? '—' : `${v}%`);
+const KIND = { course: 'Course', bundle: 'Bundle', product: 'Product', webinar: 'Webinar', membership: 'Membership' };
+
+/** Visitors → product views → checkout → paid, by item, page and traffic source (first-party tracking). */
+function ConversionsTab({ range }) {
+  const q = useQuery({ queryKey: ['analytics', 'conversions', range], queryFn: () => analyticsApi.conversions(range) });
+  if (q.isError) return <Card><ErrorState error={q.error} onRetry={() => q.refetch()} /></Card>;
+  if (!q.data) return <Skeleton className="h-64" />;
+  const d = q.data;
+  const f = d.funnel;
+  const money = (v) => formatMoney(v, d.currency);
+  const steps = [
+    { label: 'Visitors', value: f.visitors },
+    { label: 'Viewed a course or product', value: f.itemViewers },
+    { label: 'Started checkout', value: f.checkoutStarted, rate: f.viewToCheckout },
+    { label: 'Paid', value: f.attributedOrders, rate: f.checkoutToPaid },
+  ];
+  const max = Math.max(1, ...steps.map((s2) => s2.value));
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="Visitors" value={f.visitors.toLocaleString()} />
+        <StatCard label="Conversion rate" value={pct(f.conversionRate)} hint="Visitors who paid" />
+        <StatCard label="Paid orders" value={f.paidOrders.toLocaleString()} hint={f.paidOrders > f.attributedOrders ? `${f.attributedOrders} tracked from a visit` : undefined} />
+        <StatCard label="Revenue" value={money(f.revenue)} />
+      </div>
+      <Card>
+        <CardHeader title="Funnel" description="Unique visitors at each step in this period." />
+        <CardBody className="space-y-3">
+          {steps.map((st) => (
+            <div key={st.label}>
+              <div className="flex justify-between text-sm"><span>{st.label}</span><span className="tabular-nums">{st.value.toLocaleString()}{st.rate !== undefined && <span className="ml-2 text-xs text-muted">{pct(st.rate)} of previous step</span>}</span></div>
+              <div className="mt-1 h-2 rounded-full bg-surface-2"><div className="h-2 rounded-full bg-primary-600" style={{ width: `${(st.value / max) * 100}%` }} /></div>
+            </div>
+          ))}
+        </CardBody>
+      </Card>
+      <DailyBars title="Visitors per day" data={d.daily.map((x) => ({ date: x.day, visitors: x.visitors }))} dataKey="visitors" format={(v) => Number(v).toLocaleString()} />
+      <Card>
+        <CardHeader title="Traffic sources" description="First visit source (UTM tags, referring site or direct) and what it brought in." />
+        <DataTable rows={d.sources.map((x) => ({ ...x, id: x.source }))} empty={<EmptyState title="No visits yet" description="Share your academy links with utm_source / utm_medium / utm_campaign tags to see campaigns here." />}
+          columns={[
+            { key: 'source', header: 'Source', cell: (r) => <div><p className="font-medium">{r.source}</p>{r.campaigns.length > 0 && <p className="text-xs text-muted">{r.campaigns.join(', ')}</p>}</div> },
+            { key: 'visitors', header: 'Visitors', cell: (r) => r.visitors },
+            { key: 'checkouts', header: 'Checkouts', cell: (r) => r.checkouts },
+            { key: 'sales', header: 'Sales', cell: (r) => r.sales },
+            { key: 'revenue', header: 'Revenue', cell: (r) => money(r.revenue) },
+            { key: 'rate', header: 'Conversion', cell: (r) => pct(r.conversionRate) },
+          ]} />
+      </Card>
+      <Card>
+        <CardHeader title="Courses and products" description="Views, checkouts and sales per item." />
+        <DataTable rows={d.items.map((x) => ({ ...x, id: `${x.type}:${x.id}` }))} empty={<EmptyState title="No product views yet" />}
+          columns={[
+            { key: 'title', header: 'Item', cell: (r) => <div><p className="font-medium">{r.title}</p><p className="text-xs text-muted">{KIND[r.type] ?? r.type}</p></div> },
+            { key: 'visitors', header: 'Visitors', cell: (r) => r.visitors },
+            { key: 'checkouts', header: 'Checkouts', cell: (r) => r.checkouts },
+            { key: 'sales', header: 'Sales', cell: (r) => r.sales },
+            { key: 'revenue', header: 'Revenue', cell: (r) => money(r.revenue) },
+            { key: 'rate', header: 'Conversion', cell: (r) => pct(r.conversionRate) },
+          ]} />
+      </Card>
+      <Card>
+        <CardHeader title="Pages" description="Views per page; sales are credited to the page where the buyer first landed." />
+        <DataTable rows={d.pages.map((x) => ({ ...x, id: x.path }))} empty={<EmptyState title="No page views yet" />}
+          columns={[
+            { key: 'path', header: 'Page', cell: (r) => <span className="font-mono text-xs">{r.path}</span> },
+            { key: 'views', header: 'Views', cell: (r) => r.views },
+            { key: 'visitors', header: 'Visitors', cell: (r) => r.visitors },
+            { key: 'sales', header: 'Sales', cell: (r) => r.sales },
+            { key: 'rate', header: 'Conversion', cell: (r) => pct(r.conversionRate) },
+          ]} />
+      </Card>
+    </div>
+  );
+}
+
 export function AnalyticsPage() {
   const [params, setParams] = useSearchParams();
   const tab = TABS.some((t) => t.value === params.get('tab')) ? params.get('tab') : 'overview';
@@ -216,6 +293,7 @@ export function AnalyticsPage() {
       <Tabs className="mb-6" tabs={TABS} value={tab} onChange={(t) => set({ tab: t })} />
       {tab !== 'courses' && <RangeBar key={`${range.from}:${range.to}`} range={range} onChange={(r) => set(r)} />}
       {tab === 'overview' && <Overview range={range} />}
+      {tab === 'conversions' && <ConversionsTab range={range} />}
       {tab === 'courses' && <CoursesTab />}
       {tab === 'gst' && <GstTab range={range} />}
       {tab === 'exports' && <ExportsTab range={range} />}

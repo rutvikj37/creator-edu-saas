@@ -1622,6 +1622,8 @@ model Order {
   billing          Json
   idempotencyKey   String?             @db.VarChar(64)
   affiliateId      String?             @db.Char(25)
+  /// First-touch marketing attribution captured at checkout: { visitorId, source, medium, campaign, referrerHost, landingPath }.
+  attribution      Json?
   paidAt           DateTime?           @db.DateTime(3)
   failureReason    String?             @db.VarChar(500)
   expiresAt        DateTime            @db.DateTime(3)
@@ -1720,6 +1722,30 @@ model Bundle {
   @@unique([tenantId, id])
   @@unique([tenantId, slug])
   @@index([tenantId, status])
+}
+
+/// First-party analytics event on an academy site (no IP stored; random visitor id).
+model AnalyticsEvent {
+  id           String   @id @default(cuid()) @db.Char(25)
+  tenantId     String   @db.Char(25)
+  /// page_view | checkout_started
+  type         String   @db.VarChar(24)
+  path         String   @db.VarChar(255)
+  /// course | bundle | product | webinar | page | home | catalog
+  itemType     String?  @db.VarChar(16)
+  itemId       String?  @db.Char(25)
+  visitorId    String   @db.VarChar(40)
+  userId       String?  @db.Char(25)
+  utmSource    String?  @db.VarChar(100)
+  utmMedium    String?  @db.VarChar(100)
+  utmCampaign  String?  @db.VarChar(150)
+  referrerHost String?  @db.VarChar(191)
+  createdAt    DateTime @default(now()) @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, type, createdAt])
+  @@index([tenantId, itemId, createdAt])
 }
 
 /// A downloadable product sold on its own: e-book, PDF, template, worksheet pack…

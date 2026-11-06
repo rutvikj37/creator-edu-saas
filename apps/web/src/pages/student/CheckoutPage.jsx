@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -17,6 +17,7 @@ import { applyApiErrors } from '../../utils/forms.js';
 import { formatMoney } from '../../utils/format.js';
 import { openRazorpay } from '../../utils/razorpay.js';
 import { storedReferral } from '../../services/api/affiliates.js';
+import { attribution, track } from '../../utils/tracker.js';
 import { membershipsApi } from '../../services/api/community.js';
 import { AcademyHeader } from '../public/AcademyLandingPage.jsx';
 
@@ -69,6 +70,11 @@ export function CheckoutPage() {
     enabled: Boolean(course.data),
     retry: false,
   });
+  useEffect(() => {
+    if (!course.data) return;
+    const kind = { plan: 'membership', bundle: 'bundle', webinar: 'webinar', product: 'product', course: 'course', cart: 'cart' }[mode];
+    track('checkout_started', window.location.pathname, { kind, ...(mode === 'cart' ? {} : { id: mode === 'plan' ? planId : course.data.id }) });
+  }, [course.data?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const form = useForm({ resolver: zodResolver(schema), defaultValues: { name: auth.user?.fullName ?? '', phone: auth.user?.phone ?? '', state: '', gstin: '' } });
 
   const applyCoupon = async () => {
@@ -89,7 +95,7 @@ export function CheckoutPage() {
       if (attempt.current.coupon !== applied) attempt.current = { key: newKey(), orderId: null, coupon: applied };
       let orderId = attempt.current.orderId;
       if (!orderId) {
-        const order = await checkoutApi.checkout({ ...product, couponCode: applied || undefined, billing: { name: v.name, phone: v.phone || undefined, state: v.state || undefined, gstin: v.gstin || undefined }, affiliateCode: storedReferral() ?? undefined }, attempt.current.key);
+        const order = await checkoutApi.checkout({ ...product, couponCode: applied || undefined, billing: { name: v.name, phone: v.phone || undefined, state: v.state || undefined, gstin: v.gstin || undefined }, affiliateCode: storedReferral() ?? undefined, attribution: attribution() }, attempt.current.key);
         orderId = order.id;
         attempt.current.orderId = orderId;
         if (order.status === 'PAID') { qc.invalidateQueries({ queryKey: ['cart'] }); return navigate(`/learn/orders/${orderId}`, { replace: true }); }

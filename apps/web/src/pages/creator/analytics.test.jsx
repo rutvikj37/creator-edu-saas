@@ -7,7 +7,7 @@ import { AnalyticsPage } from './AnalyticsPage.jsx';
 import { analyticsApi } from '../../services/api/analytics.js';
 import { saveBlob } from '../../utils/download.js';
 
-vi.mock('../../services/api/analytics.js', () => ({ analyticsApi: { overview: vi.fn(), courses: vi.fn(), gst: vi.fn(), exportCsv: vi.fn() } }));
+vi.mock('../../services/api/analytics.js', () => ({ analyticsApi: { overview: vi.fn(), courses: vi.fn(), gst: vi.fn(), exportCsv: vi.fn(), conversions: vi.fn() } }));
 vi.mock('../../services/api/creator.js', () => ({ coursesApi: { list: vi.fn(async () => ({ items: [{ id: 'c1', title: 'SQL' }] })) } }));
 vi.mock('../../utils/download.js', () => ({ saveBlob: vi.fn() }));
 
@@ -47,4 +47,23 @@ it('course analytics explain the plan requirement instead of erroring', async ()
   analyticsApi.courses.mockRejectedValue(Object.assign(new Error('Not in plan'), { status: 403 }));
   wrap('/creator/analytics?tab=courses');
   expect(await screen.findByText('Course analytics are on higher plans')).toBeInTheDocument();
+});
+
+it('conversions tab shows the funnel, sources with campaigns, items and pages', async () => {
+  analyticsApi.conversions.mockResolvedValue({
+    currency: 'INR', range: { from: '2026-10-08', to: '2026-11-06' },
+    funnel: { visitors: 3, pageViews: 4, itemViewers: 2, checkoutStarted: 2, paidOrders: 1, attributedOrders: 1, revenue: '999.00', viewToCheckout: 100, checkoutToPaid: 50, conversionRate: 33.3 },
+    sources: [{ source: 'instagram / social', visitors: 1, checkouts: 1, sales: 1, revenue: '999.00', conversionRate: 100, campaigns: ['diwali-sale'] }, { source: 'Direct', visitors: 2, checkouts: 1, sales: 0, revenue: '0', conversionRate: 0, campaigns: [] }],
+    items: [{ type: 'course', id: 'c1', title: 'Stock Market Basics', views: 2, visitors: 2, checkouts: 2, sales: 1, revenue: '999.00', conversionRate: 50 }],
+    pages: [{ path: '/courses/stock-market-basics', views: 2, visitors: 2, sales: 0, revenue: '0', conversionRate: 0 }],
+    daily: [{ day: '2026-11-06', visitors: 3, checkouts: 2, sales: 1 }],
+  });
+  wrap('/creator/analytics?tab=conversions');
+  expect(await screen.findByText('33.3%')).toBeInTheDocument();
+  expect(screen.getAllByText('instagram / social')[0]).toBeInTheDocument();
+  expect(screen.getAllByText('diwali-sale')[0]).toBeInTheDocument();
+  expect(screen.getAllByText('Stock Market Basics')[0]).toBeInTheDocument();
+  expect(screen.getAllByText('/courses/stock-market-basics')[0]).toBeInTheDocument();
+  expect(screen.getByText('50% of previous step')).toBeInTheDocument();
+  expect(analyticsApi.conversions).toHaveBeenCalledWith(expect.objectContaining({ from: expect.any(String), to: expect.any(String) }));
 });
