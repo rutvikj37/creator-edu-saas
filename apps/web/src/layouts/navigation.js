@@ -1,5 +1,5 @@
 import {
-  Activity, Award, Banknote, BarChart3, BookOpen, Boxes, Brush, Building2, ClipboardCheck, Component,
+  Activity, MessageCircle, Award, Banknote, BarChart3, BookOpen, Boxes, Brush, Building2, ClipboardCheck, Component,
   CreditCard, Crown, FileText, FolderTree, Globe, GraduationCap, Handshake, HeartPulse, Inbox, LayoutDashboard, LifeBuoy,
   KeyRound, Layers, Library, Link2, Package, Mail, Megaphone, MessagesSquare, Palette, Percent, Plug, Radio, Receipt, ScrollText, Settings, ShieldCheck,
   ShoppingCart, Sparkles, Star, Tag, Ticket, UserCog, Users, Video, Wallet,
@@ -22,7 +22,7 @@ export const NAV = {
       items: [item('Revenue', '/finance', Wallet, 3, { available: true, perm: 'platform.finance.read' }), item('Transactions', '/finance/transactions', Receipt, 7, { available: true, perm: 'platform.finance.read' })],
     },
     { label: 'Users', items: [item('Creators', '/super-admin/tenants', Users, 3, { available: true, perm: 'platform.tenants.read' }), item('Admins & roles', '/super-admin/admins', ShieldCheck, 3, { available: true, perm: 'platform.admins.manage' })] },
-    { label: 'Support', items: [item('Tickets', '/support', LifeBuoy, 3, { available: true, perm: 'platform.support.manage' })] },
+    { label: 'Support', items: [item('Tickets', '/support', LifeBuoy, 3, { available: true, perm: 'platform.support.manage' }), item('Live chat', '/support/chat', MessageCircle, 10, { available: true, perm: 'platform.support.manage' })] },
     { label: 'Content', items: [item('Categories', '/super-admin/categories', FolderTree, 3, { available: true, perm: 'platform.content.manage' }), item('Announcements', '/super-admin/announcements', Megaphone, 3, { available: true, perm: 'platform.content.manage' }),
         item('Templates', '/super-admin/templates', Mail, 10)] },
     { label: 'Analytics', items: [item('Platform analytics', '/super-admin/analytics', BarChart3, 10)] },
@@ -57,7 +57,7 @@ export const NAV = {
         item('Memberships', '/creator/memberships', Crown, 10, { available: true, perm: 'courses.manage' }),
       ],
     },
-    { label: 'Students', items: [item('Students', '/creator/students', GraduationCap, 5, { available: true, perm: 'students.read' }), item('Batches', '/creator/batches', Boxes, 9, { available: true, perm: 'students.read' })] },
+    { label: 'Students', items: [item('Students', '/creator/students', GraduationCap, 5, { available: true, perm: 'students.read' }), item('Batches', '/creator/batches', Boxes, 9, { available: true, perm: 'students.read' }), item('Chat inbox', '/creator/chat', MessageCircle, 10, { available: true, perm: 'support.manage' })] },
     {
       label: 'Sales',
       items: [
@@ -86,6 +86,7 @@ export const NAV = {
         item('Settings', '/creator/academy?tab=business', Settings, 4, { available: true, perm: 'academy.manage' }),
         item('Billing', '/creator/billing', CreditCard, 3, { available: true, perm: 'billing.manage' }),
         item('Support', '/creator/support', LifeBuoy, 3, { available: true }),
+        item('Chat with support', '/creator/support-chat', MessageCircle, 10, { available: true }),
         item('Account security', '/creator/account/security', KeyRound, 2, { available: true }),
       ],
     },
@@ -103,6 +104,7 @@ export const NAV = {
         item('Memberships', '/memberships', Crown, 10, { available: true }),
         item('Downloads', '/learn/downloads', Package, 7, { available: true }),
         item('Orders', '/learn/orders', Receipt, 7, { available: true }),
+        item('Chat with us', '/learn/chat', MessageCircle, 10, { available: true }),
         item('Earn by sharing', '/learn/affiliate', Handshake, 10, { available: true }),
         item('Support', '/learn/support', LifeBuoy, 5),
         item('Account security', '/learn/account/security', KeyRound, 2, { available: true }),
@@ -143,6 +145,7 @@ export const NAV = {
         item('Inbox', '/support', Inbox, 3, { end: true, available: true }),
         item('All tickets', '/support?view=all', Ticket, 3, { available: true }),
         item('Reports', '/support/reports', BarChart3, 3, { available: true }),
+        item('Live chat', '/support/chat', MessageCircle, 10, { available: true }),
       ],
     },
   ],

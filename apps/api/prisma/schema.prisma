@@ -1724,6 +1724,57 @@ model Bundle {
   @@index([tenantId, status])
 }
 
+enum ChatKind {
+  /// A student talking to the academy team.
+  ACADEMY
+  /// An academy (its team) talking to platform support.
+  PLATFORM
+}
+
+enum ChatStatus {
+  OPEN
+  CLOSED
+}
+
+/// One live-chat thread. ACADEMY: one per student per academy. PLATFORM: one per academy.
+model ChatConversation {
+  id                 String     @id @default(cuid()) @db.Char(25)
+  tenantId           String     @db.Char(25)
+  kind               ChatKind
+  /// ACADEMY: the student. PLATFORM: null (the whole academy team shares it).
+  customerUserId     String?    @db.Char(25)
+  /// Dedup key: "ACADEMY:<userId>" or "PLATFORM".
+  threadKey          String     @db.VarChar(40)
+  status             ChatStatus @default(OPEN)
+  lastMessageAt      DateTime?  @db.DateTime(3)
+  lastMessagePreview String?    @db.VarChar(200)
+  customerUnread     Int        @default(0)
+  agentUnread        Int        @default(0)
+  createdAt          DateTime   @default(now()) @db.DateTime(3)
+  updatedAt          DateTime   @updatedAt @db.DateTime(3)
+  messages           ChatMessage[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, threadKey])
+  @@index([kind, status, lastMessageAt])
+  @@index([tenantId, kind, lastMessageAt])
+}
+
+model ChatMessage {
+  id             String           @id @default(cuid()) @db.Char(25)
+  tenantId       String           @db.Char(25)
+  conversationId String           @db.Char(25)
+  senderId       String           @db.Char(25)
+  /// customer (student / academy team) or agent (academy team / platform support)
+  side           String           @db.VarChar(10)
+  body           String           @db.VarChar(2000)
+  createdAt      DateTime         @default(now()) @db.DateTime(3)
+  conversation   ChatConversation @relation(fields: [tenantId, conversationId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, conversationId, createdAt])
+}
+
 /// First-party analytics event on an academy site (no IP stored; random visitor id).
 model AnalyticsEvent {
   id           String   @id @default(cuid()) @db.Char(25)

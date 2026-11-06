@@ -18,7 +18,7 @@ export const TENANT_MODELS = new Set<string>(['TenantMember', 'TenantSetting', '
   'Lead', 'ConsentEvent', 'Campaign', 'CampaignRecipient', 'Automation', 'AutomationRun',
   'AffiliateProgram', 'Affiliate', 'AffiliateClick', 'AffiliateConversion',
   'Community', 'CommunityPost', 'CommunityComment', 'CommunityReport', 'MembershipPlan', 'Membership',
-  'Batch', 'BatchMember', 'LiveClass', 'LiveSession', 'LiveAttendance', 'LiveRecording', 'Bundle', 'CartItem', 'CourseReview', 'BankQuestion', 'LiveIntegration', 'LiveSessionRegistrant', 'DigitalProduct', 'DigitalProductFile', 'DigitalProductAccess', 'DigitalProductDownload', 'AnalyticsEvent', 'LiveAdmission', 'LivePoll', 'LivePollVote', 'LiveQuestion', 'WebinarRegistration',
+  'Batch', 'BatchMember', 'LiveClass', 'LiveSession', 'LiveAttendance', 'LiveRecording', 'Bundle', 'CartItem', 'CourseReview', 'BankQuestion', 'LiveIntegration', 'LiveSessionRegistrant', 'DigitalProduct', 'DigitalProductFile', 'DigitalProductAccess', 'DigitalProductDownload', 'AnalyticsEvent', 'ChatConversation', 'ChatMessage', 'LiveAdmission', 'LivePoll', 'LivePollVote', 'LiveQuestion', 'WebinarRegistration',
 ]);
 
 export class TenantContextMissingError extends Error {

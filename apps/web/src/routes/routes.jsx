@@ -70,6 +70,10 @@ const OrderDetailPage = lazyNamed(() => import('../pages/creator/OrderDetailPage
 const ProductsPage = lazyNamed(() => import('../pages/creator/ProductsPage.jsx'), 'ProductsPage');
 const ProductPage = lazyNamed(() => import('../pages/public/ProductPage.jsx'), 'ProductPage');
 const DownloadsPage = lazyNamed(() => import('../pages/student/DownloadsPage.jsx'), 'DownloadsPage');
+const StudentChatPage = lazyNamed(() => import('../pages/chat/ChatPages.jsx'), 'StudentChatPage');
+const CreatorSupportChatPage = lazyNamed(() => import('../pages/chat/ChatPages.jsx'), 'CreatorSupportChatPage');
+const CreatorChatInboxPage = lazyNamed(() => import('../pages/chat/ChatPages.jsx'), 'CreatorChatInboxPage');
+const PlatformChatInboxPage = lazyNamed(() => import('../pages/chat/ChatPages.jsx'), 'PlatformChatInboxPage');
 const LiveIntegrationsPage = lazyNamed(() => import('../pages/creator/LiveIntegrationsPage.jsx'), 'LiveIntegrationsPage');
 const QuestionBankPage = lazyNamed(() => import('../pages/creator/QuestionBankPage.jsx'), 'QuestionBankPage');
 const ReviewsPage = lazyNamed(() => import('../pages/creator/ReviewsPage.jsx'), 'ReviewsPage');
@@ -175,6 +179,7 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/support', element: page(SupportInboxPage) },
             { path: '/support/tickets/:id', element: page(StaffTicketPage) },
             { path: '/support/reports', element: page(SupportReportPage) },
+            { path: '/support/chat', element: page(PlatformChatInboxPage) },
           ],
         },
       ],
@@ -222,6 +227,8 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/creator/domains', element: page(DomainsPage) },
             { path: '/creator/billing', element: page(BillingPage) },
             { path: '/creator/support', element: page(CreatorSupportPage) },
+            { path: '/creator/support-chat', element: page(CreatorSupportChatPage) },
+            { path: '/creator/chat', element: page(CreatorChatInboxPage) },
             { path: '/creator/support/:id', element: page(CreatorTicketPage) },
             { path: '/creator/account/security', element: page(SecurityPage, { breadcrumbs: [{ label: 'Workspace' }] }) },
             { path: '/creator/account/notifications', element: page(NotificationSettingsPage, { breadcrumbs: [{ label: 'Account' }] }) },
@@ -257,6 +264,7 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/learn/certificates', element: page(StudentCertificatesPage) },
             { path: '/learn/orders', element: page(StudentOrdersPage) },
             { path: '/learn/downloads', element: page(DownloadsPage) },
+            { path: '/learn/chat', element: page(StudentChatPage) },
             { path: '/learn/orders/:id', element: page(OrderStatusPage) },
             { path: '/learn/live', element: page(StudentLivePage) },
             { path: '/learn/affiliate', element: page(StudentAffiliatePage) },
