@@ -44,32 +44,32 @@ export const NAV = {
   creator: [
     { label: null, items: [item('Dashboard', '/creator', LayoutDashboard, 2, { end: true, available: true }), item('My academy', '/creator/academy', Palette, 4, { available: true, perm: 'academy.manage' })] },
     {
-      label: 'Content',
+      label: 'Content', icon: BookOpen,
       items: [
         item('Courses', '/creator/courses', BookOpen, 4, { available: true, perm: 'courses.read' }),
-        item('Videos', '/creator/videos', Video, 6, { available: true, perm: 'courses.read' }),
+        item('Asset library', '/creator/videos', Video, 6, { available: true, perm: 'courses.read' }),
         item('Discussions', '/creator/discussions', MessagesSquare, 5, { available: true, perm: 'courses.read' }),
         item('Certificates', '/creator/certificates', Award, 5, { available: true, perm: 'certificates.manage' }),
         item('Bundles', '/creator/bundles', Layers, 7, { available: true, perm: 'courses.read' }),
         item('Digital products', '/creator/products', Package, 7, { available: true, perm: 'courses.read' }),
-        item('Reviews', '/creator/reviews', Star, 5, { available: true, perm: 'courses.read' }),
+        item('Ratings & reviews', '/creator/reviews', Star, 5, { available: true, perm: 'courses.read' }),
         item('Question bank', '/creator/question-bank', Library, 5, { available: true, perm: 'courses.read' }),
         item('Memberships', '/creator/memberships', Crown, 10, { available: true, perm: 'courses.manage' }),
       ],
     },
-    { label: 'Students', items: [item('Students', '/creator/students', GraduationCap, 5, { available: true, perm: 'students.read' }), item('Batches', '/creator/batches', Boxes, 9, { available: true, perm: 'students.read' }), item('Chat inbox', '/creator/chat', MessageCircle, 10, { available: true, perm: 'support.manage' })] },
+    { label: 'Students', icon: GraduationCap, items: [item('Students', '/creator/students', GraduationCap, 5, { available: true, perm: 'students.read' }), item('Batches', '/creator/batches', Boxes, 9, { available: true, perm: 'students.read' }), item('Chat inbox', '/creator/chat', MessageCircle, 10, { available: true, perm: 'support.manage' })] },
     {
-      label: 'Sales',
+      label: 'Sales', icon: ShoppingCart,
       items: [
         item('Orders', '/creator/orders', ShoppingCart, 7, { available: true, perm: 'orders.read' }),
         item('Transactions', '/creator/transactions', Receipt, 7, { available: true, perm: 'orders.read' }),
-        item('Coupons', '/creator/coupons', Tag, 7, { available: true, perm: 'coupons.manage' }),
+        item('Promo codes', '/creator/coupons', Tag, 7, { available: true, perm: 'coupons.manage' }),
       ],
     },
-    { label: 'Live', items: [item('Live classes & webinars', '/creator/live', Radio, 9, { available: true, perm: 'live.manage' }), item('Integrations', '/creator/integrations', Plug, 9, { available: true, perm: 'live.manage' })] },
-    { label: 'Website', items: [item('Website', '/creator/website', Brush, 8, { available: true, perm: 'website.manage' }), item('Domains', '/creator/domains', Globe, 2, { available: true, perm: 'domains.manage' })] },
+    { label: 'Live', icon: Radio, items: [item('Live classes & webinars', '/creator/live', Radio, 9, { available: true, perm: 'live.manage' }), item('Integrations', '/creator/integrations', Plug, 9, { available: true, perm: 'live.manage' })] },
+    { label: 'Website', icon: Globe, items: [item('Website', '/creator/website', Brush, 8, { available: true, perm: 'website.manage' }), item('Domains', '/creator/domains', Globe, 2, { available: true, perm: 'domains.manage' })] },
     {
-      label: 'Growth',
+      label: 'Growth', icon: Megaphone,
       items: [
         item('Marketing', '/creator/marketing', Megaphone, 10, { available: true, perm: 'marketing.manage' }),
         item('Affiliates', '/creator/affiliates', Handshake, 10, { available: true, perm: 'affiliates.manage' }),
@@ -79,7 +79,7 @@ export const NAV = {
       ],
     },
     {
-      label: 'Workspace',
+      label: 'Workspace', icon: Settings,
       items: [
         item('Staff', '/creator/staff', UserCog, 4, { available: true, perm: 'staff.manage' }),
         item('Payments', '/creator/payments', Plug, 7, { available: true, perm: 'integrations.manage' }),

@@ -24,6 +24,7 @@ export const creatorCommerceApi = {
 
 export const checkoutApi = {
   quote: (body) => http.post('/learn/checkout/quote', body).then(d),
+  offers: (courseId) => http.get('/learn/checkout/offers', { params: courseId ? { courseId } : {} }).then(d),
   checkout: (body, idempotencyKey) => http.post('/learn/checkout', body, { headers: { 'Idempotency-Key': idempotencyKey } }).then(d),
   orders: () => http.get('/learn/orders').then(d),
   order: (id) => http.get(`/learn/orders/${id}`).then(d),

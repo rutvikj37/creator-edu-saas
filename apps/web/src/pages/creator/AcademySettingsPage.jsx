@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
+import { SettingsTabs } from '../../components/layout/SettingsTabs.jsx';
 import { FileUpload } from '../../components/forms/FileUpload.jsx';
 import { Button, Card, CardBody, CardHeader, ErrorState, Input, Select, Skeleton, Switch, Tabs, Textarea, toast } from '../../components/ui/index.js';
 import { academyApi2 } from '../../services/api/creator.js';
@@ -138,7 +139,7 @@ export function AcademySettingsPage() {
 
   return (
     <>
-      <PageHeader title="My academy" description="Profile, branding and business details." breadcrumbs={[{ label: 'My academy' }]} />
+      <PageHeader title="My academy" description="Profile, branding and business details." breadcrumbs={[{ label: 'My academy' }]} /><SettingsTabs />
       <Tabs className="mb-6" value={tab} onChange={(t) => setParams({ tab: t }, { replace: true })} tabs={[{ value: 'profile', label: 'Profile' }, { value: 'branding', label: 'Branding' }, { value: 'business', label: 'Business & tax' }]} />
       <Card className="max-w-4xl">
         {tab === 'profile' && <><CardHeader title="Profile" /><CardBody><ProfileFields form={form} setForm={setForm} errors={errors} categories={categories.data} /><Button className="mt-6" loading={saveAcademy.isPending} onClick={saveA}>Save profile</Button></CardBody></>}

@@ -61,3 +61,16 @@ describe('computeLinesQuote', () => {
     expect(r.lines.reduce((a, l) => a + l.total, 0)).toBe(r.total);
   });
 });
+
+describe('percentage coupon cap', () => {
+  it('limits a percentage discount to the maximum amount', () => {
+    expect(computeQuote(100_000, { type: 'PERCENT', value: 20, maxMinor: 5_000 }, null)).toMatchObject({ discount: 5_000, total: 95_000 });
+    expect(computeQuote(10_000, { type: 'PERCENT', value: 20, maxMinor: 5_000 }, null)).toMatchObject({ discount: 2_000, total: 8_000 });
+    expect(computeQuote(100_000, { type: 'PERCENT', value: 20, maxMinor: null }, null).discount).toBe(20_000);
+  });
+  it('applies the cap across cart lines', () => {
+    const q = computeLinesQuote([60_000, 40_000], [true, true], { type: 'PERCENT', value: 50, maxMinor: 10_000 }, null);
+    expect(q.discount).toBe(10_000);
+    expect(q.lines.map((l) => l.discount)).toEqual([6_000, 4_000]);
+  });
+});

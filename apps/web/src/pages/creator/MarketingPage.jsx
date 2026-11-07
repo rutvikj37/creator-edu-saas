@@ -3,10 +3,13 @@ import { useSearchParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDown, ArrowUp, Mail, Plus, Send, Trash2, Upload, Users, Workflow } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
+import { ListToolbar } from '../../components/common/ListToolbar.jsx';
+import { FilterChip } from '../../components/common/FilterChip.jsx';
+import { PERIOD_OPTIONS, inPeriod } from '../../utils/period.js';
 import { SearchInput } from '../../components/common/SearchInput.jsx';
 import { Alert } from '../../components/auth/Alert.jsx';
 import { RichTextEditor } from '../../components/forms/RichTextEditor.jsx';
-import { Badge, Button, Card, Checkbox, ConfirmDialog, DataTable, Drawer, EmptyState, Input, Modal, Select, Skeleton, StatusBadge, Tabs, Textarea, toast } from '../../components/ui/index.js';
+import { Avatar, Badge, Button, Card, Checkbox, ConfirmDialog, DataTable, Drawer, EmptyState, Input, Modal, Select, Skeleton, StatusBadge, Tabs, Textarea, toast } from '../../components/ui/index.js';
 import { marketingApi, parseContacts } from '../../services/api/marketing.js';
 import { coursesApi } from '../../services/api/creator.js';
 import { batchesApi } from '../../services/api/live.js';
@@ -75,10 +78,11 @@ function Contacts() {
         <Input aria-label="Tag" className="sm:w-40" placeholder="Tag" defaultValue={params.tag ?? ''} onBlur={(e) => update({ tag: e.target.value || undefined })} />
         <Button className="sm:ml-auto" variant="secondary" leftIcon={Upload} onClick={() => setImporting(true)}>Import</Button>
       </div>
-      <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data?.items ?? []} meta={q.data?.meta} onPageChange={(page) => update({ page }, { resetPage: false })} onRowClick={(r) => setSelected(r.id)}
+      {q.data && <p className="px-4 pt-3 text-sm text-muted">{q.data.meta.total.toLocaleString('en-IN')} contact{q.data.meta.total === 1 ? '' : 's'}</p>}
+      <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data?.items ?? []} meta={q.data?.meta} onPageChange={(page) => update({ page }, { resetPage: false })} onPageSizeChange={(pageSize) => update({ pageSize })} onRowClick={(r) => setSelected(r.id)}
         empty={<EmptyState icon={Users} title="No contacts yet" description="Students, webinar registrants and lead-form sign-ups appear here." />}
         columns={[
-          { key: 'email', header: 'Contact', cell: (r) => <div><p className="font-medium text-fg">{r.name || r.email}</p>{r.name && <p className="text-xs text-muted">{r.email}</p>}</div> },
+          { key: 'email', header: 'Contact', cell: (r) => <div className="flex items-center gap-2.5"><Avatar name={r.name || r.email} size="sm" /><div className="min-w-0"><p className="truncate font-medium text-fg">{r.name || r.email}</p>{r.name && <p className="truncate text-xs text-muted">{r.email}</p>}</div></div> },
           { key: 'source', header: 'Source' },
           { key: 'tags', header: 'Tags', cell: (r) => <span className="flex flex-wrap gap-1">{(r.tags ?? []).slice(0, 3).map((t) => <Badge key={t}>{t}</Badge>)}</span> },
           { key: 'canEmail', header: 'Marketing', cell: (r) => (r.canEmail ? <Badge tone="success">Can email</Badge> : r.unsubscribedAt ? <Badge>Unsubscribed</Badge> : <Badge>No consent</Badge>) },
@@ -143,17 +147,32 @@ function CampaignEditor({ id, onClose }) {
 
 function Campaigns() {
   const [editing, setEditing] = useState(null);
+  const [search, setSearch] = useState('');
+  const [statusF, setStatusF] = useState();
+  const [periodF, setPeriodF] = useState();
   const q = useQuery({ queryKey: ['marketing', 'campaigns'], queryFn: marketingApi.campaigns });
+  const all = q.data ?? [];
+  const term = search.trim().toLowerCase();
+  const rows = all.filter((r) => (!term || `${r.name} ${r.subject ?? ''}`.toLowerCase().includes(term)) && (!statusF || r.status === statusF) && inPeriod(r.createdAt, periodF));
+  const when = (d) => (d ? <div className="leading-tight"><p className="text-fg-2">{formatDate(d)}</p><p className="text-xs text-muted">{new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</p></div> : <span className="text-muted">—</span>);
   return (
     <>
-      <div className="mb-3 flex justify-end"><Button leftIcon={Plus} onClick={() => setEditing('new')}>New campaign</Button></div>
       <Card>
-        <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data ?? []} onRowClick={(r) => setEditing(r.id)}
-          empty={<EmptyState icon={Mail} title="No campaigns yet" description="Email your contacts about new courses and offers." />}
+        <ListToolbar search={search} onSearch={setSearch} placeholder="Search campaigns" count={rows.length} noun="campaign"
+          actions={<Button leftIcon={Plus} onClick={() => setEditing('new')}>New campaign</Button>}
+          filtered={Boolean(term || statusF || periodF)} onReset={() => { setSearch(''); setStatusF(undefined); setPeriodF(undefined); }}
+          filters={<>
+            <FilterChip label="Status" value={statusF} onChange={setStatusF} options={[{ value: 'DRAFT', label: 'Draft' }, { value: 'SCHEDULED', label: 'Scheduled' }, { value: 'SENDING', label: 'Sending' }, { value: 'SENT', label: 'Sent' }]} />
+            <FilterChip label="Created on" value={periodF} onChange={setPeriodF} options={PERIOD_OPTIONS} />
+          </>} />
+        <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={rows} onRowClick={(r) => setEditing(r.id)}
+          empty={all.length ? <EmptyState icon={Mail} title="No campaigns match" description="Try a different search or clear the filters." /> : <EmptyState icon={Mail} title="No campaigns yet" description="Email your contacts about new courses and offers." />}
           columns={[
-            { key: 'name', header: 'Campaign', cell: (r) => <div><p className="font-medium text-fg">{r.name}</p><p className="text-xs text-muted">{r.subject}</p></div> },
+            { key: 'name', header: 'Campaign name', cell: (r) => <div><p className="font-medium text-fg">{r.name}</p><p className="text-xs text-muted">{r.subject}</p></div> },
+            { key: 'updatedAt', header: 'Modified on', cell: (r) => when(r.updatedAt ?? r.createdAt) },
+            { key: 'sentAt', header: 'Sent', cell: (r) => when(r.sentAt) },
+            { key: 'delivered', header: 'Delivered', align: 'right', cell: (r) => (r.stats?.queued != null ? r.stats.queued.toLocaleString('en-IN') : '—') },
             { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.status === 'SENT' ? 'COMPLETED' : r.status} label={r.status.charAt(0) + r.status.slice(1).toLowerCase()} /> },
-            { key: 'sentAt', header: 'Sent', cell: (r) => (r.sentAt ? `${formatDate(r.sentAt)} · ${r.stats?.queued ?? 0}` : '—') },
           ]} />
       </Card>
       <Modal open={Boolean(editing)} onClose={() => setEditing(null)} title={editing === 'new' ? 'New campaign' : 'Campaign'} size="xl">
@@ -246,7 +265,7 @@ export function MarketingPage() {
   const tab = sp.get('tab') ?? 'contacts';
   return (
     <>
-      <PageHeader title="Marketing" description="Contacts, email campaigns and automations — always with consent." breadcrumbs={[{ label: 'Growth' }, { label: 'Marketing' }]} />
+      <PageHeader title="Marketing" description="Contacts, email campaigns and automations — always with consent." breadcrumbs={[{ label: 'Marketing' }]} />
       <Tabs className="mb-4" value={tab} onChange={(t) => setSp({ tab: t })} tabs={[{ value: 'contacts', label: 'Contacts' }, { value: 'campaigns', label: 'Campaigns' }, { value: 'automations', label: 'Automations' }]} />
       {tab === 'contacts' && <Contacts />}
       {tab === 'campaigns' && <Campaigns />}

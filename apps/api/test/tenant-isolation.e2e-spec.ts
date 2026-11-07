@@ -38,6 +38,8 @@ const WORKSPACE_ROUTES_COVERED = [
   'DELETE /api/v1/creator/courses/:id/lessons/:lessonId',
   // Phase 5 routes: isolation covered in student-platform.e2e-spec.ts
   'GET /api/v1/creator/students', 'GET /api/v1/creator/students/:id', 'GET /api/v1/creator/courses/:id/enrollments', 'POST /api/v1/creator/courses/:id/enrollments',
+  // isolation covered in student-management.e2e-spec.ts
+  'POST /api/v1/creator/students', 'POST /api/v1/creator/students/import',
   'DELETE /api/v1/creator/enrollments/:enrollmentId', 'GET /api/v1/creator/discussions', 'POST /api/v1/creator/discussions/:id/replies', 'POST /api/v1/creator/discussions/:id/moderate',
   'GET /api/v1/creator/courses/:id/lessons/:lessonId/quiz', 'PUT /api/v1/creator/courses/:id/lessons/:lessonId/quiz', 'POST /api/v1/creator/courses/:id/lessons/:lessonId/quiz/questions',
   'PUT /api/v1/creator/courses/:id/lessons/:lessonId/quiz/questions/order', 'PUT /api/v1/creator/courses/:id/lessons/:lessonId/quiz/questions/:qid',

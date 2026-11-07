@@ -5,6 +5,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowDown, ArrowUp, Layers, Plus, X } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
+import { ListToolbar, MetricCard } from '../../components/common/ListToolbar.jsx';
+import { FilterChip } from '../../components/common/FilterChip.jsx';
+import { PERIOD_OPTIONS, inPeriod } from '../../utils/period.js';
 import { Badge, Button, Card, Checkbox, DataTable, EmptyState, Input, Modal, StatusBadge, Textarea, toast } from '../../components/ui/index.js';
 import { FileUpload } from '../../components/forms/FileUpload.jsx';
 import { bundlesApi } from '../../services/api/commerce.js';
@@ -97,18 +100,35 @@ export function BundlesPage() {
     onError: (e) => toast.error(e.details?.[0]?.message ?? e.message),
   });
   const manage = can('courses.manage');
+  const [search, setSearch] = useState('');
+  const [statusF, setStatusF] = useState();
+  const [periodF, setPeriodF] = useState();
+  const all = q.data ?? [];
+  const term = search.trim().toLowerCase();
+  const rows = all.filter((r) => (!term || r.title.toLowerCase().includes(term)) && (!statusF || r.status === statusF) && inPeriod(r.createdAt, periodF));
   return (
     <>
-      <PageHeader title="Bundles" description="Sell several courses together at one price." breadcrumbs={[{ label: 'Bundles' }]}
-        actions={manage && <Button leftIcon={Plus} onClick={() => setEditing('new')}>New bundle</Button>} />
+      <PageHeader title="Bundles" count={q.data ? all.length : undefined} description="Sell several courses together at one price." breadcrumbs={[{ label: 'Bundles' }]}
+        actions={manage && <Button leftIcon={Plus} onClick={() => setEditing('new')}>Create</Button>} />
+      <div className="mb-6 grid gap-4 sm:grid-cols-2">
+        <MetricCard label="Total sold" value={all.reduce((n, r) => n + (r.sold ?? 0), 0).toLocaleString('en-IN')} loading={q.isLoading} />
+        <MetricCard label="Published bundles" value={all.filter((r) => r.status === 'PUBLISHED').length} hint={`${all.length} in total`} loading={q.isLoading} />
+      </div>
       <Card>
-        <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data ?? []} onRowClick={manage ? (r) => setEditing(r) : undefined}
-          empty={<EmptyState icon={Layers} title="No bundles yet" description="Group courses into a bundle with a saving, e.g. a learning path." action={manage && <Button size="sm" leftIcon={Plus} onClick={() => setEditing('new')}>Create a bundle</Button>} />}
+        <div className="border-b border-line px-4 pt-4"><h2 className="font-semibold">All bundles</h2></div>
+        <ListToolbar search={search} onSearch={setSearch} placeholder="Search by bundle name" count={rows.length} noun="bundle"
+          filtered={Boolean(term || statusF || periodF)} onReset={() => { setSearch(''); setStatusF(undefined); setPeriodF(undefined); }}
+          filters={<>
+            <FilterChip label="Status" value={statusF} onChange={setStatusF} options={[{ value: 'PUBLISHED', label: 'Published' }, { value: 'DRAFT', label: 'Draft' }]} />
+            <FilterChip label="Date created" value={periodF} onChange={setPeriodF} options={PERIOD_OPTIONS} />
+          </>} />
+        <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={rows} onRowClick={manage ? (r) => setEditing(r) : undefined}
+          empty={all.length ? <EmptyState icon={Layers} title="No bundles match" description="Try a different search or clear the filters." /> : <EmptyState icon={Layers} title="No bundles yet" description="Group courses into a bundle with a saving, e.g. a learning path." action={manage && <Button size="sm" leftIcon={Plus} onClick={() => setEditing('new')}>Create a bundle</Button>} />}
           columns={[
+            { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.status} /> },
             { key: 'title', header: 'Bundle', cell: (r) => <div><p className="font-medium text-fg">{r.title}</p><p className="text-xs text-muted">{r.courses.length} courses{r.courses.some((c) => c.status !== 'PUBLISHED') ? ' · some not published' : ''}</p></div> },
             { key: 'price', header: 'Price', cell: (r) => <span className="tabular-nums">{formatMoney(r.priceAmount, r.currency)}{Number(r.worthAmount) > Number(r.priceAmount) && <span className="ml-1 text-xs text-muted line-through">{formatMoney(r.worthAmount, r.currency)}</span>}</span> },
-            { key: 'sold', header: 'Sold', cell: (r) => r.sold },
-            { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.status} /> },
+            { key: 'sold', header: 'Sold', align: 'right', cell: (r) => r.sold },
             {
               key: 'actions', header: '', cell: (r) => manage && (
                 <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>

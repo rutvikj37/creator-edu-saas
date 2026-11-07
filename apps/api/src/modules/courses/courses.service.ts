@@ -76,10 +76,10 @@ export class CoursesService {
       ...(q.q ? { title: { contains: q.q } } : {}),
     };
     const [rows, total] = await Promise.all([
-      this.db.course.findMany({ where, orderBy: toOrderBy(q.sort, ['createdAt', 'updatedAt', 'title', 'status'] as const, { updatedAt: 'desc' }), ...toSkipTake(q), include: { _count: { select: { lessons: true, sections: true } } } }),
+      this.db.course.findMany({ where, orderBy: toOrderBy(q.sort, ['createdAt', 'updatedAt', 'title', 'status'] as const, { updatedAt: 'desc' }), ...toSkipTake(q), include: { _count: { select: { lessons: true, sections: true, enrollments: { where: { status: 'ACTIVE' } } } } } }),
       this.db.course.count({ where }),
     ]);
-    const items = await Promise.all(rows.map(async ({ _count, ...c }) => this.present(c, { lessonCount: _count.lessons, sectionCount: _count.sections, thumbnailUrl: await this.files.urlFor(c.thumbnailFileId, apiOrigin) })));
+    const items = await Promise.all(rows.map(async ({ _count, ...c }) => this.present(c, { lessonCount: _count.lessons, sectionCount: _count.sections, studentCount: _count.enrollments, thumbnailUrl: await this.files.urlFor(c.thumbnailFileId, apiOrigin) })));
     return new Paginated(items, { page: q.page, pageSize: q.pageSize, total });
   }
 
@@ -88,10 +88,16 @@ export class CoursesService {
     const count = await this.db.course.count({ where: { deletedAt: null, status: { not: 'ARCHIVED' } } });
     await this.entitlements.assertWithinLimit(tenantId, FEATURES.COURSES_MAX.key, count);
     const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { defaultCurrency: true } });
+    const isFree = dto.isFree ?? false;
+    const price = isFree ? null : dto.priceAmount ?? null;
+    const compare = isFree ? null : dto.compareAtAmount ?? null;
+    if (compare !== null && price !== null && compare <= price) throw AppException.validation([{ field: 'compareAtAmount', message: 'Original price must be higher than the selling price' }]);
     const slug = await this.uniqueSlug(dto.title);
     // Explicit tenantId on every row (composite tenant FKs); one transaction.
     const course = await this.prisma.$transaction(async (tx) => {
-      const c = await tx.course.create({ data: { tenantId, title: dto.title, shortDescription: dto.shortDescription, slug, createdById: actor.userId, currency: tenant.defaultCurrency } });
+      const c = await tx.course.create({
+        data: { tenantId, title: dto.title, shortDescription: dto.shortDescription, slug, createdById: actor.userId, currency: tenant.defaultCurrency, description: (dto.description ?? undefined) as never, isFree, priceAmount: price, compareAtAmount: compare },
+      });
       await tx.courseSection.create({ data: { tenantId, courseId: c.id, title: 'Introduction', position: 0 } });
       await tx.courseInstructor.create({ data: { tenantId, courseId: c.id, userId: actor.userId, isPrimary: true } });
       return c;

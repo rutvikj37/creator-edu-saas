@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { LifeBuoy, Plus } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
+import { ListToolbar } from '../../components/common/ListToolbar.jsx';
 import { Button, Card, CardBody, DataTable, EmptyState, ErrorState, Input, Modal, Select, Skeleton, StatusBadge, Textarea, toast } from '../../components/ui/index.js';
 import { creatorApi } from '../../services/api/platform.js';
 import { useListParams } from '../../hooks/useListParams.js';
@@ -50,15 +51,16 @@ export function CreatorSupportPage() {
 
   return (
     <>
-      <PageHeader title="Support" description="Get help from the platform team." breadcrumbs={[{ label: 'Workspace' }, { label: 'Support' }]} actions={<Button leftIcon={Plus} onClick={() => setOpen(true)}>New ticket</Button>} />
+      <PageHeader title="Support" count={q.data?.meta?.total} description="Get help from the platform team. We reply by email and here." breadcrumbs={[{ label: 'Support' }]} actions={<Button leftIcon={Plus} onClick={() => setOpen(true)}>New ticket</Button>} />
       <Card>
-        <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data?.items ?? []} meta={q.data?.meta} onPageChange={(page) => update({ page }, { resetPage: false })}
+        <ListToolbar count={q.data?.meta?.total} noun="ticket" />
+        <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data?.items ?? []} meta={q.data?.meta} onPageChange={(page) => update({ page }, { resetPage: false })} onPageSizeChange={(pageSize) => update({ pageSize })}
           empty={<EmptyState icon={LifeBuoy} title="No tickets yet" description="Questions about billing, uploads or your academy? We're here." action={<Button size="sm" onClick={() => setOpen(true)}>Create a ticket</Button>} />}
           columns={[
             { key: 'number', header: '#', cell: (r) => <span className="text-muted">#{r.number}</span> },
             { key: 'subject', header: 'Subject', cell: (r) => <Link to={`/creator/support/${r.id}`} className="font-medium text-primary-600 hover:underline">{r.subject}</Link> },
             { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.status} /> },
-            { key: 'lastActivityAt', header: 'Updated', cell: (r) => formatDate(r.lastActivityAt, { withTime: true }) },
+            { key: 'lastActivityAt', header: 'Last activity', cell: (r) => <div className="leading-tight"><p className="text-fg-2">{formatDate(r.lastActivityAt)}</p><p className="text-xs text-muted">{new Date(r.lastActivityAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</p></div> },
           ]} />
       </Card>
       <Modal open={open} onClose={() => setOpen(false)} title="New support ticket" size="lg"

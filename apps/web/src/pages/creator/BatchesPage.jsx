@@ -5,8 +5,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Boxes, Plus, Trash2 } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
+import { ListToolbar } from '../../components/common/ListToolbar.jsx';
+import { FilterChip } from '../../components/common/FilterChip.jsx';
 import { Alert } from '../../components/auth/Alert.jsx';
-import { Button, Card, ConfirmDialog, DataTable, Drawer, EmptyState, Input, Modal, Select, Skeleton, Textarea, toast } from '../../components/ui/index.js';
+import { Badge, Button, Card, ConfirmDialog, DataTable, Drawer, EmptyState, Input, Modal, Select, Skeleton, Textarea, toast } from '../../components/ui/index.js';
 import { batchesApi } from '../../services/api/live.js';
 import { coursesApi } from '../../services/api/creator.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -93,17 +95,27 @@ export function BatchesPage() {
   const [selected, setSelected] = useState(null);
   const q = useQuery({ queryKey: ['creator', 'batches'], queryFn: batchesApi.list });
   const canManage = auth.can('students.manage');
+  const [search, setSearch] = useState('');
+  const [whenF, setWhenF] = useState();
+  const all = q.data ?? [];
+  const today = new Date().toISOString().slice(0, 10);
+  const phase = (b) => (b.startsAt && b.startsAt.slice(0, 10) > today ? 'upcoming' : b.endsAt && b.endsAt.slice(0, 10) < today ? 'finished' : 'running');
+  const term = search.trim().toLowerCase();
+  const rows = all.filter((b) => (!term || b.name.toLowerCase().includes(term)) && (!whenF || phase(b) === whenF));
   return (
     <>
-      <PageHeader title="Batches" description="Group students into cohorts for live classes and shared timelines." breadcrumbs={[{ label: 'Students' }, { label: 'Batches' }]}
+      <PageHeader title="Batches" count={q.data ? all.length : undefined} description="Group students into cohorts for live classes and shared timelines." breadcrumbs={[{ label: 'Batches' }]}
         actions={canManage && <Button leftIcon={Plus} onClick={() => setOpen(true)}>New batch</Button>} />
       <Card>
-        <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data ?? []} onRowClick={(r) => setSelected(r.id)}
-          empty={<EmptyState icon={Boxes} title="No batches yet" description="Create a batch, add students, then schedule live classes for it." />}
+        <ListToolbar search={search} onSearch={setSearch} placeholder="Search batches" count={rows.length} noun="batch" filtered={Boolean(term || whenF)} onReset={() => { setSearch(''); setWhenF(undefined); }}
+          filters={<FilterChip label="Status" value={whenF} onChange={setWhenF} options={[{ value: 'upcoming', label: 'Upcoming' }, { value: 'running', label: 'Running' }, { value: 'finished', label: 'Finished' }]} />} />
+        <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={rows} onRowClick={(r) => setSelected(r.id)}
+          empty={all.length ? <EmptyState icon={Boxes} title="No batches match" description="Try a different search or clear the filters." /> : <EmptyState icon={Boxes} title="No batches yet" description="Create a batch, add students, then schedule live classes for it." />}
           columns={[
             { key: 'name', header: 'Batch', cell: (r) => <span className="font-medium text-fg">{r.name}</span> },
             { key: 'memberCount', header: 'Members', align: 'right', cell: (r) => `${r.memberCount}${r.capacity ? ` / ${r.capacity}` : ''}` },
             { key: 'startsAt', header: 'Dates', cell: (r) => (r.startsAt ? `${formatDate(r.startsAt)}${r.endsAt ? ` – ${formatDate(r.endsAt)}` : ''}` : '—') },
+            { key: 'phase', header: 'Status', cell: (r) => ({ upcoming: <Badge tone="info">Upcoming</Badge>, running: <Badge tone="success">Running</Badge>, finished: <Badge>Finished</Badge> })[phase(r)] },
           ]} />
       </Card>
       <Modal open={open} onClose={() => setOpen(false)} title="New batch">{open && <BatchForm onDone={(ok) => { setOpen(false); if (ok) qc.invalidateQueries({ queryKey: ['creator', 'batches'] }); }} />}</Modal>

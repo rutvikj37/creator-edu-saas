@@ -3,6 +3,9 @@ import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Archive, Crown, Pencil, Plus, Users } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
+import { ListToolbar, MetricCard } from '../../components/common/ListToolbar.jsx';
+import { FilterChip } from '../../components/common/FilterChip.jsx';
+import { PERIOD_OPTIONS, inPeriod } from '../../utils/period.js';
 import { Alert } from '../../components/auth/Alert.jsx';
 import { Badge, Button, Card, CardBody, Checkbox, DataTable, Drawer, EmptyState, ErrorState, Input, Modal, Select, Skeleton, StatusBadge, Textarea, toast } from '../../components/ui/index.js';
 import { membershipsApi } from '../../services/api/community.js';
@@ -79,17 +82,35 @@ export function CreatorMembershipsPage() {
   const [editing, setEditing] = useState(null); // null | 'new' | plan
   const [members, setMembers] = useState(null);
   const setStatus = useMutation({ mutationFn: ({ id, status }) => membershipsApi.update(id, { status }), onSuccess: () => qc.invalidateQueries({ queryKey: ['memberships'] }), onError: (e) => toast.error(e.message) });
+  const [search, setSearch] = useState('');
+  const [statusF, setStatusF] = useState();
+  const [periodF, setPeriodF] = useState();
+  const all = q.data ?? [];
+  const term = search.trim().toLowerCase();
+  const rows = all.filter((r) => (!term || r.name.toLowerCase().includes(term)) && (!statusF || r.status === statusF) && inPeriod(r.createdAt, periodF));
+  const mrr = all.filter((r) => r.status === 'ACTIVE').reduce((n, r) => n + Number(r.priceAmount) * (r.activeMembers ?? 0) / (r.interval === 'YEAR' ? 12 : 1), 0);
   return (
     <>
-      <PageHeader title="Memberships" description="Sell access to a bundle of courses for a monthly or yearly price." breadcrumbs={[{ label: 'Courses' }, { label: 'Memberships' }]} actions={<Button leftIcon={Plus} onClick={() => setEditing('new')}>New plan</Button>} />
+      <PageHeader title="Memberships" count={q.data ? all.length : undefined} description="Sell access to a bundle of courses for a monthly or yearly price." breadcrumbs={[{ label: 'Memberships' }]} actions={<Button leftIcon={Plus} onClick={() => setEditing('new')}>Create</Button>} />
+      <div className="mb-6 grid gap-4 sm:grid-cols-2">
+        <MetricCard label="Total members" value={all.reduce((n, r) => n + (r.activeMembers ?? 0), 0).toLocaleString('en-IN')} hint="With an active membership" loading={q.isLoading} />
+        <MetricCard label="Monthly revenue" value={formatMoney(mrr, all[0]?.currency ?? 'INR')} hint="Active members × plan price, per month" loading={q.isLoading} />
+      </div>
       <Card>
-        <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data ?? []}
-          empty={<EmptyState icon={Crown} title="No membership plans" description="Bundle courses into a plan students pay for every month or year." action={<Button leftIcon={Plus} onClick={() => setEditing('new')}>New plan</Button>} />}
+        <div className="border-b border-line px-4 pt-4"><h2 className="font-semibold">All plans</h2></div>
+        <ListToolbar search={search} onSearch={setSearch} placeholder="Search by plan name" count={rows.length} noun="plan"
+          filtered={Boolean(term || statusF || periodF)} onReset={() => { setSearch(''); setStatusF(undefined); setPeriodF(undefined); }}
+          filters={<>
+            <FilterChip label="Status" value={statusF} onChange={setStatusF} options={[{ value: 'ACTIVE', label: 'Active' }, { value: 'ARCHIVED', label: 'Archived' }]} />
+            <FilterChip label="Created on" value={periodF} onChange={setPeriodF} options={PERIOD_OPTIONS} />
+          </>} />
+        <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={rows}
+          empty={all.length ? <EmptyState icon={Crown} title="No plans match" description="Try a different search or clear the filters." /> : <EmptyState icon={Crown} title="No membership plans" description="Bundle courses into a plan students pay for every month or year." action={<Button leftIcon={Plus} onClick={() => setEditing('new')}>New plan</Button>} />}
           columns={[
+            { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.status} /> },
             { key: 'name', header: 'Plan', cell: (r) => <div><p className="font-medium text-fg">{r.name}</p><p className="text-xs text-muted">{r.courseIds.length} course{r.courseIds.length === 1 ? '' : 's'}</p></div> },
             { key: 'priceAmount', header: 'Price', cell: (r) => `${formatMoney(r.priceAmount, r.currency)} / ${per(r.interval)}` },
             { key: 'activeMembers', header: 'Active members', align: 'right' },
-            { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.status} /> },
             {
               key: 'actions', header: '', align: 'right',
               cell: (r) => (

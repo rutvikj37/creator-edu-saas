@@ -99,7 +99,8 @@ export const envSchema = z.object({
   /** Claude model for AI features. */
   ANTHROPIC_MODEL: z.string().default('claude-opus-5-5'),
   // SMS (optional; OTP over SMS reports "not configured" without these)
-  SMS_PROVIDER: z.enum(['twilio', 'msg91']).optional(),
+  // A blank value (as in .env.example) means "not configured".
+  SMS_PROVIDER: z.preprocess((v) => (v === '' ? undefined : v), z.enum(['twilio', 'msg91']).optional()),
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
   TWILIO_FROM: z.string().optional(),

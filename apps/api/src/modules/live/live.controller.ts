@@ -36,12 +36,14 @@ class ClassDto {
   @ApiPropertyOptional() @IsOptional() @IsBoolean() recordSessions?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsString() @Length(25, 25) hostUserId?: string;
   @ApiPropertyOptional({ description: 'Webinars: ticket price; null or 0 = free' }) @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(10_000_000) priceAmount?: number | null;
+  @ApiPropertyOptional({ description: 'Uploaded image (purpose IMAGE); null removes it' }) @IsOptional() @IsString() @Length(25, 25) coverFileId?: string | null;
 }
 class CreateClassDto extends ClassDto {
   @ApiProperty() @Transform(trim) @IsString() @Length(1, 200) declare title: string;
   @ApiProperty({ enum: ['LIVEKIT', 'EXTERNAL', 'PLUGNMEET', 'ZOOM', 'GOOGLE_MEET'] }) @IsIn(['LIVEKIT', 'EXTERNAL', 'PLUGNMEET', 'ZOOM', 'GOOGLE_MEET']) declare provider: 'LIVEKIT' | 'EXTERNAL' | 'PLUGNMEET' | 'ZOOM' | 'GOOGLE_MEET';
   @ApiProperty() @IsDateString() declare startsAt: string;
   @ApiProperty() @IsInt() @Min(5) @Max(600) declare durationMinutes: number;
+  @ApiPropertyOptional({ description: 'Email/notify the audience (webinars: all students) that it was scheduled' }) @IsOptional() @IsBoolean() notifyLearners?: boolean;
 }
 class DecideDto {
   @ApiProperty() @IsBoolean() admit: boolean;
@@ -105,16 +107,16 @@ export class CreatorLiveController {
   providers() { return this.live.providers(); }
 
   @Get('classes') @RequirePermissions(PERMISSIONS.LIVE_MANAGE)
-  list(@Query('kind') kind?: 'CLASS' | 'WEBINAR') { return this.live.list({ kind: kind === 'WEBINAR' || kind === 'CLASS' ? kind : undefined }); }
+  list(@Req() req: AppRequest, @Query('kind') kind?: 'CLASS' | 'WEBINAR') { return this.live.list({ kind: kind === 'WEBINAR' || kind === 'CLASS' ? kind : undefined }, apiOrigin(req)); }
 
   @Post('classes') @RequirePermissions(PERMISSIONS.LIVE_MANAGE)
-  create(@Body() dto: CreateClassDto, @CurrentAuth() auth: AuthContext) { return this.live.create(dto, auth.userId); }
+  create(@Body() dto: CreateClassDto, @CurrentAuth() auth: AuthContext, @Req() req: AppRequest) { return this.live.create(dto, auth.userId, apiOrigin(req)); }
 
   @Get('classes/:id') @RequirePermissions(PERMISSIONS.LIVE_MANAGE)
-  get(@Param('id') id: string) { return this.live.get(id); }
+  get(@Param('id') id: string, @Req() req: AppRequest) { return this.live.get(id, apiOrigin(req)); }
 
   @Patch('classes/:id') @RequirePermissions(PERMISSIONS.LIVE_MANAGE)
-  update(@Param('id') id: string, @Body() dto: ClassDto, @CurrentAuth() auth: AuthContext) { return this.live.update(id, dto, auth.userId); }
+  update(@Param('id') id: string, @Body() dto: ClassDto, @CurrentAuth() auth: AuthContext, @Req() req: AppRequest) { return this.live.update(id, dto, auth.userId, apiOrigin(req)); }
 
   @Post('classes/:id/cancel') @HttpCode(200) @RequirePermissions(PERMISSIONS.LIVE_MANAGE)
   cancel(@Param('id') id: string, @CurrentAuth() auth: AuthContext) { return this.live.cancelClass(id, auth.userId); }

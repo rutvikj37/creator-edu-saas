@@ -7,6 +7,14 @@ export interface CouponRule {
   type: 'PERCENT' | 'FIXED';
   /** Percent (0–100) or a fixed amount in minor units. */
   value: number;
+  /** Most a percentage coupon may take off, in minor units (e.g. "20% off, up to ₹500"). */
+  maxMinor?: number | null;
+}
+
+/** Percentage discount of `base`, limited by the coupon's cap when it has one. */
+function percentOff(base: number, coupon: CouponRule) {
+  const raw = Math.round((base * Math.min(100, coupon.value)) / 100);
+  return coupon.maxMinor != null && coupon.maxMinor >= 0 ? Math.min(raw, coupon.maxMinor) : raw;
 }
 
 export interface TaxRule {
@@ -26,7 +34,7 @@ export interface Quote {
 export function computeQuote(unitMinor: number, coupon: CouponRule | null, tax: TaxRule | null): Quote {
   const subtotal = unitMinor;
   let discount = 0;
-  if (coupon) discount = coupon.type === 'PERCENT' ? Math.round((subtotal * Math.min(100, coupon.value)) / 100) : Math.min(coupon.value, subtotal);
+  if (coupon) discount = coupon.type === 'PERCENT' ? percentOff(subtotal, coupon) : Math.min(coupon.value, subtotal);
   const afterDiscount = subtotal - discount;
   if (!tax || tax.rate <= 0 || afterDiscount === 0) return { subtotal, discount, tax: 0, total: afterDiscount, net: afterDiscount };
   if (tax.inclusive) {
@@ -78,7 +86,7 @@ export function computeLinesQuote(units: number[], eligible: boolean[], coupon: 
     const base = units.map((u, i) => (eligible[i] ? u : 0));
     const eligibleSum = base.reduce((a, b) => a + b, 0);
     discounts = coupon.type === 'PERCENT'
-      ? allocate(Math.round((eligibleSum * Math.min(100, coupon.value)) / 100), base)
+      ? allocate(percentOff(eligibleSum, coupon), base)
       : allocate(Math.min(coupon.value, eligibleSum), base);
   }
   const discount = discounts.reduce((a, b) => a + b, 0);

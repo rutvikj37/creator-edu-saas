@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Eye, Film, Info, Link2, Pencil, Play, RefreshCw, Trash2, Upload, X } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
+import { ListToolbar } from '../../components/common/ListToolbar.jsx';
+import { FilterChip } from '../../components/common/FilterChip.jsx';
+import { PERIOD_OPTIONS, inPeriod } from '../../utils/period.js';
 import { Alert } from '../../components/auth/Alert.jsx';
 import { Badge, Button, Card, ConfirmDialog, DataTable, Drawer, Dropdown, DropdownItem, EmptyState, Input, Modal, Select, Skeleton, StatusBadge, toast } from '../../components/ui/index.js';
 import { readVideoDuration, uploadVideo, videosApi } from '../../services/api/videos.js';
@@ -283,6 +286,8 @@ export function VideosPage() {
   const qc = useQueryClient();
   const config = useQuery({ queryKey: ['videos', 'config'], queryFn: videosApi.config, staleTime: 10 * 60_000 });
   const [filters, setFilters] = useState({ status: '', q: '' });
+  const [courseF, setCourseF] = useState();
+  const [periodF, setPeriodF] = useState();
   const q = useQuery({
     queryKey: ['videos', 'library', filters],
     queryFn: () => videosApi.library({ status: filters.status || undefined, q: filters.q || undefined }),
@@ -298,28 +303,34 @@ export function VideosPage() {
   const [deleting, setDeleting] = useState(null);
   const remove = useMutation({ mutationFn: (v) => videosApi.destroy(v.id), onSuccess: () => { changed(); toast.success('Video deleted'); setDeleting(null); }, onError: (e) => { toast.error(e.message); setDeleting(null); } });
   const courseList = courses.data?.items ?? [];
+  const all = q.data ?? [];
+  const courseOf = (v) => v.course?.id ?? v.usedIn?.[0]?.course?.id;
+  const rows = all.filter((v) => (!courseF || courseOf(v) === courseF || v.usedIn?.some((u) => u.course?.id === courseF)) && inPeriod(v.updatedAt ?? v.createdAt, periodF));
+  const filtered = Boolean(filters.q || filters.status || courseF || periodF);
 
   return (
     <>
-      <PageHeader title="Video library" description="Upload once, use in any lesson. Videos are encoded for adaptive streaming and only enrolled students can play them." breadcrumbs={[{ label: 'Content' }, { label: 'Videos' }]} />
+      <PageHeader title="Asset library" count={q.data && !filtered ? all.length : undefined} description="Re-use your course content with ease. Upload once, use in any lesson; only enrolled students can play videos." breadcrumbs={[{ label: 'Videos' }]} />
       {config.data?.provider === 'STORAGE' && <Alert tone="info" className="mb-4">The video host (Bunny Stream) is not configured, so uploads are stored privately and played without adaptive streaming.</Alert>}
       <UploadPanel config={config.data} uploads={uploads} courses={courseList} />
-      <div className="mb-3 flex flex-wrap gap-2">
-        <Input aria-label="Search videos" placeholder="Search by title" className="w-64" value={filters.q} onChange={(e) => setFilters({ ...filters, q: e.target.value })} />
-        <Select aria-label="Filter by status" value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} placeholder="All statuses" options={['READY', 'PROCESSING', 'UPLOADING', 'UPLOAD_AUTHORIZED', 'FAILED'].map((s) => ({ value: s, label: STATUS_LABEL[s] }))} />
-      </div>
       <Card>
-        <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data ?? []}
-          empty={<EmptyState icon={Film} title="No videos yet" description="Upload a video to start building video lessons." />}
+        <ListToolbar search={filters.q} onSearch={(v) => setFilters({ ...filters, q: v })} placeholder="Search by title" count={rows.length} noun="file"
+          filtered={filtered} onReset={() => { setFilters({ status: '', q: '' }); setCourseF(undefined); setPeriodF(undefined); }}
+          filters={<>
+            <FilterChip label="Course" value={courseF} onChange={setCourseF} options={courseList.map((c) => ({ value: c.id, label: c.title }))} panelClassName="w-72" />
+            <FilterChip label="Processing status" value={filters.status || undefined} onChange={(v) => setFilters({ ...filters, status: v ?? '' })} options={['READY', 'PROCESSING', 'UPLOADING', 'UPLOAD_AUTHORIZED', 'FAILED'].map((x) => ({ value: x, label: STATUS_LABEL[x] }))} />
+            <FilterChip label="Date modified" value={periodF} onChange={setPeriodF} options={PERIOD_OPTIONS} />
+          </>} />
+        <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={rows}
+          empty={filtered ? <EmptyState icon={Film} title="No files match" description="Try a different search or clear the filters." /> : <EmptyState icon={Film} title="No videos yet" description="Upload a video to start building video lessons." />}
           columns={[
             { key: 'thumbnail', header: '', cell: (v) => (v.thumbnailUrl ? <img src={v.thumbnailUrl} alt="" className="h-10 w-16 rounded object-cover" loading="lazy" /> : <div className="grid h-10 w-16 place-items-center rounded bg-surface-2"><Film className="size-4 text-muted" aria-hidden /></div>) },
-            { key: 'title', header: 'Video', cell: (v) => <div className="min-w-0"><p className="font-medium text-fg">{v.title}</p><p className="truncate text-xs text-muted">{v.originalFilename ?? v.file?.fileName}</p></div> },
+            { key: 'title', header: 'Title', cell: (v) => <div className="min-w-0"><p className="font-medium text-fg">{v.title}</p><p className="truncate text-xs text-muted">{v.course?.title ?? v.usedIn?.[0]?.course.title ?? v.originalFilename ?? v.file?.fileName}</p></div> },
             { key: 'durationSeconds', header: 'Duration', cell: (v) => fmtDuration(v.durationSeconds) },
             { key: 'originalSize', header: 'Size', cell: (v) => fmtSize(v.originalSize ?? v.file?.sizeBytes) },
             { key: 'status', header: 'Status', cell: (v) => <VideoStatus status={v.status} progress={v.encodeProgress} /> },
             { key: 'backup', header: 'Backup', cell: (v) => <BackupStatus backup={v.backup} /> },
-            { key: 'createdAt', header: 'Uploaded', cell: (v) => formatDate(v.createdAt) },
-            { key: 'course', header: 'Course', cell: (v) => v.course?.title ?? v.usedIn?.[0]?.course.title ?? <span className="text-muted">—</span> },
+            { key: 'updatedAt', header: 'Modified on', cell: (v) => { const d = v.updatedAt ?? v.createdAt; return <div className="leading-tight"><p className="text-fg-2">{formatDate(d)}</p><p className="text-xs text-muted">{new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</p></div>; } },
             {
               key: 'actions', header: '', align: 'right',
               cell: (v) => (

@@ -231,6 +231,17 @@ describe('Creator platform (e2e)', () => {
       expect(ws.body.data.id).toBe(owner.tenant.id);
     });
 
+    it('creates a course with description and pricing in one step', async () => {
+      const c = await registerCreator(app);
+      const doc = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Learn GST' }] }] };
+      const made = (await authed(app, c.session).post('/api/v1/creator/courses').send({ title: 'GST Basics', description: doc, isFree: false, priceAmount: 999, compareAtAmount: 1999 }).expect(201)).body.data;
+      expect(made).toMatchObject({ title: 'GST Basics', isFree: false, priceAmount: '999', compareAtAmount: '1999', description: doc });
+      const free = (await authed(app, c.session).post('/api/v1/creator/courses').send({ title: 'Free intro', isFree: true, priceAmount: 500 }).expect(201)).body.data;
+      expect(free).toMatchObject({ isFree: true, priceAmount: null, compareAtAmount: null });
+      const bad = await authed(app, c.session).post('/api/v1/creator/courses').send({ title: 'Wrong prices', priceAmount: 999, compareAtAmount: 500 }).expect(422);
+      expect(bad.body.error.details[0].field).toBe('compareAtAmount');
+    });
+
     it('dashboard reflects real counts', async () => {
       const c = await registerCreator(app);
       await authed(app, c.session).post('/api/v1/creator/courses').send({ title: 'Dash course' }).expect(201);
@@ -239,6 +250,40 @@ describe('Creator platform (e2e)', () => {
       expect(d.usage.courses).toEqual({ used: 1, limit: 3 });
       expect(d.activity.map((a: any) => a.action)).toEqual(expect.arrayContaining(['course.create', 'tenant.create']));
       expect(d.revenue.available).toBe(false);
+    });
+
+    it('dashboard: last-30-day trends with previous-period change, setup checklist, sales hidden without orders.read', async () => {
+      const c = await registerCreator(app);
+      const day = 86_400_000;
+      const add = (email: string, ago: number) => prisma.user.create({ data: { realm: 'TENANT', realmKey: c.tenant.id, tenantId: c.tenant.id, email, fullName: 'S', createdAt: new Date(Date.now() - ago * day) } });
+      await add(uniqueEmail('n1'), 1);
+      await add(uniqueEmail('n2'), 2);
+      await add(uniqueEmail('n3'), 10);
+      await add(uniqueEmail('p1'), 40);
+      await add(uniqueEmail('old'), 90); // outside both windows
+      const d = (await authed(app, c.session).get('/api/v1/creator/dashboard').expect(200)).body.data;
+      expect(d.last30.signups).toEqual({ value: 3, previous: 1, change: 200 });
+      expect(d.last30.paidUsers).toEqual({ value: 0, previous: 0, change: null });
+      expect(d.last30.revenue).toMatchObject({ change: null });
+      expect(d.last30.series).toHaveLength(30);
+      expect(d.last30.series.reduce((n: number, p: any) => n + p.signups, 0)).toBe(3);
+      expect(d.setup).toEqual([
+        { key: 'publish_academy', done: false }, { key: 'connect_payments', done: false }, { key: 'publish_course', done: false },
+        { key: 'add_students', done: true }, { key: 'schedule_live', done: false }, { key: 'start_community', done: false },
+      ]);
+
+      // An instructor (no orders.read) sees sign-ups but not sales
+      await prisma.tenantLimitOverride.create({ data: { tenantId: c.tenant.id, featureKey: 'staff.max', enabled: true, limitValue: 5n } });
+      await app.get(EntitlementsService).invalidate(c.tenant.id);
+      const email = uniqueEmail('dash-teacher');
+      await authed(app, c.session).post('/api/v1/creator/staff/invitations').send({ email, roleKey: 'INSTRUCTOR' }).expect(201);
+      const token = tokenFromEmail((await lastEmail(app, email))!.text);
+      const teacher = parseSession(await api(app).post('/api/v1/invitations/register').set('Host', PLATFORM).send({ token, fullName: 'Dash Teacher', password: 'teacher-password-1' }).expect(201), PLATFORM);
+      const t = (await authed(app, teacher).get('/api/v1/creator/dashboard').expect(200)).body.data;
+      expect(t.last30.signups.value).toBe(3);
+      expect(t.last30.paidUsers).toBeNull();
+      expect(t.last30.revenue).toBeNull();
+      expect(t.last30.series.every((p: any) => p.revenue === null)).toBe(true);
     });
   });
 

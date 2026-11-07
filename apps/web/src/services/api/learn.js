@@ -53,6 +53,8 @@ export async function uploadSubmission(file, onProgress) {
 export const creatorLearnApi = {
   students: (params) => http.get('/creator/students', { params }).then((r) => ({ items: r.data, meta: r.meta })),
   student: (id) => http.get(`/creator/students/${id}`).then(d),
+  addStudent: (body) => http.post('/creator/students', body).then(d),
+  importStudents: (body) => http.post('/creator/students/import', body).then(d),
   courseEnrollments: (courseId) => http.get(`/creator/courses/${courseId}/enrollments`).then(d),
   enroll: (courseId, email) => http.post(`/creator/courses/${courseId}/enrollments`, { email }).then(d),
   revoke: (id) => http.delete(`/creator/enrollments/${id}`).then(d),

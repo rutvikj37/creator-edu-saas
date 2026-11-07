@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { CheckCircle2, Copy, CreditCard, ExternalLink, RefreshCw, ShieldAlert } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
+import { SettingsTabs } from '../../components/layout/SettingsTabs.jsx';
 import { Alert } from '../../components/auth/Alert.jsx';
 import { Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, ErrorState, Input, Skeleton, Switch, toast } from '../../components/ui/index.js';
 import { creatorCommerceApi } from '../../services/api/commerce.js';
@@ -70,7 +71,7 @@ export function PaymentsPage() {
   const status = g?.configured ? STATUS[g.status] : null;
   return (
     <>
-      <PageHeader title="Payments" description="Sell courses with your own Razorpay account. Money settles directly to your bank account." breadcrumbs={[{ label: 'Workspace' }, { label: 'Payments' }]} />
+      <PageHeader title="Payments" description="Sell courses with your own Razorpay account. Money settles directly to your bank account." breadcrumbs={[{ label: 'Payments' }]} /><SettingsTabs />
       {q.isError ? <Card><ErrorState error={q.error} onRetry={() => q.refetch()} /></Card> : !g ? <Skeleton className="h-80" /> : (
         <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
           <div className="space-y-6">

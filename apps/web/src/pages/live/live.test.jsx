@@ -1,9 +1,9 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { vi } from 'vitest';
-import { LiveClassesPage } from '../creator/LiveClassesPage.jsx';
+import { LiveClassCreatePage, LiveClassesPage } from '../creator/LiveClassesPage.jsx';
 import { LiveIntegrationsPage } from '../creator/LiveIntegrationsPage.jsx';
 import { StudentLivePage, WebinarPage } from './LivePages.jsx';
 import { LiveRoom } from '../../components/live/LiveRoom.jsx';
@@ -31,6 +31,8 @@ vi.mock('../../services/api/auth.js', () => ({ academyApi: { site: vi.fn(async (
 vi.mock('../../context/AuthContext.jsx', () => ({ useAuth: () => ({ status: 'authenticated', can: () => true }) }));
 vi.mock('../public/AcademyLandingPage.jsx', () => ({ AcademyHeader: () => null, CourseCard: () => null }));
 
+const createPage = (kind) => wrap(<LiveClassCreatePage />, `/creator/live/new?kind=${kind}`, '/creator/live/new');
+
 function wrap(element, path = '/', route = '/') {
   const router = createMemoryRouter([{ path: route, element }, { path: '*', element: <div>elsewhere</div> }], { initialEntries: [path] });
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><RouterProvider router={router} /></QueryClientProvider>);
@@ -44,21 +46,21 @@ describe('LiveClassesPage', () => {
     creatorLiveApi.providers.mockResolvedValue({ livekit: false, external: true, recording: false });
     creatorLiveApi.classes.mockResolvedValue([]);
     creatorLiveApi.create.mockResolvedValue({ id: 'new1' });
-    const router = wrap(<LiveClassesPage />);
+    const router = createPage('CLASS');
     expect(await screen.findByText(/built-in classroom isn't set up/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Schedule class' }));
-    const dialog = await screen.findByRole('dialog');
+    expect(screen.getByRole('heading', { name: 'Schedule a live class' })).toBeInTheDocument();
+    const dialog = document.body;
     expect(within(dialog).getByRole('radio', { name: /Built-in classroom/ })).toBeDisabled();
     await userEvent.type(within(dialog).getByLabelText(/^Title/), 'Office hours');
     await userEvent.type(within(dialog).getByLabelText('Meeting link'), 'zoom.us/j/1');
     await userEvent.click(within(dialog).getByLabelText('Repeats weekly'));
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Schedule' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Publish' }));
     expect(await within(dialog).findByText(/Paste your Zoom/)).toBeInTheDocument();
     expect(within(dialog).getByText('Pick at least one day')).toBeInTheDocument();
     await userEvent.clear(within(dialog).getByLabelText('Meeting link'));
     await userEvent.type(within(dialog).getByLabelText('Meeting link'), 'https://zoom.us/j/123');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Tue' }));
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Schedule' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Publish' }));
     await waitFor(() => expect(creatorLiveApi.create).toHaveBeenCalled());
     expect(creatorLiveApi.create.mock.calls[0][0]).toMatchObject({ title: 'Office hours', provider: 'EXTERNAL', externalUrl: 'https://zoom.us/j/123', audience: 'ALL_STUDENTS', recurrence: { freq: 'WEEKLY', byDay: ['TU'], count: 8 }, waitingRoom: false });
     await waitFor(() => expect(router.state.location.pathname).toBe('/creator/live/new1'));
@@ -69,21 +71,22 @@ describe('LiveClassesPage', () => {
 describe('LiveClassesPage with plugNmeet', () => {
   it('defaults to the plugNmeet classroom and sends waiting room / recording', async () => {
     creatorLiveApi.providers.mockResolvedValue({ livekit: false, plugnmeet: true, external: true, recording: true, livekitRecording: false, plugnmeetRecording: true });
-    creatorLiveApi.classes.mockResolvedValue([{ id: 'k1', title: 'Algebra live', provider: 'PLUGNMEET', audience: 'ALL_STUDENTS', status: 'ACTIVE' }]);
+    creatorLiveApi.classes.mockResolvedValue([{ id: 'k1', kind: 'CLASS', title: 'Algebra live', provider: 'PLUGNMEET', audience: 'ALL_STUDENTS', status: 'ACTIVE', durationMinutes: 60, nextSession: { id: 's1', status: 'SCHEDULED', startsAt: new Date(Date.now() + 86_400_000).toISOString() }, lastSession: null }]);
     creatorLiveApi.create.mockResolvedValue({ id: 'new2' });
     wrap(<LiveClassesPage />);
     expect((await screen.findAllByText('plugNmeet classroom'))[0]).toBeInTheDocument(); // list label
     expect(screen.queryByText(/built-in classroom isn't set up/)).toBeNull();
-    await userEvent.click(screen.getByRole('button', { name: 'Schedule class' }));
-    const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByRole('radio', { name: /plugNmeet classroom/ })).toBeChecked();
+    cleanup();
+    createPage('CLASS');
+    const dialog = document.body;
+    expect(await within(dialog).findByRole('radio', { name: /plugNmeet classroom/ })).toBeChecked();
     expect(within(dialog).queryByRole('radio', { name: /Built-in classroom/ })).toBeNull(); // LiveKit not set up: not offered
     expect(within(dialog).queryByLabelText('Meeting link')).toBeNull();
     await userEvent.type(within(dialog).getByLabelText(/^Title/), 'Algebra live');
     await userEvent.click(within(dialog).getByRole('checkbox', { name: /Waiting room/ }));
     await userEvent.click(within(dialog).getByRole('checkbox', { name: /Record sessions/ }));
     expect(within(dialog).getByText(/added to your video library after the session/)).toBeInTheDocument();
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Schedule' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Publish' }));
     await waitFor(() => expect(creatorLiveApi.create).toHaveBeenCalled());
     expect(creatorLiveApi.create.mock.calls[0][0]).toMatchObject({ provider: 'PLUGNMEET', waitingRoom: true, recordSessions: true });
     expect(creatorLiveApi.create.mock.calls[0][0].externalUrl).toBeUndefined();
@@ -149,16 +152,16 @@ describe('Paid webinars', () => {
     creatorLiveApi.providers.mockResolvedValue({ livekit: false, plugnmeet: false, external: true, recording: false });
     creatorLiveApi.classes.mockResolvedValue([]);
     creatorLiveApi.create.mockResolvedValue({ id: 'w2' });
-    wrap(<LiveClassesPage />);
-    await userEvent.click(await screen.findByRole('tab', { name: 'Webinars' }));
-    await userEvent.click(screen.getByRole('button', { name: 'New webinar' }));
-    const dialog = await screen.findByRole('dialog');
-    await userEvent.type(within(dialog).getByLabelText(/^Title/), 'Tax Saving Masterclass');
+    createPage('WEBINAR');
+    expect(await screen.findByRole('heading', { name: 'Create a webinar' })).toBeInTheDocument();
+    const dialog = document.body;
+    await userEvent.type(within(dialog).getByLabelText(/^Webinar title/), 'Tax Saving Masterclass');
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: /Notify learners/ }));
     await userEvent.type(within(dialog).getByLabelText('Meeting link'), 'https://meet.example.test/tax');
     await userEvent.type(within(dialog).getByLabelText('Ticket price'), '299');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Schedule' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Publish' }));
     await waitFor(() => expect(creatorLiveApi.create).toHaveBeenCalled());
-    expect(creatorLiveApi.create.mock.calls[0][0]).toMatchObject({ kind: 'WEBINAR', priceAmount: 299 });
+    expect(creatorLiveApi.create.mock.calls[0][0]).toMatchObject({ kind: 'WEBINAR', priceAmount: 299, notifyLearners: true });
   });
 });
 
@@ -181,14 +184,13 @@ describe('Zoom and Google Meet', () => {
     creatorLiveApi.providers.mockResolvedValue({ livekit: false, plugnmeet: false, external: true, recording: false, zoom: true, zoomAvailable: true, googleMeet: false, googleMeetAvailable: true });
     creatorLiveApi.classes.mockResolvedValue([]);
     creatorLiveApi.create.mockResolvedValue({ id: 'z1' });
-    wrap(<LiveClassesPage />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Schedule class' }));
-    const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByRole('radio', { name: /Google Meet/ })).toBeDisabled();
+    createPage('CLASS');
+    const dialog = document.body;
+    expect(await within(dialog).findByRole('radio', { name: /Google Meet/ })).toBeDisabled();
     await userEvent.click(within(dialog).getByRole('radio', { name: /^Zoom/ }));
     await userEvent.type(within(dialog).getByLabelText(/^Title/), 'GST Basics');
     await userEvent.click(within(dialog).getByRole('checkbox', { name: /Record sessions/ }));
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Schedule' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Publish' }));
     await waitFor(() => expect(creatorLiveApi.create).toHaveBeenCalled());
     expect(creatorLiveApi.create.mock.calls[0][0]).toMatchObject({ provider: 'ZOOM', recordSessions: true });
   });
@@ -203,5 +205,45 @@ describe('LiveRoom', () => {
     expect(screen.queryByText('conference')).not.toBeInTheDocument();
     status = 'ADMITTED';
     expect(await screen.findByText('conference', {}, { timeout: 5000 })).toBeInTheDocument();
+  });
+});
+
+describe('LiveClassesPage lists', () => {
+  const day = 86_400_000;
+  const at = (ms) => new Date(Date.now() + ms).toISOString();
+  const classes = [
+    { id: 'c1', kind: 'CLASS', title: 'Weekly Algebra', provider: 'ZOOM', audience: 'COURSE', status: 'ACTIVE', durationMinutes: 45, recurrence: { days: ['MO'] }, nextSession: { id: 's1', status: 'SCHEDULED', startsAt: at(day) }, lastSession: null },
+    { id: 'c2', kind: 'CLASS', title: 'Doubt clearing', provider: 'EXTERNAL', audience: 'ALL_STUDENTS', status: 'ACTIVE', durationMinutes: 30, nextSession: { id: 's2', status: 'LIVE', startsAt: at(-600_000) }, lastSession: null },
+    { id: 'c3', kind: 'CLASS', title: 'Orientation', provider: 'EXTERNAL', audience: 'ALL_STUDENTS', status: 'ACTIVE', durationMinutes: 60, nextSession: null, lastSession: { startsAt: at(-3 * day), status: 'ENDED' } },
+    { id: 'w1', kind: 'WEBINAR', title: 'Stock Market Basics', provider: 'ZOOM', audience: 'REGISTRANTS', status: 'ACTIVE', durationMinutes: 30, priceAmount: '299.00', currency: 'INR', nextSession: { id: 's4', status: 'SCHEDULED', startsAt: at(2 * day) }, lastSession: null },
+  ];
+
+  it('splits classes into upcoming, live now and past, with counts and search', async () => {
+    creatorLiveApi.providers.mockResolvedValue({ livekit: true, external: true });
+    creatorLiveApi.classes.mockResolvedValue(classes);
+    wrap(<LiveClassesPage />);
+    expect((await screen.findAllByText('Weekly Algebra'))[0]).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Classes/ })).toHaveTextContent('3');
+    expect(screen.getByRole('tab', { name: /Webinars/ })).toHaveTextContent('1');
+    expect(screen.queryByText('Doubt clearing')).toBeNull();
+    await userEvent.click(screen.getByRole('radio', { name: /Live now/ }));
+    expect(screen.getAllByText('Doubt clearing')[0]).toBeInTheDocument();
+    expect(screen.getAllByText('Live now').length).toBeGreaterThan(0);
+    await userEvent.click(screen.getByRole('radio', { name: /Past/ }));
+    expect(screen.getAllByText('Orientation')[0]).toBeInTheDocument();
+    expect(screen.getAllByText('Last session')[0]).toBeInTheDocument();
+    await userEvent.type(screen.getByPlaceholderText('Search by title'), 'zzz');
+    expect(await screen.findByText('No matches')).toBeInTheDocument();
+  });
+
+  it('shows webinars as cards with duration and price', async () => {
+    creatorLiveApi.providers.mockResolvedValue({ livekit: true, external: true });
+    creatorLiveApi.classes.mockResolvedValue(classes);
+    wrap(<LiveClassesPage />);
+    await userEvent.click(await screen.findByRole('tab', { name: /Webinars/ }));
+    expect(screen.getByRole('heading', { name: /Webinars/ })).toHaveTextContent('1');
+    expect(screen.getByText('Stock Market Basics')).toBeInTheDocument();
+    expect(screen.getByText('30 min')).toBeInTheDocument();
+    expect(screen.getByText('₹299.00')).toBeInTheDocument();
   });
 });

@@ -4,8 +4,9 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { BookOpen, Download, GraduationCap, IndianRupee, Receipt, Users } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
+import { TrendCard } from '../../components/charts/TrendCard.jsx';
 import { Alert } from '../../components/auth/Alert.jsx';
-import { Button, Card, CardBody, CardHeader, DataTable, EmptyState, ErrorState, Input, Skeleton, StatCard, Tabs, toast } from '../../components/ui/index.js';
+import { Button, Card, CardBody, CardHeader, DataTable, EmptyState, ErrorState, Input, SegmentedControl, Skeleton, StatCard, Tabs, toast } from '../../components/ui/index.js';
 import { analyticsApi } from '../../services/api/analytics.js';
 import { coursesApi } from '../../services/api/creator.js';
 import { saveBlob } from '../../utils/download.js';
@@ -22,19 +23,27 @@ function presetRange(days) {
 }
 const exportError = (e) => (e.status === 403 ? 'Your plan does not include this export. Upgrade in Billing.' : e.status === 422 ? 'Too much data for one file — choose a shorter period.' : e.message);
 
-/** Date-range control shared by the overview, GST and export tabs (one row, above the content). */
-function RangeBar({ range, onChange }) {
-  const [draft, setDraft] = useState(range);
+/**
+ * Date range, Graphy-Reports style: preset pills on the right of the tab row. "Custom" opens
+ * From/To fields underneath.
+ */
+function RangePills({ range, onChange, custom, setCustom }) {
   const active = PRESETS.find((p) => { const r = presetRange(p.days); return r.from === range.from && r.to === range.to; });
   return (
-    <div className="mb-6 flex flex-wrap items-end gap-2">
-      <div className="flex gap-1" role="group" aria-label="Quick ranges">
-        {PRESETS.map((p) => <Button key={p.days} size="sm" variant={active?.days === p.days ? 'primary' : 'secondary'} onClick={() => { const r = presetRange(p.days); setDraft(r); onChange(r); }}>{p.label}</Button>)}
-      </div>
+    <SegmentedControl label="Date range" size="sm" value={custom || !active ? 'custom' : String(active.days)}
+      onChange={(v) => { if (v === 'custom') { setCustom(true); return; } setCustom(false); onChange(presetRange(Number(v))); }}
+      options={[...PRESETS.map((p) => ({ value: String(p.days), label: p.label })), { value: 'custom', label: 'Custom' }]} />
+  );
+}
+
+function CustomRange({ range, onChange }) {
+  const [draft, setDraft] = useState(range);
+  return (
+    <Card className="mb-6 flex flex-wrap items-end gap-2 p-3">
       <Input label="From" type="date" className="w-40" value={draft.from} max={draft.to} onChange={(e) => setDraft({ ...draft, from: e.target.value })} />
       <Input label="To" type="date" className="w-40" value={draft.to} min={draft.from} onChange={(e) => setDraft({ ...draft, to: e.target.value })} />
       <Button size="sm" variant="secondary" disabled={!draft.from || !draft.to || (draft.from === range.from && draft.to === range.to)} onClick={() => onChange(draft)}>Apply</Button>
-    </div>
+    </Card>
   );
 }
 
@@ -73,10 +82,10 @@ function Overview({ range }) {
   return (
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Sales (incl. GST)" value={t ? formatMoney(t.gross, cur) : formatMoney(0, cur)} hint={t && Number(t.refunds) > 0 ? `${formatMoney(t.refunds, cur)} refunded` : undefined} icon={IndianRupee} loading={!o} />
-        <StatCard label="Your earnings" value={formatMoney(t?.net ?? 0, cur)} hint="After refunds, GST, Razorpay fees and commissions" icon={Receipt} loading={!o} />
-        <StatCard label="New students" value={count(o?.counts.newStudents)} icon={Users} loading={!o} />
-        <StatCard label="Enrolments" value={count(o?.counts.enrollments)} hint={o ? `${count(o.counts.completions)} completions` : undefined} icon={GraduationCap} loading={!o} />
+        <TrendCard label="Sales (incl. GST)" value={Number(t?.gross ?? 0)} format={(v) => formatMoney(v, cur)} hint={t && Number(t.refunds) > 0 ? `${formatMoney(t.refunds, cur)} refunded` : 'Daily sales, net of refunds'} series={o?.series.map((p) => ({ date: p.date, value: Number(p.revenue) }))} loading={!o} />
+        <TrendCard label="Your earnings" value={Number(t?.net ?? 0)} format={(v) => formatMoney(v, cur)} hint="After refunds, GST, Razorpay fees and commissions" loading={!o} />
+        <TrendCard label="New students" value={o?.counts.newStudents ?? 0} series={o?.series.map((p) => ({ date: p.date, value: p.students }))} loading={!o} />
+        <TrendCard label="Enrolments" value={o?.counts.enrollments ?? 0} hint={o ? `${count(o.counts.completions)} completions` : undefined} series={o?.series.map((p) => ({ date: p.date, value: p.enrollments }))} loading={!o} />
       </div>
       {!o ? <Skeleton className="h-64" /> : (
         <>
@@ -286,12 +295,16 @@ export function AnalyticsPage() {
   const [params, setParams] = useSearchParams();
   const tab = TABS.some((t) => t.value === params.get('tab')) ? params.get('tab') : 'overview';
   const range = params.get('from') && params.get('to') ? { from: params.get('from'), to: params.get('to') } : presetRange(30);
+  const [custom, setCustom] = useState(false);
   const set = (patch) => setParams((p) => { const n = new URLSearchParams(p); for (const [k, v] of Object.entries(patch)) n.set(k, v); return n; }, { replace: true });
   return (
     <>
-      <PageHeader title="Analytics" description="Sales, learners and tax reports from your academy’s own data." breadcrumbs={[{ label: 'Growth' }, { label: 'Analytics' }]} />
-      <Tabs className="mb-6" tabs={TABS} value={tab} onChange={(t) => set({ tab: t })} />
-      {tab !== 'courses' && <RangeBar key={`${range.from}:${range.to}`} range={range} onChange={(r) => set(r)} />}
+      <PageHeader title="Analytics" description="Insight into your sales, learners and academy activity." breadcrumbs={[{ label: 'Analytics' }]} />
+      <div className="mb-6 flex flex-col gap-3 border-b border-line lg:flex-row lg:items-end lg:justify-between">
+        <Tabs className="border-b-0" tabs={TABS} value={tab} onChange={(t) => set({ tab: t })} />
+        {tab !== 'courses' && <div className="pb-2"><RangePills range={range} onChange={(r) => set(r)} custom={custom} setCustom={setCustom} /></div>}
+      </div>
+      {tab !== 'courses' && custom && <CustomRange key={`${range.from}:${range.to}`} range={range} onChange={(r) => set(r)} />}
       {tab === 'overview' && <Overview range={range} />}
       {tab === 'conversions' && <ConversionsTab range={range} />}
       {tab === 'courses' && <CoursesTab />}

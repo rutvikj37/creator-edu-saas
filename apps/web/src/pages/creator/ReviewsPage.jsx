@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { MessageSquareReply, Star } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
+import { ListToolbar, MetricCard } from '../../components/common/ListToolbar.jsx';
+import { FilterChip } from '../../components/common/FilterChip.jsx';
 import { Badge, Button, Card, CardBody, EmptyState, ErrorState, Input, Modal, Select, Skeleton, Textarea, toast } from '../../components/ui/index.js';
 import { Stars } from '../../components/reviews/Stars.jsx';
 import { reviewsApi } from '../../services/api/reviews.js';
@@ -32,14 +34,21 @@ export function ReviewsPage() {
   const d = q.data;
   return (
     <>
-      <PageHeader title="Reviews" description="What students say about your courses." breadcrumbs={[{ label: 'Reviews' }]} />
-      <div className="mb-4 flex flex-wrap items-end gap-3">
-        <Select label="Course" value={filters.courseId} onChange={(e) => set({ courseId: e.target.value })} options={[{ value: '', label: 'All courses' }, ...(courses.data?.items ?? []).map((c) => ({ value: c.id, label: c.title }))]} />
-        <Select label="Show" value={filters.status} onChange={(e) => set({ status: e.target.value })} options={[{ value: '', label: 'All reviews' }, { value: 'UNANSWERED', label: 'Not replied yet' }, { value: 'PUBLISHED', label: 'Published' }, { value: 'HIDDEN', label: 'Hidden' }]} />
-        {d?.publishedCount > 0 && <p className="ml-auto flex items-center gap-2 text-sm"><span className="text-2xl font-semibold">{d.average.toFixed(1)}</span><Stars value={d.average} /><span className="text-muted">{d.publishedCount} published</span></p>}
+      <PageHeader title="Ratings & reviews" count={d && !filters.courseId && !filters.status ? d.total : undefined} description="What students say about your courses." breadcrumbs={[{ label: 'Reviews' }]} />
+      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        <Card className="flex flex-col gap-2 p-5"><p className="text-sm font-medium text-fg-2">Average rating</p>{!d ? <Skeleton className="h-8 w-24" /> : <p className="flex items-center gap-2 text-2xl font-semibold tabular-nums">{d.publishedCount ? d.average.toFixed(1) : '—'}{d.publishedCount > 0 && <Stars value={d.average} />}</p>}</Card>
+        <MetricCard label="Published reviews" value={d?.publishedCount ?? 0} loading={!d} />
+        <MetricCard label="Showing" value={d?.total ?? 0} hint={filters.status === 'UNANSWERED' ? 'Not replied yet' : filters.courseId ? 'For the chosen course' : 'All reviews'} loading={!d} />
       </div>
+      <Card className="mb-4">
+        <ListToolbar filtered={Boolean(filters.courseId || filters.status)} onReset={() => set({ courseId: '', status: '' })} count={d?.total} noun="review"
+          filters={<>
+            <FilterChip label="Course" value={filters.courseId || undefined} onChange={(v) => set({ courseId: v ?? '' })} options={(courses.data?.items ?? []).map((c) => ({ value: c.id, label: c.title }))} panelClassName="w-72" />
+            <FilterChip label="Show" value={filters.status || undefined} onChange={(v) => set({ status: v ?? '' })} options={[{ value: 'UNANSWERED', label: 'Not replied yet' }, { value: 'PUBLISHED', label: 'Published' }, { value: 'HIDDEN', label: 'Hidden' }]} />
+          </>} />
+      </Card>
       {q.isError ? <Card><ErrorState error={q.error} onRetry={() => q.refetch()} /></Card> : !d ? <Skeleton className="h-64" /> : d.items.length === 0 ? (
-        <Card><EmptyState icon={Star} title="No reviews yet" description="Students who have access to a course can rate it from the course player." /></Card>
+        <Card><EmptyState icon={Star} title={filters.courseId || filters.status ? 'No reviews match' : 'No reviews yet'} description="Students who have access to a course can rate it from the course player." /></Card>
       ) : (
         <div className="space-y-3">
           {d.items.map((r) => (

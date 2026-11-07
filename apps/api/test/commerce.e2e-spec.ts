@@ -80,6 +80,18 @@ describe('Commerce — Razorpay (e2e)', () => {
     const quote = (await authed(app, buyer.s).post('/api/v1/learn/checkout/quote').send({ courseId: course.id, couponCode: 'save10' }).expect(200)).body.data;
     expect(quote).toMatchObject({ subtotal: '1180.00', discount: '118.00', total: '1062.00', tax: '162.00', couponCode: 'SAVE10', paymentsEnabled: true });
 
+    // Capped percentage coupon, random code, and offers shown at checkout
+    const capped = (await authed(app, cs).post('/api/v1/creator/coupons').send({ type: 'PERCENT', value: 50, maxDiscountAmount: 100, showAtCheckout: true }).expect(201)).body.data;
+    expect(capped.code).toMatch(/^[A-HJ-KM-NP-Z2-9]{8}$/);
+    expect(capped).toMatchObject({ maxDiscountAmount: '100', showAtCheckout: true });
+    const cq = (await authed(app, buyer.s).post('/api/v1/learn/checkout/quote').send({ courseId: course.id, couponCode: capped.code }).expect(200)).body.data;
+    expect(cq).toMatchObject({ subtotal: '1180.00', discount: '100.00', total: '1080.00' });
+    await authed(app, cs).post('/api/v1/creator/coupons').send({ code: 'FLATCAP', type: 'FIXED', value: 50, maxDiscountAmount: 10 }).expect(422);
+    const offers = (await authed(app, buyer.s).get('/api/v1/learn/checkout/offers').query({ courseId: course.id }).expect(200)).body.data;
+    expect(offers.map((o: any) => o.code)).toEqual([capped.code]); // SAVE10 is not offered (showAtCheckout off)
+    await authed(app, cs).patch(`/api/v1/creator/coupons/${capped.id}`).send({ showAtCheckout: false }).expect(200);
+    expect((await authed(app, buyer.s).get('/api/v1/learn/checkout/offers').query({ courseId: course.id })).body.data).toEqual([]);
+
     // Order with idempotency.
     const body = { courseId: course.id, couponCode: 'SAVE10', billing: { name: 'Priya Buyer', phone: '+919812345678', state: 'Gujarat' } };
     const order = (await authed(app, buyer.s).post('/api/v1/learn/checkout').set('Idempotency-Key', 'k-1').send(body).expect(201)).body.data;
@@ -275,6 +287,17 @@ describe('Commerce — Razorpay (e2e)', () => {
     // Summary nets refunds and reversals: gross 2000, refunds 1400, commission 100 − 70 = 30.
     const s = (await authed(app, cs).get('/api/v1/creator/orders/summary')).body.data.totals[0];
     expect(s).toMatchObject({ gross: '2000.00', refunds: '1400.00', platformCommission: '30.00' });
+
+    // List filters: course, status and whole-day date range
+    const total = (await authed(app, cs).get('/api/v1/creator/orders')).body.meta.total;
+    expect(total).toBeGreaterThan(0);
+    expect((await authed(app, cs).get('/api/v1/creator/orders').query({ courseId: course.id })).body.meta.total).toBe(total);
+    expect((await authed(app, cs).get('/api/v1/creator/orders').query({ courseId: 'c'.repeat(25) })).body.meta.total).toBe(0);
+    const today = new Date().toISOString().slice(0, 10);
+    expect((await authed(app, cs).get('/api/v1/creator/orders').query({ from: today, to: today })).body.meta.total).toBe(total);
+    expect((await authed(app, cs).get('/api/v1/creator/orders').query({ to: '2000-01-01' })).body.meta.total).toBe(0);
+    expect((await authed(app, cs).get('/api/v1/creator/orders').query({ status: 'REFUNDED' })).body.data.every((o: any) => o.status === 'REFUNDED')).toBe(true);
+    await authed(app, cs).get('/api/v1/creator/orders').query({ from: 'last week' }).expect(422);
 
     // Gateway with captured payments cannot be deleted (refunds must keep working); pausing hides checkout.
     await authed(app, cs).delete('/api/v1/creator/payments/razorpay').expect(409);

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BellRing } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
+import { SettingsTabs } from '../../components/layout/SettingsTabs.jsx';
 import { Alert } from '../../components/auth/Alert.jsx';
 import { Button, Card, CardBody, CardHeader, ErrorState, Skeleton, toast } from '../../components/ui/index.js';
 import { notificationsApi } from '../../services/api/notifications.js';
@@ -46,7 +47,7 @@ export function NotificationSettingsPage({ breadcrumbs = [] }) {
   };
   return (
     <>
-      <PageHeader title="Notifications" description="Choose how you hear about what matters to you." breadcrumbs={[...breadcrumbs, { label: 'Notifications' }]} />
+      <PageHeader title="Notifications" description="Choose how you hear about what matters to you." breadcrumbs={[...breadcrumbs, { label: 'Notifications' }]} /><SettingsTabs />
       {!p ? <Skeleton className="h-72" /> : (
         <div className="space-y-6">
           <Card>

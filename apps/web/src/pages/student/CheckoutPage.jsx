@@ -70,6 +70,7 @@ export function CheckoutPage() {
     enabled: Boolean(course.data),
     retry: false,
   });
+  const offers = useQuery({ queryKey: ['checkout', 'offers', courseId ?? mode], queryFn: () => checkoutApi.offers(courseId), enabled: Boolean(course.data) && mode !== 'plan', retry: false });
   useEffect(() => {
     if (!course.data) return;
     const kind = { plan: 'membership', bundle: 'bundle', webinar: 'webinar', product: 'product', course: 'course', cart: 'cart' }[mode];
@@ -77,9 +78,10 @@ export function CheckoutPage() {
   }, [course.data?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const form = useForm({ resolver: zodResolver(schema), defaultValues: { name: auth.user?.fullName ?? '', phone: auth.user?.phone ?? '', state: '', gstin: '' } });
 
-  const applyCoupon = async () => {
-    const code = coupon.trim();
+  const applyCoupon = async (picked) => {
+    const code = (typeof picked === 'string' ? picked : coupon).trim();
     if (!code) return;
+    if (typeof picked === 'string') setCoupon(code);
     setCouponError(null);
     try {
       await checkoutApi.quote({ ...product, couponCode: code });
@@ -189,6 +191,17 @@ export function CheckoutPage() {
                         <Button variant="secondary" onClick={applyCoupon} disabled={!coupon.trim()}>Apply</Button>
                       </div>
                       {couponError && <p role="alert" className="mt-1.5 text-xs text-red-600">{couponError}</p>}
+                      {offers.data?.length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-xs font-medium tracking-wide text-muted uppercase">Available offers</p>
+                          {offers.data.map((o) => (
+                            <div key={o.code} className="flex items-center justify-between gap-3 rounded-md border border-dashed border-primary-300 bg-primary-50/50 px-3 py-2 text-sm dark:border-primary-500/40 dark:bg-primary-500/10">
+                              <span><span className="font-mono font-semibold text-fg">{o.code}</span><span className="block text-xs text-muted">{o.type === 'PERCENT' ? `${Number(o.value)}% off${o.maxDiscountAmount ? `, up to ${formatMoney(o.maxDiscountAmount, 'INR')}` : ''}` : `${formatMoney(o.value, 'INR')} off`}{o.minOrderAmount ? ` · min ${formatMoney(o.minOrderAmount, 'INR')}` : ''}</span></span>
+                              <Button size="sm" variant="ghost" onClick={() => applyCoupon(o.code)}>Apply</Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                   <dl className="space-y-2 border-t border-line pt-4 text-sm">

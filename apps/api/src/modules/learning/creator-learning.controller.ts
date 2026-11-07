@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
-import { IsBoolean, IsEmail, IsIn, IsOptional, IsString, Length, Matches, MaxLength } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsEmail, IsIn, IsOptional, IsString, Length, Matches, MaxLength, ValidateNested } from 'class-validator';
 import { PERMISSIONS } from '@ce/shared';
 import { CurrentAuth, RequirePermissions, TenantScoped } from '../../common/decorators/auth.decorators.js';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto.js';
@@ -11,7 +11,7 @@ import { QuizzesService } from '../assessment/quizzes.service.js';
 import { AssignmentsService } from '../assessment/assignments.service.js';
 import { AssignmentSettingsDto, GradeSubmissionDto, ManualGradeDto, OrderDto, QuestionDto, QuizSettingsDto } from '../assessment/dto.js';
 import { CertificatesService } from '../certificates/certificates.service.js';
-import { CreatorLearningService } from './creator-learning.service.js';
+import { CreatorLearningService, normalizePhone } from './creator-learning.service.js';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 class EnrollDto { @ApiProperty() @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value)) @IsEmail({}, { message: 'Enter a valid email address' }) email: string; }
@@ -25,7 +25,33 @@ class TemplateDto {
   @ApiPropertyOptional() @IsOptional() @Matches(/^#[0-9a-fA-F]{6}$/) accentColor?: string;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() showQr?: boolean;
 }
+/** Learner list filters (Graphy-style "Filter by" chips). Dates are whole days, YYYY-MM-DD. */
+class StudentsQueryDto extends PaginationQueryDto {
+  @ApiPropertyOptional() @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) joinedFrom?: string;
+  @ApiPropertyOptional() @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) joinedTo?: string;
+  @ApiPropertyOptional({ description: 'Signed in on or after this day' }) @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) activeFrom?: string;
+  @ApiPropertyOptional({ description: 'true = never signed in' }) @IsOptional() @IsIn(['true']) neverSignedIn?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @Length(25, 25) courseId?: string;
+}
 class RevokeDto { @ApiProperty() @Transform(trim) @IsString() @Length(3, 255) reason: string; }
+class StudentOptionsDto {
+  @ApiPropertyOptional({ type: [String], description: 'Courses to enrol the student(s) in' }) @IsOptional() @IsArray() @ArrayMaxSize(20) @IsString({ each: true }) courseIds?: string[];
+  @ApiPropertyOptional({ default: true, description: 'Email new students a set-password link' }) @IsOptional() @IsBoolean() sendInvite?: boolean;
+}
+class CreateStudentDto extends StudentOptionsDto {
+  @ApiProperty() @Transform(trim) @IsString() @Length(1, 120, { message: 'Enter the student\'s name' }) fullName: string;
+  @ApiProperty() @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value)) @IsEmail({}, { message: 'Enter a valid email address' }) @MaxLength(191) email: string;
+  @ApiPropertyOptional() @IsOptional() @Transform(({ value }) => { const p = normalizePhone(value); return p === false ? '!invalid' : p; }) @Matches(/^\+?\d{7,15}$/, { message: 'Enter a valid phone number' }) phone?: string | null;
+}
+/** Rows are checked one by one in the service, so a bad row is reported instead of failing the whole file. */
+class ImportRowDto {
+  @ApiProperty() @IsString() @MaxLength(320) email: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(200) fullName?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(40) phone?: string;
+}
+class ImportStudentsDto extends StudentOptionsDto {
+  @ApiProperty({ type: [ImportRowDto] }) @IsArray() @ArrayMinSize(1, { message: 'The file has no students' }) @ArrayMaxSize(1000, { message: 'Import up to 1,000 students at a time' }) @ValidateNested({ each: true }) @Type(() => ImportRowDto) rows: ImportRowDto[];
+}
 
 @ApiTags('Creator · Learning')
 @ApiBearerAuth()
@@ -40,10 +66,20 @@ export class CreatorLearningController {
   ) {}
 
   @Get('students') @RequirePermissions(PERMISSIONS.STUDENTS_READ)
-  students(@Query() q: PaginationQueryDto) { return this.svc.students(q); }
+  students(@Query() q: StudentsQueryDto) { return this.svc.students(q); }
 
   @Get('students/:id') @RequirePermissions(PERMISSIONS.STUDENTS_READ)
   student(@Param('id') id: string) { return this.svc.student(id); }
+
+  @Post('students') @RequirePermissions(PERMISSIONS.STUDENTS_MANAGE)
+  addStudent(@Body() dto: CreateStudentDto, @CurrentAuth() auth: AuthContext, @Req() req: AppRequest) {
+    return this.svc.addStudent(dto, auth.userId, req.get('origin') ?? apiOrigin(req));
+  }
+
+  @Post('students/import') @HttpCode(200) @RequirePermissions(PERMISSIONS.STUDENTS_MANAGE)
+  importStudents(@Body() dto: ImportStudentsDto, @CurrentAuth() auth: AuthContext, @Req() req: AppRequest) {
+    return this.svc.importStudents(dto.rows.map((r) => ({ email: r.email, fullName: r.fullName ?? '', phone: r.phone })), { courseIds: dto.courseIds, sendInvite: dto.sendInvite }, auth.userId, req.get('origin') ?? apiOrigin(req));
+  }
 
   @Get('courses/:id/enrollments') @RequirePermissions(PERMISSIONS.STUDENTS_READ)
   enrollments(@Param('id') id: string) { return this.svc.courseEnrollments(id); }

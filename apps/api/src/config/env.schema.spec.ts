@@ -19,6 +19,12 @@ describe('validateEnv', () => {
     expect(env.NODE_ENV).toBe('development');
   });
 
+  it('treats a blank SMS_PROVIDER as not configured', () => {
+    expect(validateEnv({ ...base, SMS_PROVIDER: '' }).SMS_PROVIDER).toBeUndefined();
+    expect(validateEnv({ ...base, SMS_PROVIDER: 'msg91' }).SMS_PROVIDER).toBe('msg91');
+    expect(() => validateEnv({ ...base, SMS_PROVIDER: 'nope' })).toThrow(/SMS_PROVIDER/);
+  });
+
   it('rejects a short JWT secret', () => {
     expect(() => validateEnv({ ...base, JWT_ACCESS_SECRET: 'short' })).toThrow(/JWT_ACCESS_SECRET/);
   });

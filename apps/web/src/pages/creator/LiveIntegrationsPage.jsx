@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Video } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
+import { SettingsTabs } from '../../components/layout/SettingsTabs.jsx';
 import { Alert } from '../../components/auth/Alert.jsx';
 import { Badge, Button, Card, CardBody, ErrorState, Skeleton, toast } from '../../components/ui/index.js';
 import { creatorLiveApi } from '../../services/api/live.js';
@@ -29,7 +30,7 @@ export function LiveIntegrationsPage() {
   const manage = can('integrations.manage');
   return (
     <>
-      <PageHeader title="Live integrations" description="Run live classes and webinars on your own Zoom or Google Meet account." breadcrumbs={[{ label: 'Live', to: '/creator/live' }, { label: 'Integrations' }]} />
+      <PageHeader title="Live integrations" description="Run live classes and webinars on your own Zoom or Google Meet account." breadcrumbs={[{ label: 'Integrations' }]} /><SettingsTabs />
       {q.isError ? <Card><ErrorState error={q.error} onRetry={() => q.refetch()} /></Card> : !q.data ? <Skeleton className="h-64" /> : (
         <div className="grid gap-4 lg:grid-cols-2">
           {CARDS.map((c) => {

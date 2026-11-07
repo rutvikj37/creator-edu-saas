@@ -14,6 +14,10 @@ export class CourseListQuery extends PaginationQueryDto {
 export class CreateCourseDto {
   @ApiProperty() @Transform(trim) @IsString() @Length(3, 200) title: string;
   @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(500) shortDescription?: string;
+  @ApiPropertyOptional({ description: 'Rich-text (TipTap) document' }) @IsOptional() @IsObject() description?: Record<string, unknown> | null;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() isFree?: boolean;
+  @ApiPropertyOptional({ description: 'Selling price' }) @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(10_000_000) priceAmount?: number | null;
+  @ApiPropertyOptional({ description: 'Original price shown struck through' }) @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(10_000_000) compareAtAmount?: number | null;
 }
 
 export class UpdateCourseDto {

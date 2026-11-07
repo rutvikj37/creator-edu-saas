@@ -50,6 +50,7 @@ const OnboardingPage = lazyNamed(() => import('../pages/creator/OnboardingPage.j
 const AcademySettingsPage = lazyNamed(() => import('../pages/creator/AcademySettingsPage.jsx'), 'AcademySettingsPage');
 const CoursesPage = lazyNamed(() => import('../pages/creator/CoursesPage.jsx'), 'CoursesPage');
 const CourseEditorPage = lazyNamed(() => import('../pages/creator/CourseEditorPage.jsx'), 'CourseEditorPage');
+const CourseCreatePage = lazyNamed(() => import('../pages/creator/CourseCreatePage.jsx'), 'CourseCreatePage');
 const StaffPage = lazyNamed(() => import('../pages/creator/StaffPage.jsx'), 'StaffPage');
 const InvitePage = lazyNamed(() => import('../pages/creator/InvitePage.jsx'), 'InvitePage');
 const CourseLandingPage = lazyNamed(() => import('../pages/public/CourseLandingPage.jsx'), 'CourseLandingPage');
@@ -85,6 +86,7 @@ const OrderStatusPage = lazyNamed(() => import('../pages/student/OrdersPages.jsx
 const StudentOrdersPage = lazyNamed(() => import('../pages/student/OrdersPages.jsx'), 'StudentOrdersPage');
 const LiveClassesPage = lazyNamed(() => import('../pages/creator/LiveClassesPage.jsx'), 'LiveClassesPage');
 const LiveClassDetailPage = lazyNamed(() => import('../pages/creator/LiveClassesPage.jsx'), 'LiveClassDetailPage');
+const LiveClassCreatePage = lazyNamed(() => import('../pages/creator/LiveClassesPage.jsx'), 'LiveClassCreatePage');
 const BatchesPage = lazyNamed(() => import('../pages/creator/BatchesPage.jsx'), 'BatchesPage');
 const HostRoomPage = lazyNamed(() => import('../pages/live/LivePages.jsx'), 'HostRoomPage');
 const StudentRoomPage = lazyNamed(() => import('../pages/live/LivePages.jsx'), 'StudentRoomPage');
@@ -195,6 +197,7 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/creator/onboarding', element: page(OnboardingPage) },
             { path: '/creator/academy', element: page(AcademySettingsPage) },
             { path: '/creator/courses', element: page(CoursesPage) },
+            { path: '/creator/courses/new', element: page(CourseCreatePage) },
             { path: '/creator/courses/:id', element: page(CourseEditorPage) },
             { path: '/creator/staff', element: page(StaffPage) },
             { path: '/creator/students', element: page(StudentsPage) },
@@ -210,6 +213,7 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/creator/orders/:id', element: page(OrderDetailPage) },
             { path: '/creator/transactions', element: page(TransactionsPage) },
             { path: '/creator/live', element: page(LiveClassesPage) },
+            { path: '/creator/live/new', element: page(LiveClassCreatePage) },
             { path: '/creator/live/:id', element: page(LiveClassDetailPage) },
             { path: '/creator/batches', element: page(BatchesPage) },
             { path: '/creator/marketing', element: page(MarketingPage) },

@@ -39,10 +39,12 @@ class CouponDto {
   @ApiPropertyOptional() @IsOptional() @IsDateString() startsAt?: string | null;
   @ApiPropertyOptional() @IsOptional() @IsDateString() endsAt?: string | null;
   @ApiPropertyOptional({ type: [String] }) @IsOptional() @IsArray() @ArrayMaxSize(200) @IsString({ each: true }) @Length(25, 25, { each: true }) courseIds?: string[] | null;
+  @ApiPropertyOptional({ description: 'Percentage coupons: most it can take off' }) @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(1) @Max(10_000_000) maxDiscountAmount?: number | null;
+  @ApiPropertyOptional({ description: 'Offer this coupon to students on the checkout page' }) @IsOptional() @IsBoolean() showAtCheckout?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() isActive?: boolean;
 }
 class CreateCouponDto extends CouponDto {
-  @ApiProperty() @Transform(trim) @Matches(/^[A-Za-z0-9_-]{3,40}$/, { message: '3–40 letters, digits, - or _' }) declare code: string;
+  @ApiPropertyOptional({ description: 'Leave empty for a random code' }) @IsOptional() @Transform(({ value }) => (typeof value === 'string' ? value.trim() || undefined : value)) @Matches(/^[A-Za-z0-9_-]{3,40}$/, { message: '3–40 letters, digits, - or _' }) declare code?: string;
   @ApiProperty({ enum: ['PERCENT', 'FIXED'] }) @IsIn(['PERCENT', 'FIXED']) declare type: 'PERCENT' | 'FIXED';
   @ApiProperty() @IsNumber({ maxDecimalPlaces: 2 }) @Min(0.01) @Max(10_000_000) declare value: number;
 }
@@ -84,6 +86,9 @@ class RefundDto {
 class ListQuery {
   @IsOptional() @IsIn(ORDER_STATUSES) status?: string;
   @IsOptional() @IsString() @MaxLength(100) q?: string;
+  @IsOptional() @IsString() @Length(25, 25) courseId?: string;
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Use YYYY-MM-DD' }) from?: string;
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Use YYYY-MM-DD' }) to?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize?: number;
 }
@@ -192,7 +197,11 @@ export class CreatorOrdersController {
 @TenantScoped('academy')
 @Controller({ path: 'learn', version: '1' })
 export class LearnCommerceController {
-  constructor(private readonly orders: OrdersService) {}
+  constructor(private readonly orders: OrdersService, private readonly coupons: CouponsService) {}
+
+  @Get('checkout/offers')
+  @ApiOperation({ summary: 'Coupons the academy offers on the checkout page for a course' })
+  offers(@Query('courseId') courseId?: string) { return this.coupons.offers(courseId && courseId.length === 25 ? courseId : null); }
 
   @Post('checkout/quote') @HttpCode(200)
   @ApiOperation({ summary: 'Price breakdown with coupon and GST, without creating an order' })

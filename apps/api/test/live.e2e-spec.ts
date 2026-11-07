@@ -6,7 +6,7 @@ import { HostResolverService } from '../src/core/tenancy/host-resolver.service.j
 import { LiveJobs } from '../src/modules/live/live.processor.js';
 import { LiveKitService } from '../src/modules/live/livekit.service.js';
 import { EntitlementsService } from '../src/modules/subscriptions/entitlements.service.js';
-import { api, authed, createTestApp, lastEmail, parseSession, registerCreator, resetDatabase, type Session, tenantHost, uniqueEmail } from './helpers.js';
+import { api, authed, createTestApp, lastEmail, parseSession, PNG, registerCreator, resetDatabase, type Session, tenantHost, uniqueEmail, uploadFile } from './helpers.js';
 
 const LK = { url: 'wss://live.example.test', key: 'APItestkey', secret: 'livekit-test-secret-at-least-32-chars-long' };
 const doc = (t: string) => ({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: t }] }] });
@@ -180,6 +180,14 @@ describe('Live learning (e2e)', () => {
     const att = (await authed(app, cs).get(`/api/v1/creator/live/sessions/${es}/attendance`)).body.data;
     expect(att.people).toEqual([expect.objectContaining({ name: 'Batch Member', source: 'click', seconds: null })]);
 
+    // List shows the next session, and the most recent one that already started
+    const prisma2 = app.get(PrismaService);
+    const ranAt = new Date(Date.now() - 2 * 86_400_000);
+    await prisma2.liveSession.update({ where: { id: es }, data: { startsAt: ranAt, endsAt: new Date(ranAt.getTime() + 1_800_000), status: 'ENDED' } });
+    const listed = (await authed(app, cs).get('/api/v1/creator/live/classes').expect(200)).body.data.find((x: any) => x.id === ext.id);
+    expect(listed.nextSession).toBeNull();
+    expect(listed.lastSession).toMatchObject({ status: 'ENDED', startsAt: ranAt.toISOString() });
+
     // Reminders 1 hour ahead go to the audience once.
     const soon = (await authed(app, cs).post('/api/v1/creator/live/classes').send({ title: 'Doubt clearing', provider: 'LIVEKIT', startsAt: new Date(Date.now() + 60 * 60_000).toISOString(), durationMinutes: 45, audience: 'BATCH', batchId: batch.id }).expect(201)).body.data;
     const jobs = app.get(LiveJobs);
@@ -193,6 +201,17 @@ describe('Live learning (e2e)', () => {
     // Webinar: public page, registration emails a personal link, ticket joins without an account.
     const web = (await authed(app, cs).post('/api/v1/creator/live/classes').send({ kind: 'WEBINAR', title: 'Free Python Masterclass', provider: 'LIVEKIT', startsAt: new Date(Date.now() + 10 * 60_000).toISOString(), durationMinutes: 60, capacity: 100 }).expect(201)).body.data;
     expect(web).toMatchObject({ kind: 'WEBINAR', audience: 'REGISTRANTS', slug: 'free-python-masterclass' });
+
+    // Cover image and "notify learners" (webinars go to every student of the academy)
+    const cover = (await uploadFile(app, cs, 'IMAGE', 'cover.png', 'image/png', PNG).then((r) => r.body.data));
+    const covered = (await authed(app, cs).post('/api/v1/creator/live/classes').send({ kind: 'WEBINAR', title: 'Covered webinar', provider: 'EXTERNAL', externalUrl: 'https://zoom.us/j/1234567890', startsAt: new Date(Date.now() + 2 * 86_400_000).toISOString(), durationMinutes: 30, coverFileId: cover.id, notifyLearners: true }).expect(201)).body.data;
+    expect(covered.coverFileId).toBe(cover.id);
+    expect(covered.coverUrl).toEqual(expect.any(String));
+    expect((await authed(app, cs).get('/api/v1/creator/live/classes').expect(200)).body.data.find((x: any) => x.id === covered.id).coverUrl).toEqual(expect.any(String));
+    const notified = await app.get(LiveJobs).announce(c.tenant.id, covered.id);
+    expect(notified).toBeGreaterThanOrEqual(2); // both students
+    await authed(app, cs).post('/api/v1/creator/live/classes').send({ kind: 'WEBINAR', title: 'Bad cover', provider: 'EXTERNAL', externalUrl: 'https://zoom.us/j/1234567890', startsAt: new Date(Date.now() + 86_400_000).toISOString(), durationMinutes: 30, coverFileId: 'x'.repeat(25) }).expect(422);
+    await authed(app, cs).patch(`/api/v1/creator/live/classes/${covered.id}`).send({ coverFileId: null }).expect(200).then((r) => expect(r.body.data.coverUrl).toBeNull());
     const host = tenantHost(c.tenant.slug);
     const pub = (await api(app).get('/api/v1/public/webinars/free-python-masterclass').set('Host', host).expect(200)).body.data;
     expect(pub).toMatchObject({ title: 'Free Python Masterclass', open: true, seatsLeft: 100 });

@@ -93,6 +93,7 @@ export function CreatorLayout({ preview = false, ...props }) {
       banner={preview ? undefined : <AnnouncementsBanner />}
       brand={{ key: 'creator', mark: name.slice(0, 2).toUpperCase(), name, subtitle: auth.activeTenant?.role?.name ?? 'Creator workspace' }}
       footer={preview ? undefined : <WorkspaceSwitcher />}
+      defaultCollapsed
       {...(preview ? {} : account)}
       {...props}
     />

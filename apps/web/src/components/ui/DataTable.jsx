@@ -8,7 +8,7 @@ import { Pagination } from './Navigation.jsx';
  * to the API (`sort=-createdAt`, `page`), so large datasets are never loaded client-side.
  * On small screens rows collapse into stacked cards.
  */
-export function DataTable({ columns, rows, rowKey = 'id', loading, error, onRetry, sort, onSortChange, meta, onPageChange, empty, onRowClick }) {
+export function DataTable({ columns, rows, rowKey = 'id', loading, error, onRetry, sort, onSortChange, meta, onPageChange, onPageSizeChange, empty, onRowClick }) {
   const toggleSort = (key) => {
     if (!onSortChange) return;
     onSortChange(sort === key ? `-${key}` : sort === `-${key}` ? undefined : key);
@@ -22,7 +22,7 @@ export function DataTable({ columns, rows, rowKey = 'id', loading, error, onRetr
     <div>
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full text-left text-sm">
-          <thead className="border-b border-line bg-surface-2/60 text-xs font-medium tracking-wide text-muted uppercase">
+          <thead className="border-b border-line text-[11px] font-semibold tracking-wider text-muted uppercase">
             <tr>
               {columns.map((c) => (
                 <th key={c.key} scope="col" className={cn('px-4 py-2.5 font-medium', c.align === 'right' && 'text-right', c.className)}
@@ -54,7 +54,7 @@ export function DataTable({ columns, rows, rowKey = 'id', loading, error, onRetr
                   <tr key={row[rowKey]} onClick={onRowClick ? () => onRowClick(row) : undefined}
                     className={cn('transition-colors hover:bg-surface-2/60', onRowClick && 'cursor-pointer')}>
                     {columns.map((c) => (
-                      <td key={c.key} className={cn('px-4 py-3 text-fg-2', c.align === 'right' && 'text-right tabular-nums', c.className)}>
+                      <td key={c.key} className={cn('px-4 py-3.5 text-fg-2', c.align === 'right' && 'text-right tabular-nums', c.className)}>
                         {c.cell ? c.cell(row) : row[c.key]}
                       </td>
                     ))}
@@ -87,7 +87,7 @@ export function DataTable({ columns, rows, rowKey = 'id', loading, error, onRetr
       {!loading && rows.length === 0 && (empty ?? <EmptyState title="No results" description="Try adjusting your search or filters." />)}
       {meta && onPageChange && rows.length > 0 && (
         <div className="border-t border-line px-3">
-          <Pagination page={meta.page} pageSize={meta.pageSize} total={meta.total} onPageChange={onPageChange} />
+          <Pagination page={meta.page} pageSize={meta.pageSize} total={meta.total} onPageChange={onPageChange} onPageSizeChange={onPageSizeChange} />
         </div>
       )}
     </div>

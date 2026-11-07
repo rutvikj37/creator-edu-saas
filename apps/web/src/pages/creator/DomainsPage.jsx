@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AtSign, Check, Copy, Globe, Link2, Plus, RefreshCw, Star, Trash2, X } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
+import { SettingsTabs } from '../../components/layout/SettingsTabs.jsx';
 import { Alert } from '../../components/auth/Alert.jsx';
 import { Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, EmptyState, ErrorState, Input, Modal, Skeleton, StatusBadge, toast } from '../../components/ui/index.js';
 import { workspaceApi } from '../../services/api/auth.js';
@@ -124,12 +125,12 @@ export function DomainsPage() {
   });
 
   if (!canManage) {
-    return (<><PageHeader title="Domains" breadcrumbs={[{ label: 'Website' }, { label: 'Domains' }]} /><Card><EmptyState title="You don't have access" description="Ask the academy owner for the domains permission." /></Card></>);
+    return (<><PageHeader title="Domains" breadcrumbs={[{ label: 'Domains' }]} /><SettingsTabs /><Card><EmptyState title="You don't have access" description="Ask the academy owner for the domains permission." /></Card></>);
   }
 
   return (
     <>
-      <PageHeader title="Domains" description="Choose how students reach your academy: a free branded subdomain, your own domain, or both." breadcrumbs={[{ label: 'Website' }, { label: 'Domains' }]} />
+      <PageHeader title="Domains" description="Choose how students reach your academy: a free branded subdomain, your own domain, or both." breadcrumbs={[{ label: 'Domains' }]} /><SettingsTabs />
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
         <SubdomainOption count={(domains.data ?? []).filter((d) => d.type === 'SUBDOMAIN').length} onAdded={invalidate} />
         <Card>

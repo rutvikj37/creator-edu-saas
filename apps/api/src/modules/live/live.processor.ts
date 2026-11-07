@@ -18,7 +18,7 @@ import { PlugNmeetService } from './plugnmeet.service.js';
 import { ZoomService } from './zoom.service.js';
 import { LiveIntegrationsService } from './live-integrations.service.js';
 
-export const LIVE_JOBS = { REMINDERS: 'live-reminders', MAINTAIN: 'live-maintain', PNM_SYNC: 'live-plugnmeet-sync', PNM_IMPORT: 'live-plugnmeet-import', ZOOM_IMPORT: 'live-zoom-import' } as const;
+export const LIVE_JOBS = { ANNOUNCE: 'live-announce', REMINDERS: 'live-reminders', MAINTAIN: 'live-maintain', PNM_SYNC: 'live-plugnmeet-sync', PNM_IMPORT: 'live-plugnmeet-import', ZOOM_IMPORT: 'live-zoom-import' } as const;
 const REMINDERS = [
   { key: '24h', ms: 24 * 3600_000, label: 'tomorrow' },
   { key: '1h', ms: 3600_000, label: 'in 1 hour' },
@@ -38,6 +38,32 @@ export class LiveJobs {
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly notifications: NotificationsService,
   ) {}
+
+  /**
+   * "Notify learners" on create: tells the audience a class/webinar was scheduled. Webinars go to
+   * every student of the academy (they register from the link); classes to their own audience.
+   */
+  async announce(tenantId: string, id: string) {
+    return this.ctx.run(tenantId, async () => {
+      const c = await this.prisma.liveClass.findFirst({ where: { id, tenantId, status: 'ACTIVE' }, include: { sessions: { where: { status: 'SCHEDULED' }, orderBy: { startsAt: 'asc' }, take: 1 } } });
+      if (!c || !c.sessions[0]) return 0;
+      const { origin, name } = await academyOrigin(this.prisma, this.config, tenantId);
+      const when = new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: c.timezone }).format(c.sessions[0].startsAt);
+      const isWebinar = c.kind === 'WEBINAR';
+      const people = isWebinar
+        ? await this.prisma.user.findMany({ where: { tenantId, realm: 'TENANT', deletedAt: null, status: 'ACTIVE' }, select: { id: true }, take: 50_000 }).then((u) => u.map((x) => ({ userId: x.id })))
+        : (await this.live.audienceEmails(c)).filter((p) => p.userId).map((p) => ({ userId: p.userId! }));
+      const link = isWebinar && c.slug ? `/webinars/${c.slug}` : '/learn/live';
+      for (const p of people) {
+        await this.notifications.notify({
+          userId: p.userId, tenantId, category: 'live', brand: name, link, url: `${origin}${link}`,
+          title: isWebinar ? `New webinar: ${c.title}` : `New live class: ${c.title}`,
+          body: `“${c.title}” is scheduled for ${when} (${c.timezone}).${isWebinar ? ' Register to get your join link.' : ''}`,
+        });
+      }
+      return people.length;
+    });
+  }
 
   async sendReminders(now = new Date()) {
     let sent = 0;
@@ -136,6 +162,7 @@ export class LiveProcessor extends WorkerHost {
     super();
   }
   async process(job: Job) {
+    if (job.name === LIVE_JOBS.ANNOUNCE) { const d = job.data as { tenantId: string; id: string }; return this.jobs.announce(d.tenantId, d.id); }
     if (job.name === LIVE_JOBS.REMINDERS) return this.jobs.sendReminders();
     if (job.name === LIVE_JOBS.MAINTAIN) return this.jobs.maintain();
     if (job.name === LIVE_JOBS.PNM_SYNC) return this.pnmJobs.sync();

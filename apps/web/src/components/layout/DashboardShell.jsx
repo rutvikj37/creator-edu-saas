@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { NavLink, Outlet, matchPath, useLocation } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { Bell, ChevronsLeft, ChevronsRight, Languages, LogOut, Menu, Moon, Search, Sun, User, X } from 'lucide-react';
 import { cn } from '../../utils/cn.js';
@@ -63,15 +63,95 @@ function SidebarNav({ nav, collapsed, onNavigate }) {
   );
 }
 
+/** True when `item` is the current page (query strings in nav targets are ignored). */
+function isItemActive(item, pathname) {
+  return Boolean(matchPath({ path: item.to.split('?')[0], end: Boolean(item.end) }, pathname));
+}
+
+/**
+ * One rail button for a whole nav section. Hovering or focusing it opens a flyout with the
+ * section's pages; it's positioned `fixed` so the rail's scroll container never clips it.
+ */
+function RailGroup({ group, pathname }) {
+  const [open, setOpen] = useState(false);
+  const [top, setTop] = useState(0);
+  const btn = useRef(null);
+  const closeTimer = useRef(null);
+  const panelId = useId();
+  const Icon = group.icon ?? group.items[0].icon;
+  const active = group.items.some((i) => isItemActive(i, pathname));
+  const show = () => {
+    clearTimeout(closeTimer.current);
+    const r = btn.current?.getBoundingClientRect();
+    if (r) setTop(Math.max(8, Math.min(r.top - 8, window.innerHeight - 48 - group.items.length * 34)));
+    setOpen(true);
+  };
+  const hide = () => { closeTimer.current = setTimeout(() => setOpen(false), 120); };
+  useEffect(() => () => clearTimeout(closeTimer.current), []);
+  useEffect(() => setOpen(false), [pathname]);
+  return (
+    <li onMouseEnter={show} onMouseLeave={hide} onKeyDown={(e) => { if (e.key === 'Escape') { setOpen(false); btn.current?.focus(); } }}
+      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false); }}>
+      <button ref={btn} type="button" aria-label={group.label} aria-expanded={open} aria-controls={panelId} onClick={show}
+        className={cn('relative grid h-10 w-10 place-items-center rounded-lg transition-colors', active ? 'bg-primary-50 text-primary-700' : 'text-fg-2 hover:bg-surface-2 hover:text-fg', open && !active && 'bg-surface-2 text-fg')}>
+        <Icon className="size-[18px]" aria-hidden />
+        {active && <span className="absolute top-2 -left-3 h-6 w-1 rounded-r-full bg-primary-600" aria-hidden />}
+      </button>
+      {open && (
+        <div id={panelId} role="menu" aria-label={group.label} style={{ top }} onMouseEnter={show} onMouseLeave={hide}
+          className="fixed left-[68px] z-40 w-56 rounded-xl border border-line bg-surface p-1.5 shadow-lg">
+          <p className="px-2.5 pt-1.5 pb-1 text-[11px] font-semibold tracking-wider text-muted uppercase">{group.label}</p>
+          {group.items.map((item) => item.available ? (
+            <NavLink key={item.to} to={item.to} end={item.end} role="menuitem"
+              className={() => cn('flex h-8 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors', isItemActive(item, pathname) ? 'bg-primary-50 font-medium text-primary-700' : 'text-fg-2 hover:bg-surface-2 hover:text-fg')}>
+              <item.icon className="size-4 shrink-0" aria-hidden /><span className="truncate">{item.label}</span>
+            </NavLink>
+          ) : (
+            <span key={item.to} role="menuitem" aria-disabled="true" className="flex h-8 cursor-not-allowed items-center gap-2.5 rounded-md px-2.5 text-sm text-muted opacity-70">
+              <item.icon className="size-4 shrink-0" aria-hidden /><span className="truncate">{item.label}</span>
+            </span>
+          ))}
+        </div>
+      )}
+    </li>
+  );
+}
+
+/** Collapsed sidebar: an icon rail. Unlabelled sections show their pages directly; others open a flyout. */
+function RailNav({ nav }) {
+  const { pathname } = useLocation();
+  return (
+    <nav aria-label="Main" className="flex-1 overflow-y-auto py-3">
+      <ul className="flex flex-col items-center gap-1">
+        {nav.flatMap((group) => (!group.label || group.items.length === 1 ? group.items.map((item) => {
+          const Icon = item.icon;
+          return (
+            <li key={item.to}>
+              {item.available ? (
+                <NavLink to={item.to} end={item.end} title={item.label} aria-label={item.label}
+                  className={({ isActive }) => cn('relative grid h-10 w-10 place-items-center rounded-lg transition-colors', isActive ? 'bg-primary-50 text-primary-700' : 'text-fg-2 hover:bg-surface-2 hover:text-fg')}>
+                  {({ isActive }) => <><Icon className="size-[18px]" aria-hidden />{isActive && <span className="absolute top-2 -left-3 h-6 w-1 rounded-r-full bg-primary-600" aria-hidden />}</>}
+                </NavLink>
+              ) : (
+                <span aria-disabled="true" title={item.label} className="grid h-10 w-10 cursor-not-allowed place-items-center rounded-lg text-muted opacity-70"><Icon className="size-[18px]" aria-hidden /></span>
+              )}
+            </li>
+          );
+        }) : [<RailGroup key={group.label} group={group} pathname={pathname} />]))}
+      </ul>
+    </nav>
+  );
+}
+
 /**
  * Shared dashboard layout for every panel: collapsible (remembered) sidebar, mobile
  * drawer, top bar with ⌘K search, notifications, theme, language and profile menu.
  */
-export function DashboardShell({ nav, brand, user, footer, onSignOut, notifications = [], notificationsSlot, banner }) {
+export function DashboardShell({ nav, brand, user, footer, onSignOut, notifications = [], notificationsSlot, banner, defaultCollapsed = false }) {
   const { t, i18n } = useTranslation();
   const { theme, toggle } = useTheme();
   const location = useLocation();
-  const [collapsed, setCollapsed] = usePersistentState(`sidebar.${brand.key}.collapsed`, false);
+  const [collapsed, setCollapsed] = usePersistentState(`sidebar.${brand.key}.collapsed`, defaultCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const items = useMemo(() => flatten(nav), [nav]);
@@ -107,9 +187,9 @@ export function DashboardShell({ nav, brand, user, footer, onSignOut, notificati
       </a>
 
       {/* Desktop sidebar */}
-      <aside className={cn('sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-line bg-surface transition-[width] lg:flex', collapsed ? 'w-16' : 'w-64')}>
+      <aside className={cn('sticky top-0 z-30 hidden h-dvh shrink-0 flex-col border-r border-line bg-surface transition-[width] lg:flex', collapsed ? 'w-[68px]' : 'w-64')}>
         {brandBlock}
-        <SidebarNav nav={nav} collapsed={collapsed} />
+        {collapsed ? <RailNav nav={nav} /> : <SidebarNav nav={nav} collapsed={false} />}
         {footer && !collapsed && <div className="border-t border-line p-3">{footer}</div>}
         <button
           type="button"

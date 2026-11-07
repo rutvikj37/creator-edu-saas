@@ -596,7 +596,7 @@ export class OrdersService {
   }
 
   // ── creator views ─────────────────────────────────────────
-  async list(params: { status?: string; q?: string; page?: number; pageSize?: number }) {
+  async list(params: { status?: string; q?: string; courseId?: string; from?: string; to?: string; page?: number; pageSize?: number }) {
     const page = Math.max(1, params.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 20));
     const where: Record<string, unknown> = { status: params.status ? params.status : { notIn: ['CANCELLED'] } };
@@ -604,6 +604,11 @@ export class OrdersService {
       const q = params.q.trim();
       const users = await this.prisma.user.findMany({ where: { tenantId: this.ctx.requireTenantId(), OR: [{ email: { contains: q } }, { fullName: { contains: q } }] }, select: { id: true }, take: 200 });
       where.OR = [{ number: { contains: q.toUpperCase() } }, { userId: { in: users.map((u) => u.id) } }];
+    }
+    if (params.courseId) where.items = { some: { courseId: params.courseId } };
+    if (params.from || params.to) {
+      // Whole days, inclusive of `to`
+      where.createdAt = { ...(params.from ? { gte: new Date(`${params.from}T00:00:00.000Z`) } : {}), ...(params.to ? { lt: new Date(new Date(`${params.to}T00:00:00.000Z`).getTime() + 86_400_000) } : {}) };
     }
     const [rows, total] = await Promise.all([
       this.db.order.findMany({ where, include: { items: true }, orderBy: { createdAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }),

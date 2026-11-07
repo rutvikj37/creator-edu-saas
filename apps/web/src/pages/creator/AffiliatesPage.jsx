@@ -3,7 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, Handshake, Wallet } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
 import { Alert } from '../../components/auth/Alert.jsx';
-import { Badge, Button, Card, CardBody, CardHeader, DataTable, EmptyState, ErrorState, Input, Modal, Skeleton, StatusBadge, Switch, Textarea, toast } from '../../components/ui/index.js';
+import { Avatar, Badge, Button, Card, CardBody, CardHeader, DataTable, EmptyState, ErrorState, Input, Modal, Skeleton, StatusBadge, Switch, Tabs, Textarea, toast } from '../../components/ui/index.js';
+import { ListToolbar, MetricCard } from '../../components/common/ListToolbar.jsx';
+import { FilterChip } from '../../components/common/FilterChip.jsx';
 import { affiliatesApi } from '../../services/api/affiliates.js';
 import { formatDate, formatMoney } from '../../utils/format.js';
 
@@ -56,33 +58,54 @@ export function AffiliatesPage() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['affiliates', 'list'], queryFn: affiliatesApi.list });
   const [paying, setPaying] = useState(null);
+  const [tab, setTab] = useState('affiliates');
+  const [search, setSearch] = useState('');
+  const [statusF, setStatusF] = useState();
   const update = useMutation({ mutationFn: ({ id, ...body }) => affiliatesApi.update(id, body), onSuccess: () => qc.invalidateQueries({ queryKey: ['affiliates'] }), onError: (e) => toast.error(e.message) });
+  const all = q.data ?? [];
+  const term = search.trim().toLowerCase();
+  const rows = all.filter((r) => (!term || `${r.user?.fullName ?? ''} ${r.user?.email ?? ''} ${r.code}`.toLowerCase().includes(term)) && (!statusF || r.status === statusF));
+  const sum = (k) => all.reduce((n, r) => n + Number(r[k] ?? 0), 0);
   return (
     <>
-      <PageHeader title="Affiliates" description="Reward students who bring you new learners." breadcrumbs={[{ label: 'Growth' }, { label: 'Affiliates' }]} />
-      <ProgramCard />
-      <Card className="mt-6">
-        <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data ?? []}
-          empty={<EmptyState icon={Handshake} title="No affiliates yet" description="Students can join from their account once the program is on." />}
-          columns={[
-            { key: 'user', header: 'Affiliate', cell: (r) => <div><p className="font-medium text-fg">{r.user?.fullName}</p><p className="font-mono text-xs text-muted">{r.code}</p></div> },
-            { key: 'commissionPercent', header: 'Rate', cell: (r) => <Input aria-label={`Rate for ${r.user?.fullName}`} type="number" className="w-20" defaultValue={r.commissionPercent} onBlur={(e) => Number(e.target.value) !== r.commissionPercent && update.mutate({ id: r.id, commissionPercent: Number(e.target.value) })} /> },
-            { key: 'clicks', header: 'Clicks', align: 'right' },
-            { key: 'conversions', header: 'Sales', align: 'right' },
-            { key: 'pending', header: 'On hold', align: 'right', cell: (r) => formatMoney(r.pending, 'INR') },
-            { key: 'owed', header: 'To pay', align: 'right', cell: (r) => formatMoney(r.owed, 'INR') },
-            { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.status === 'ACTIVE' ? 'ACTIVE' : r.status === 'PENDING' ? 'PENDING' : 'SUSPENDED'} /> },
-            {
-              key: 'actions', header: '', align: 'right',
-              cell: (r) => (
-                <div className="flex justify-end gap-1">
-                  {r.status !== 'ACTIVE' ? <Button size="sm" onClick={() => update.mutate({ id: r.id, status: 'ACTIVE' })}>{r.status === 'PENDING' ? 'Approve' : 'Reactivate'}</Button> : <Button size="sm" variant="ghost" onClick={() => update.mutate({ id: r.id, status: 'SUSPENDED' })}>Suspend</Button>}
-                  {Number(r.owed) > 0 && <Button size="sm" variant="secondary" leftIcon={Wallet} onClick={() => setPaying(r)}>Pay</Button>}
-                </div>
-              ),
-            },
-          ]} />
-      </Card>
+      <PageHeader title="Affiliates" count={q.data ? all.length : undefined} description="Manage your reseller and affiliate team: students earn a share of each sale they bring." breadcrumbs={[{ label: 'Affiliates' }]} />
+      <Tabs className="mb-6" value={tab} onChange={setTab} tabs={[{ value: 'affiliates', label: 'Affiliates', count: q.data ? all.length : undefined }, { value: 'settings', label: 'Program settings' }]} />
+      {tab === 'settings' ? <ProgramCard /> : (
+        <>
+          <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <MetricCard label="Link clicks" value={sum('clicks').toLocaleString('en-IN')} loading={q.isLoading} />
+            <MetricCard label="Sales by affiliates" value={sum('conversions').toLocaleString('en-IN')} loading={q.isLoading} />
+            <MetricCard label="Commission on hold" value={formatMoney(sum('pending'), 'INR')} hint="Waiting out the refund window" loading={q.isLoading} />
+            <MetricCard label="Commission to pay" value={formatMoney(sum('owed'), 'INR')} hint="Approved, not yet paid" loading={q.isLoading} />
+          </div>
+          <Card>
+            <ListToolbar search={search} onSearch={setSearch} placeholder="Search by name, email or code" count={rows.length} noun="affiliate"
+              filtered={Boolean(term || statusF)} onReset={() => { setSearch(''); setStatusF(undefined); }}
+              filters={<FilterChip label="Status" value={statusF} onChange={setStatusF} options={[{ value: 'ACTIVE', label: 'Active' }, { value: 'PENDING', label: 'Waiting for approval' }, { value: 'SUSPENDED', label: 'Suspended' }]} />} />
+            <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={rows}
+              empty={all.length ? <EmptyState icon={Handshake} title="No affiliates match" description="Try a different search or clear the filters." />
+                : <EmptyState icon={Handshake} title="Nothing here yet!" description="Students join as affiliates from their account once your program is on." action={<Button size="sm" variant="secondary" onClick={() => setTab('settings')}>Program settings</Button>} />}
+              columns={[
+                { key: 'user', header: 'Affiliate', cell: (r) => <div className="flex items-center gap-2.5"><Avatar name={r.user?.fullName || r.code} size="sm" /><div className="min-w-0"><p className="truncate font-medium text-fg">{r.user?.fullName}</p><p className="font-mono text-xs text-muted">{r.code}</p></div></div> },
+                { key: 'commissionPercent', header: 'Rate %', cell: (r) => <Input aria-label={`Rate for ${r.user?.fullName}`} type="number" className="w-20" defaultValue={r.commissionPercent} onBlur={(e) => Number(e.target.value) !== r.commissionPercent && update.mutate({ id: r.id, commissionPercent: Number(e.target.value) })} /> },
+                { key: 'clicks', header: 'Clicks', align: 'right' },
+                { key: 'conversions', header: 'Sales', align: 'right' },
+                { key: 'pending', header: 'On hold', align: 'right', cell: (r) => formatMoney(r.pending, 'INR') },
+                { key: 'owed', header: 'To pay', align: 'right', cell: (r) => formatMoney(r.owed, 'INR') },
+                { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.status === 'ACTIVE' ? 'ACTIVE' : r.status === 'PENDING' ? 'PENDING' : 'SUSPENDED'} /> },
+                {
+                  key: 'actions', header: '', align: 'right',
+                  cell: (r) => (
+                    <div className="flex justify-end gap-1">
+                      {r.status !== 'ACTIVE' ? <Button size="sm" onClick={() => update.mutate({ id: r.id, status: 'ACTIVE' })}>{r.status === 'PENDING' ? 'Approve' : 'Reactivate'}</Button> : <Button size="sm" variant="ghost" onClick={() => update.mutate({ id: r.id, status: 'SUSPENDED' })}>Suspend</Button>}
+                      {Number(r.owed) > 0 && <Button size="sm" variant="secondary" leftIcon={Wallet} onClick={() => setPaying(r)}>Pay</Button>}
+                    </div>
+                  ),
+                },
+              ]} />
+          </Card>
+        </>
+      )}
       <PayoutModal affiliate={paying} onClose={() => setPaying(null)} />
     </>
   );

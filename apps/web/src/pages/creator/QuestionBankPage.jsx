@@ -30,13 +30,18 @@ export function QuestionBankPage() {
   const d = list.data;
   return (
     <>
-      <PageHeader title="Question bank" description="Write questions once and reuse them in any quiz." breadcrumbs={[{ label: 'Question bank' }]}
+      <PageHeader title="Question bank" count={d && !params.q && !params.tag && !params.type ? d.total : undefined} description="Write questions once and reuse them in any quiz." breadcrumbs={[{ label: 'Question bank' }]}
         actions={manage && <Button leftIcon={Plus} onClick={() => { setError(null); setEditing({ ...blankQuestion(), tagsText: '' }); }}>New question</Button>} />
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+      <Card className="mb-4 space-y-3 p-4">
         <Input aria-label="Search" placeholder="Search questions" value={filters.q} onChange={(e) => set({ q: e.target.value })} />
-        <Select aria-label="Tag" value={filters.tag} onChange={(e) => set({ tag: e.target.value })} options={[{ value: '', label: 'All tags' }, ...(tags.data ?? []).map((t) => ({ value: t.tag, label: `${t.tag} (${t.count})` }))]} />
-        <Select aria-label="Type" value={filters.type} onChange={(e) => set({ type: e.target.value })} options={[{ value: '', label: 'All types' }, ...TYPES]} />
-      </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-muted">Filter by:</span>
+          <Select aria-label="Tag" className="h-8 w-auto rounded-full text-sm" value={filters.tag} onChange={(e) => set({ tag: e.target.value })} options={[{ value: '', label: 'All tags' }, ...(tags.data ?? []).map((t) => ({ value: t.tag, label: `${t.tag} (${t.count})` }))]} />
+          <Select aria-label="Type" className="h-8 w-auto rounded-full text-sm" value={filters.type} onChange={(e) => set({ type: e.target.value })} options={[{ value: '', label: 'All types' }, ...TYPES]} />
+          {(filters.q || filters.tag || filters.type) && <button type="button" className="ml-1 text-sm font-medium text-primary-700 hover:underline dark:text-primary-300" onClick={() => set({ q: '', tag: '', type: '' })}>Reset</button>}
+          {d && <span className="ml-auto text-sm text-muted">{d.total} question{d.total === 1 ? '' : 's'}</span>}
+        </div>
+      </Card>
       {list.isError ? <Card><ErrorState error={list.error} onRetry={() => list.refetch()} /></Card> : !d ? <Skeleton className="h-64" /> : d.items.length === 0 ? (
         <Card><EmptyState icon={Library} title={d.total === 0 && !params.q && !params.tag && !params.type ? 'Your question bank is empty' : 'No questions match'} description="Add questions here, or save questions from a quiz with the bookmark icon." /></Card>
       ) : (

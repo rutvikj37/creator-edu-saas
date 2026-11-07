@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Download, Minus } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
+import { SettingsTabs } from '../../components/layout/SettingsTabs.jsx';
 import { Alert } from '../../components/auth/Alert.jsx';
 import { Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, DataTable, EmptyState, ErrorState, Modal, Skeleton, StatusBadge, Tabs, toast } from '../../components/ui/index.js';
 import { creatorApi } from '../../services/api/platform.js';
@@ -118,7 +119,7 @@ export function BillingPage() {
 
   return (
     <>
-      <PageHeader title="Billing & subscription" description="Your plan, invoices and usage." breadcrumbs={[{ label: 'Workspace' }, { label: 'Billing' }]} />
+      <PageHeader title="Billing & subscription" description="Your plan, invoices and usage." breadcrumbs={[{ label: 'Billing' }]} /><SettingsTabs />
       {s?.status === 'PAST_DUE' && (
         <Alert tone="error" title="Renewal payment overdue" className="mb-4" action={renewal && <Button size="sm" loading={paying === renewal.id} onClick={() => pay(renewal)}>Pay {formatMoney(renewal.totalAmount, renewal.currency)}</Button>}>
           Everything keeps working until {formatDate(s.graceEndsAt)}. After that, creating courses and taking new payments pauses until the invoice is paid.

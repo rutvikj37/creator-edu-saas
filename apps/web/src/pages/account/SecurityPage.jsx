@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { KeyRound, LogOut, Monitor, ShieldCheck, Smartphone } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
+import { SettingsTabs } from '../../components/layout/SettingsTabs.jsx';
 import { PasswordInput } from '../../components/auth/PasswordInput.jsx';
 import { TwoFactorSetup } from '../../components/account/TwoFactorSetup.jsx';
 import { EmailVerificationBanner } from '../../components/account/EmailVerificationBanner.jsx';
@@ -179,7 +180,7 @@ function SessionsCard() {
 export function SecurityPage({ breadcrumbs = [] }) {
   return (
     <>
-      <PageHeader title="Account security" description="Manage how you sign in and where you're signed in." breadcrumbs={[...breadcrumbs, { label: 'Account security' }]} />
+      <PageHeader title="Account security" description="Manage how you sign in and where you're signed in." breadcrumbs={[...breadcrumbs, { label: 'Account security' }]} /><SettingsTabs />
       <EmailVerificationBanner />
       <div className="space-y-6">
         <ChangePasswordCard />

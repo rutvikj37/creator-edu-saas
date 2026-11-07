@@ -14,6 +14,17 @@ import { TenantContext } from '../../core/tenancy/tenant-context.service.js';
 import { EntitlementsService } from '../subscriptions/entitlements.service.js';
 import { LearningService } from './learning.service.js';
 
+export type StudentInput = { email: string; fullName: string; phone?: string | null };
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Strips spaces, dashes, dots and brackets. Returns null when empty, false when it isn't a phone number. */
+export function normalizePhone(raw: string | null | undefined): string | null | false {
+  const v = (raw ?? '').replace(/[\s\-().]/g, '');
+  if (!v) return null;
+  return /^\+?\d{7,15}$/.test(v) ? v : false;
+}
+
 @Injectable()
 export class CreatorLearningService {
   constructor(
@@ -26,9 +37,17 @@ export class CreatorLearningService {
     private readonly audit: AuditService,
   ) {}
 
-  async students(q: PaginationQueryDto) {
+  async students(q: PaginationQueryDto & { joinedFrom?: string; joinedTo?: string; activeFrom?: string; neverSignedIn?: string; courseId?: string }) {
     const tenantId = this.ctx.requireTenantId();
-    const where = { tenantId, deletedAt: null, ...(q.q ? { OR: [{ fullName: { contains: q.q } }, { email: { contains: q.q } }] } : {}) };
+    const day = (d: string) => new Date(`${d}T00:00:00.000Z`);
+    const where: Record<string, unknown> = { tenantId, deletedAt: null, ...(q.q ? { OR: [{ fullName: { contains: q.q } }, { email: { contains: q.q } }] } : {}) };
+    if (q.joinedFrom || q.joinedTo) where.createdAt = { ...(q.joinedFrom ? { gte: day(q.joinedFrom) } : {}), ...(q.joinedTo ? { lt: new Date(day(q.joinedTo).getTime() + 86_400_000) } : {}) };
+    if (q.neverSignedIn === 'true') where.lastLoginAt = null;
+    else if (q.activeFrom) where.lastLoginAt = { gte: day(q.activeFrom) };
+    if (q.courseId) {
+      const enrolled = await this.db.enrollment.findMany({ where: { courseId: q.courseId }, select: { userId: true }, take: 50_000 });
+      where.id = { in: enrolled.map((e) => e.userId) };
+    }
     const [rows, total] = await Promise.all([
       this.prisma.user.findMany({ where, orderBy: { createdAt: 'desc' }, ...toSkipTake(q), select: { id: true, fullName: true, email: true, phone: true, status: true, emailVerifiedAt: true, lastLoginAt: true, createdAt: true } }),
       this.prisma.user.count({ where }),
@@ -77,6 +96,99 @@ export class CreatorLearningService {
     });
     await this.audit.record({ action: 'enrollment.grant', tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'Enrollment', targetId: enrollment.id, after: { courseId, email } });
     return { enrollmentId: enrollment.id, invited };
+  }
+
+  /** Creates one student account, optionally enrols it in courses and emails a set-password link. */
+  async addStudent(input: StudentInput & { courseIds?: string[]; sendInvite?: boolean }, actorUserId: string, origin: string) {
+    const tenantId = this.ctx.requireTenantId();
+    const courses = await this.coursesById(input.courseIds ?? []);
+    const email = input.email.trim().toLowerCase();
+    if (await this.prisma.user.findUnique({ where: { realmKey_email: { realmKey: tenantId, email } }, select: { id: true } })) {
+      throw AppException.conflict('A student with this email already exists. Open them from the list to enrol them in a course.');
+    }
+    const phone = input.phone || null;
+    if (phone && (await this.prisma.user.findUnique({ where: { realmKey_phone: { realmKey: tenantId, phone } }, select: { id: true } }))) {
+      throw AppException.conflict('Another student already uses this phone number.');
+    }
+    const count = await this.prisma.user.count({ where: { tenantId, deletedAt: null } });
+    await this.entitlements.assertWithinLimit(tenantId, FEATURES.STUDENTS_MAX.key, count);
+    const user = await this.prisma.user.create({ data: { realm: 'TENANT', realmKey: tenantId, tenantId, email, phone, fullName: input.fullName.trim().slice(0, 120) } });
+    for (const c of courses) await this.learning.grant(user.id, c.id, 'MANUAL', actorUserId);
+    if (input.sendInvite !== false) await this.sendWelcome(tenantId, user.id, email, courses, origin);
+    await this.audit.record({ action: 'student.create', tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'User', targetId: user.id, after: { email, courseIds: courses.map((c) => c.id) } });
+    return { id: user.id, invited: input.sendInvite !== false, enrolled: courses.length };
+  }
+
+  /**
+   * Bulk import from a parsed CSV. Rows are validated one by one so a bad row never blocks the rest:
+   * new emails get an account, existing students are only enrolled in the chosen courses.
+   */
+  async importStudents(rows: StudentInput[], opts: { courseIds?: string[]; sendInvite?: boolean }, actorUserId: string, origin: string) {
+    const tenantId = this.ctx.requireTenantId();
+    const courses = await this.coursesById(opts.courseIds ?? []);
+    const sendInvite = opts.sendInvite !== false;
+    const failed: { row: number; email: string; reason: string }[] = [];
+    let created = 0;
+    let existing = 0;
+    let count = await this.prisma.user.count({ where: { tenantId, deletedAt: null } });
+    const seen = new Set<string>();
+
+    for (const [i, raw] of rows.entries()) {
+      const row = i + 2; // spreadsheet row number: header is row 1
+      const email = (raw.email ?? '').trim().toLowerCase();
+      const fullName = (raw.fullName ?? '').trim() || email.split('@')[0];
+      const phone = normalizePhone(raw.phone);
+      const fail = (reason: string) => failed.push({ row, email: raw.email ?? '', reason });
+      if (!EMAIL_RE.test(email) || email.length > 191) { fail('Invalid email address'); continue; }
+      if (seen.has(email)) { fail('Duplicate email in file'); continue; }
+      seen.add(email);
+      if (phone === false) { fail('Invalid phone number'); continue; }
+      try {
+        const found = await this.prisma.user.findUnique({ where: { realmKey_email: { realmKey: tenantId, email } }, select: { id: true } });
+        if (found) {
+          for (const c of courses) await this.learning.grant(found.id, c.id, 'MANUAL', actorUserId);
+          existing++;
+          continue;
+        }
+        if (phone && (await this.prisma.user.findUnique({ where: { realmKey_phone: { realmKey: tenantId, phone } }, select: { id: true } }))) {
+          fail('Phone number already used by another student');
+          continue;
+        }
+        await this.entitlements.assertWithinLimit(tenantId, FEATURES.STUDENTS_MAX.key, count);
+        const user = await this.prisma.user.create({ data: { realm: 'TENANT', realmKey: tenantId, tenantId, email, phone: phone || null, fullName: fullName.slice(0, 120) } });
+        count++;
+        created++;
+        for (const c of courses) await this.learning.grant(user.id, c.id, 'MANUAL', actorUserId);
+        if (sendInvite) await this.sendWelcome(tenantId, user.id, email, courses, origin);
+      } catch (e) {
+        fail(e instanceof AppException ? e.message : 'Could not create this student');
+      }
+    }
+    await this.audit.record({ action: 'student.import', tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'Tenant', targetId: tenantId, after: { rows: rows.length, created, existing, failed: failed.length, courseIds: courses.map((c) => c.id) } });
+    return { total: rows.length, created, existing, failed };
+  }
+
+  private async coursesById(ids: string[]) {
+    const unique = [...new Set(ids)];
+    if (!unique.length) return [];
+    const courses = await this.db.course.findMany({ where: { id: { in: unique }, deletedAt: null }, select: { id: true, title: true } });
+    if (courses.length !== unique.length) throw AppException.notFound('One of the selected courses was not found');
+    return courses;
+  }
+
+  /** Emails a new student a 7-day set-password link, listing any courses they were given. */
+  private async sendWelcome(tenantId: string, userId: string, email: string, courses: { title: string }[], origin: string) {
+    const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { name: true } });
+    const token = randomToken(32);
+    await this.prisma.passwordReset.create({ data: { userId, tokenHash: sha256(token), expiresAt: new Date(Date.now() + 7 * 86_400_000) } });
+    const link = `${origin}/reset-password?token=${encodeURIComponent(token)}`;
+    const list = courses.map((c) => c.title).join(', ');
+    await this.mail.send({
+      to: email, tenantId, tag: 'student-invite',
+      subject: `Your account at ${tenant.name}`,
+      html: `<p>An account has been created for you at <strong>${escapeHtml(tenant.name)}</strong>.</p>${list ? `<p>You have access to: ${escapeHtml(list)}.</p>` : ''}<p><a href="${escapeHtml(link)}">Set your password and start learning</a></p><p>This link expires in 7 days.</p>`,
+      text: `An account has been created for you at ${tenant.name}.${list ? ` You have access to: ${list}.` : ''} Set your password: ${link} (expires in 7 days)`,
+    });
   }
 
   async revoke(enrollmentId: string, actorUserId: string) {

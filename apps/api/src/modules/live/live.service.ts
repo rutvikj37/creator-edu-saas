@@ -34,6 +34,8 @@ const EXTERNAL_URL = /^https:\/\/[^\s]+$/i;
 
 export interface ClassInput {
   kind?: 'CLASS' | 'WEBINAR';
+  coverFileId?: string | null;
+  notifyLearners?: boolean;
   title?: string;
   description?: string | null;
   provider?: 'LIVEKIT' | 'EXTERNAL' | 'PLUGNMEET' | 'ZOOM' | 'GOOGLE_MEET';
@@ -134,7 +136,7 @@ export class LiveService {
     return `${base}-${randomBytes(3).toString('hex')}`;
   }
 
-  async create(input: Required<Pick<ClassInput, 'title' | 'provider' | 'startsAt' | 'durationMinutes'>> & ClassInput, actorUserId: string) {
+  async create(input: Required<Pick<ClassInput, 'title' | 'provider' | 'startsAt' | 'durationMinutes'>> & ClassInput, actorUserId: string, origin?: string) {
     const kind = input.kind ?? 'CLASS';
     const audience = input.audience ?? (kind === 'WEBINAR' ? 'REGISTRANTS' : 'ALL_STUDENTS');
     await this.validate({ ...input, kind, audience, externalUrl: input.provider === 'EXTERNAL' ? input.externalUrl ?? '' : input.externalUrl });
@@ -142,8 +144,10 @@ export class LiveService {
     const timezone = input.timezone ?? tenant.timezone;
     const first = new Date(input.startsAt);
     if (first.getTime() < Date.now() - 5 * 60_000) throw AppException.validation([{ field: 'startsAt', message: 'Choose a time in the future' }]);
+    if (input.coverFileId) await this.assertCover(input.coverFileId);
     const c = await this.db.liveClass.create({
       data: {
+        coverFileId: input.coverFileId ?? null,
         kind, title: input.title.trim(), description: input.description?.trim() || null, provider: input.provider, externalUrl: input.provider === 'EXTERNAL' ? input.externalUrl!.trim() : null,
         audience, courseId: audience === 'COURSE' ? input.courseId : null, batchId: audience === 'BATCH' ? input.batchId : null, hostUserId: input.hostUserId ?? actorUserId,
         durationMinutes: input.durationMinutes, timezone, recurrence: (input.recurrence ?? null) as never, capacity: input.capacity ?? null, waitingRoom: Boolean(input.waitingRoom),
@@ -156,8 +160,11 @@ export class LiveService {
       const sessions = await this.db.liveSession.findMany({ where: { liveClassId: c.id }, select: { id: true }, orderBy: { startsAt: 'asc' } });
       for (const s of sessions) await this.integrations.ensureMeeting(s.id);
     }
-    await this.audit.record({ action: 'live.create', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'LiveClass', targetId: c.id, after: { title: c.title, kind, provider: c.provider } });
-    return this.get(c.id);
+    if (input.notifyLearners) {
+      await this.queue.add('live-announce', { tenantId: this.ctx.requireTenantId(), id: c.id }, { jobId: `live-announce-${c.id}`, attempts: 3, backoff: { type: 'exponential', delay: 30_000 }, removeOnComplete: 1000, removeOnFail: 1000 });
+    }
+    await this.audit.record({ action: 'live.create', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'LiveClass', targetId: c.id, after: { title: c.title, kind, provider: c.provider, notifyLearners: Boolean(input.notifyLearners) } });
+    return this.get(c.id, origin);
   }
 
   /** Creates sessions for upcoming occurrences (up to 90 days ahead). Idempotent. */
@@ -177,20 +184,27 @@ export class LiveService {
     return created;
   }
 
-  async list(params: { kind?: 'CLASS' | 'WEBINAR' }) {
+  async list(params: { kind?: 'CLASS' | 'WEBINAR' }, origin?: string) {
     const rows = await this.db.liveClass.findMany({
       where: { ...(params.kind ? { kind: params.kind } : {}) },
       include: { sessions: { where: { status: { in: ['SCHEDULED', 'LIVE'] } }, orderBy: { startsAt: 'asc' }, take: 1 } },
       orderBy: { createdAt: 'desc' }, take: 200,
     });
-    return rows.map((c) => ({ ...this.classView(c), nextSession: c.sessions[0] ? this.sessionView(c.sessions[0]) : null }));
+    // Most recent session that already started, for the "Past" view
+    const past = rows.length
+      ? await this.db.liveSession.findMany({ where: { liveClassId: { in: rows.map((c) => c.id) }, startsAt: { lt: new Date() } }, orderBy: { startsAt: 'desc' }, select: { liveClassId: true, startsAt: true, status: true } })
+      : [];
+    const last = new Map<string, { startsAt: Date; status: string }>();
+    for (const s of past) if (!last.has(s.liveClassId)) last.set(s.liveClassId, { startsAt: s.startsAt, status: s.status });
+    const covers = await this.coverUrls(rows.map((c) => c.coverFileId), origin);
+    return rows.map((c) => ({ ...this.classView(c), coverUrl: c.coverFileId ? covers.get(c.coverFileId) ?? null : null, nextSession: c.sessions[0] ? this.sessionView(c.sessions[0]) : null, lastSession: last.get(c.id) ?? null }));
   }
 
   private classView(c: any) {
     return {
       id: c.id, kind: c.kind, title: c.title, description: c.description, provider: c.provider, externalUrl: c.externalUrl, audience: c.audience, courseId: c.courseId, batchId: c.batchId,
       hostUserId: c.hostUserId, durationMinutes: c.durationMinutes, timezone: c.timezone, recurrence: c.recurrence, capacity: c.capacity, waitingRoom: c.waitingRoom,
-      recordSessions: c.recordSessions, slug: c.slug, status: c.status, createdAt: c.createdAt,
+      recordSessions: c.recordSessions, slug: c.slug, status: c.status, createdAt: c.createdAt, coverFileId: c.coverFileId ?? null,
       priceAmount: c.priceAmount && Number(c.priceAmount) > 0 ? c.priceAmount.toString() : null, currency: c.currency ?? null,
     };
   }
@@ -199,17 +213,35 @@ export class LiveService {
     return { id: s.id, startsAt: s.startsAt, endsAt: s.endsAt, status: s.status, startedAt: s.startedAt, endedAt: s.endedAt, recordingStatus: s.recordingStatus, videoAssetId: s.videoAssetId };
   }
 
-  async get(id: string) {
+  async get(id: string, origin?: string) {
     const c = await this.db.liveClass.findFirst({ where: { id }, include: { sessions: { orderBy: { startsAt: 'asc' } } } });
     if (!c) throw AppException.notFound('Live class not found');
     const registrations = c.kind === 'WEBINAR' ? await this.db.webinarRegistration.count({ where: { liveClassId: c.id, cancelledAt: null } }) : null;
-    return { ...this.classView(c), sessions: c.sessions.map((s) => this.sessionView(s)), registrations };
+    const coverUrl = c.coverFileId ? (await this.coverUrls([c.coverFileId], origin)).get(c.coverFileId) ?? null : null;
+    return { ...this.classView(c), coverUrl, sessions: c.sessions.map((s) => this.sessionView(s)), registrations };
   }
 
-  async update(id: string, input: ClassInput, actorUserId: string) {
+  /** Cover images must be this academy's READY image uploads. */
+  private async assertCover(id: string) {
+    const f = await this.db.fileAsset.findUnique({ where: { id } });
+    if (!f || f.status !== 'READY' || !['IMAGE', 'COURSE_THUMBNAIL', 'COURSE_BANNER'].includes(f.purpose)) throw AppException.validation([{ field: 'coverFileId', message: 'Upload a cover image first' }]);
+  }
+
+  private async coverUrls(ids: (string | null)[], origin?: string) {
+    const wanted = [...new Set(ids.filter(Boolean) as string[])];
+    const out = new Map<string, string>();
+    if (!wanted.length) return out;
+    const files = await this.db.fileAsset.findMany({ where: { id: { in: wanted }, status: 'READY' } });
+    const base = origin ?? this.config.get('API_PUBLIC_URL');
+    for (const f of files) out.set(f.id, await this.storage.downloadUrl(f, f.fileName, base, 3600));
+    return out;
+  }
+
+  async update(id: string, input: ClassInput, actorUserId: string, origin?: string) {
     const c = await this.db.liveClass.findFirst({ where: { id } });
     if (!c) throw AppException.notFound('Live class not found');
     await this.validate(input, c);
+    if (input.coverFileId) await this.assertCover(input.coverFileId);
     await this.db.liveClass.update({
       where: { id },
       data: {
@@ -221,11 +253,12 @@ export class LiveService {
         ...(input.recordSessions !== undefined ? { recordSessions: input.recordSessions } : {}),
         ...(input.priceAmount !== undefined && c.kind === 'WEBINAR' ? { priceAmount: input.priceAmount || null, currency: input.priceAmount ? c.currency ?? (await this.prisma.tenant.findUniqueOrThrow({ where: { id: c.tenantId }, select: { defaultCurrency: true } })).defaultCurrency : null } : {}),
         ...(input.hostUserId !== undefined ? { hostUserId: input.hostUserId } : {}),
+        ...(input.coverFileId !== undefined ? { coverFileId: input.coverFileId } : {}),
       },
     });
     if (c.provider === 'ZOOM' || c.provider === 'GOOGLE_MEET') await this.integrations.updateMeetings(c.id);
     await this.audit.record({ action: 'live.update', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'LiveClass', targetId: id, after: input as never });
-    return this.get(id);
+    return this.get(id, origin);
   }
 
   async cancelClass(id: string, actorUserId: string) {

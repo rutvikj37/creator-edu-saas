@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { EyeOff, Flag, Heart, Lock, MessageSquare, MessagesSquare, Pin, Plus, Trash2 } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
+import { MetricCard } from '../../components/common/ListToolbar.jsx';
 import { Alert } from '../../components/auth/Alert.jsx';
 import { Badge, Button, Card, CardBody, CardHeader, Checkbox, DataTable, Dropdown, DropdownItem, EmptyState, ErrorState, Input, Modal, Select, Skeleton, Textarea, toast } from '../../components/ui/index.js';
 import { communityApi, membershipsApi } from '../../services/api/community.js';
@@ -188,7 +189,12 @@ export function CreatorCommunitiesPage() {
   const hidePost = useMutation({ mutationFn: (postId) => api.moderate(postId, 'hide'), onSuccess: () => qc.invalidateQueries({ queryKey: ['communities'] }) });
   return (
     <>
-      <PageHeader title="Communities" description="Spaces for your students to discuss and connect." breadcrumbs={[{ label: 'Growth' }, { label: 'Communities' }]} actions={<Button leftIcon={Plus} onClick={() => setOpen(true)}>New community</Button>} />
+      <PageHeader title="Communities" count={q.data ? (q.data.communities ?? []).length : undefined} description="Spaces for your students to discuss and connect." breadcrumbs={[{ label: 'Communities' }]} actions={<Button leftIcon={Plus} onClick={() => setOpen(true)}>New community</Button>} />
+      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        <MetricCard label="Communities" value={(q.data?.communities ?? []).length} loading={q.isLoading} />
+        <MetricCard label="Posts" value={(q.data?.communities ?? []).reduce((n, c) => n + (c.postCount ?? 0), 0).toLocaleString('en-IN')} loading={q.isLoading} />
+        <MetricCard label="Open reports" value={(reports.data ?? []).length} hint={(reports.data ?? []).length ? 'Review them below' : 'Nothing to moderate'} loading={reports.isLoading} />
+      </div>
       {(reports.data ?? []).length > 0 && (
         <Card className="mb-6">
           <CardHeader title={`Reports (${reports.data.length})`} />
@@ -204,7 +210,7 @@ export function CreatorCommunitiesPage() {
         <DataTable loading={q.isLoading} error={q.error} rows={q.data?.communities ?? []} onRowClick={(r) => navigate(`/creator/communities/${r.id}`)}
           empty={<EmptyState icon={MessagesSquare} title="No communities yet" description="Create a lounge for everyone, or a space per course or membership." />}
           columns={[
-            { key: 'name', header: 'Community', cell: (r) => <div><p className="font-medium text-fg">{r.name}</p>{r.description && <p className="text-xs text-muted">{r.description}</p>}</div> },
+            { key: 'name', header: 'Community', cell: (r) => <div className="flex items-center gap-3"><span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary-50 text-primary-700 dark:bg-primary-500/15 dark:text-primary-300"><MessagesSquare className="size-4" aria-hidden /></span><div className="min-w-0"><p className="font-medium text-fg">{r.name}</p>{r.description && <p className="truncate text-xs text-muted">{r.description}</p>}</div></div> },
             { key: 'access', header: 'Who', cell: (r) => ({ ALL_STUDENTS: 'All students', COURSE: 'Course', MEMBERSHIP: 'Members' })[r.access] },
             { key: 'postCount', header: 'Posts', align: 'right' },
             { key: 'staffOnlyPosts', header: '', cell: (r) => (r.staffOnlyPosts ? <Badge>Announcements</Badge> : null) },

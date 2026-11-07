@@ -14,6 +14,7 @@ import { OrdersService } from './orders.service.js';
 import { PaymentHttp } from './providers/http.js';
 import { PROVIDER_CLASSES } from './providers/registry.js';
 import { WebhooksService } from './webhooks.service.js';
+import { FilesService } from '../files/files.service.js';
 
 const SERVICES = [PaymentHttp, ...PROVIDER_CLASSES, GatewayService, CouponsService, DigitalProductsService, OrdersService, WebhooksService, BillingService];
 
@@ -25,6 +26,7 @@ const SERVICES = [PaymentHttp, ...PROVIDER_CLASSES, GatewayService, CouponsServi
 })
 export class CommerceModule {}
 
-/** Razorpay commerce: worker side (webhook processing, reconciliation). */
-@Module({ providers: [...SERVICES, WebhooksProcessor, CommerceProcessor, BillingProcessor, CommerceScheduler] })
+/** Razorpay commerce: worker side (webhook processing, reconciliation).
+ *  The worker doesn't load the HTTP-only FilesModule, so DigitalProductsService's FilesService is provided here. */
+@Module({ providers: [...SERVICES, FilesService, WebhooksProcessor, CommerceProcessor, BillingProcessor, CommerceScheduler] })
 export class CommerceWorkerModule {}

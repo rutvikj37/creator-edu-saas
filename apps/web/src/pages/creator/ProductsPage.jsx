@@ -5,6 +5,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowDown, ArrowUp, Package, Plus, Trash2, Users } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
+import { ListToolbar, MetricCard } from '../../components/common/ListToolbar.jsx';
+import { FilterChip } from '../../components/common/FilterChip.jsx';
+import { PERIOD_OPTIONS, inPeriod } from '../../utils/period.js';
 import { Button, Card, DataTable, EmptyState, Input, Modal, StatusBadge, Textarea, toast } from '../../components/ui/index.js';
 import { FileUpload } from '../../components/forms/FileUpload.jsx';
 import { productsApi } from '../../services/api/commerce.js';
@@ -102,19 +105,38 @@ export function ProductsPage() {
     onSuccess: (p) => { toast.success({ PUBLISHED: 'Product published', DRAFT: 'Product unpublished', ARCHIVED: 'Product archived' }[p.status]); qc.invalidateQueries({ queryKey: ['creator', 'products'] }); },
     onError: (e) => toast.error(e.details?.[0]?.message ?? e.message),
   });
+  const [search, setSearch] = useState('');
+  const [statusF, setStatusF] = useState();
+  const [periodF, setPeriodF] = useState();
+  const all = q.data ?? [];
+  const term = search.trim().toLowerCase();
+  const rows = all.filter((r) => (!term || r.title.toLowerCase().includes(term)) && (!statusF || r.status === statusF) && inPeriod(r.createdAt, periodF));
+  const currency = all[0]?.currency ?? 'INR';
   return (
     <>
-      <PageHeader title="Digital products" description="Sell e-books, PDFs, templates and other downloads on their own." breadcrumbs={[{ label: 'Digital products' }]}
-        actions={manage && <Button leftIcon={Plus} onClick={() => setEditing('new')}>New product</Button>} />
+      <PageHeader title="Digital products" count={q.data ? all.length : undefined} description="Sell e-books, PDFs, templates and other downloads on their own." breadcrumbs={[{ label: 'Digital products' }]}
+        actions={manage && <Button leftIcon={Plus} onClick={() => setEditing('new')}>Create</Button>} />
+      <div className="mb-6 grid gap-4 sm:grid-cols-2">
+        <MetricCard label="Total sales" value={all.reduce((n, r) => n + (r.sales ?? 0), 0).toLocaleString('en-IN')} loading={q.isLoading} />
+        <MetricCard label="Total revenue" value={formatMoney(all.reduce((n, r) => n + Number(r.revenue ?? 0), 0), currency)} loading={q.isLoading} />
+      </div>
       <Card>
-        <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data ?? []} onRowClick={manage ? (r) => setEditing(r) : undefined}
-          empty={<EmptyState icon={Package} title="No products yet" description="Upload an e-book, worksheet pack or template and sell it — or give it away to collect students." action={manage && <Button size="sm" leftIcon={Plus} onClick={() => setEditing('new')}>Create a product</Button>} />}
+        <div className="border-b border-line px-4 pt-4"><h2 className="font-semibold">All products</h2></div>
+        <ListToolbar search={search} onSearch={setSearch} placeholder="Search by product name" count={rows.length} noun="product"
+          filtered={Boolean(term || statusF || periodF)} onReset={() => { setSearch(''); setStatusF(undefined); setPeriodF(undefined); }}
+          filters={<>
+            <FilterChip label="Status" value={statusF} onChange={setStatusF} options={[{ value: 'PUBLISHED', label: 'Published' }, { value: 'DRAFT', label: 'Draft' }]} />
+            <FilterChip label="Date created" value={periodF} onChange={setPeriodF} options={PERIOD_OPTIONS} />
+          </>} />
+        <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={rows} onRowClick={manage ? (r) => setEditing(r) : undefined}
+          empty={all.length ? <EmptyState icon={Package} title="No products match" description="Try a different search or clear the filters." /> : <EmptyState icon={Package} title="No products yet" description="Upload an e-book, worksheet pack or template and sell it — or give it away to collect students." action={manage && <Button size="sm" leftIcon={Plus} onClick={() => setEditing('new')}>Create a product</Button>} />}
           columns={[
+            { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.status} /> },
             { key: 'title', header: 'Product', cell: (r) => <div><p className="font-medium text-fg">{r.title}</p><p className="text-xs text-muted">{r.files.length} file{r.files.length === 1 ? '' : 's'}{r.downloadLimit ? ` · ${r.downloadLimit} downloads per file` : ''}</p></div> },
             { key: 'price', header: 'Price', cell: (r) => (Number(r.priceAmount) === 0 ? 'Free' : formatMoney(r.priceAmount, r.currency)) },
-            { key: 'buyers', header: 'Buyers', cell: (r) => r.buyers },
-            { key: 'revenue', header: 'Revenue', cell: (r) => formatMoney(r.revenue, r.currency) },
-            { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.status} /> },
+            { key: 'sales', header: 'Sales', align: 'right', cell: (r) => r.sales ?? 0 },
+            { key: 'buyers', header: 'Buyers', align: 'right', cell: (r) => r.buyers },
+            { key: 'revenue', header: 'Revenue', align: 'right', cell: (r) => formatMoney(r.revenue, r.currency) },
             {
               key: 'actions', header: '', cell: (r) => (
                 <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
