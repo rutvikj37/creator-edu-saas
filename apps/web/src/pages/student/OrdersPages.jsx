@@ -4,7 +4,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, Clock, Download, Gift, Receipt, XCircle } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
 import { Alert } from '../../components/auth/Alert.jsx';
-import { Button, Card, CardBody, DataTable, EmptyState, ErrorState, Skeleton, Spinner, StatusBadge, toast } from '../../components/ui/index.js';
+import { Badge, Button, Card, CardBody, DataTable, EmptyState, ErrorState, Skeleton, Spinner, StatusBadge, toast } from '../../components/ui/index.js';
+import { ListToolbar, MetricCard } from '../../components/common/ListToolbar.jsx';
+import { FilterChip } from '../../components/common/FilterChip.jsx';
 import { checkoutApi } from '../../services/api/commerce.js';
 import { academyApi } from '../../services/api/auth.js';
 import { adEvent, initAdTracking } from '../../utils/adTracking.js';
@@ -127,21 +129,37 @@ export function OrderStatusPage() {
   );
 }
 
+const KIND = (i) => (i.bundleId ? 'Bundle' : i.digitalProductId ? 'Digital product' : i.liveClassId ? 'Webinar ticket' : i.membershipPlanId ? 'Membership' : i.coachingProgramId ? 'Coaching' : 'Course');
+const PAID = ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'];
+
 export function StudentOrdersPage() {
   const q = useQuery({ queryKey: ['learn', 'orders'], queryFn: checkoutApi.orders });
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState();
+  const all = q.data ?? [];
+  const term = search.trim().toLowerCase();
+  const rows = all.filter((r) => (!term || r.number.toLowerCase().includes(term) || r.items.some((i) => i.title.toLowerCase().includes(term)))
+    && (!status || (status === 'PAID' ? PAID.includes(r.status) : status === 'WAITING' ? WAITING.includes(r.status) : !PAID.includes(r.status) && !WAITING.includes(r.status))));
+  const spent = all.filter((r) => PAID.includes(r.status)).reduce((n, r) => n + Number(r.totalAmount) - Number(r.refundedAmount ?? 0), 0);
   return (
     <>
-      <PageHeader title="Orders" description="Your purchases and invoices." breadcrumbs={[{ label: 'Orders' }]} />
+      <PageHeader title="Orders" count={q.data ? all.length : undefined} description="Your purchases and invoices." />
+      <div className="mb-6 grid gap-4 sm:grid-cols-2">
+        <MetricCard label="Total spent" value={formatMoney(spent, all[0]?.currency ?? 'INR')} hint="Paid orders, after refunds" loading={q.isLoading} />
+        <MetricCard label="Purchases" value={String(all.filter((r) => PAID.includes(r.status)).length)} hint="Including free enrolments" loading={q.isLoading} />
+      </div>
       <Card>
-        <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data ?? []}
-          empty={<EmptyState icon={Receipt} title="No orders yet" description="Courses you buy appear here with their invoices." action={<Link className="text-sm text-primary-600 underline" to="/courses">Browse courses</Link>} />}
+        <ListToolbar search={search} onSearch={setSearch} placeholder="Search by course or order number" count={rows.length} noun="order"
+          filtered={Boolean(term || status)} onReset={() => { setSearch(''); setStatus(undefined); }}
+          filters={<FilterChip label="Status" value={status} onChange={setStatus} options={[{ value: 'PAID', label: 'Paid' }, { value: 'WAITING', label: 'Awaiting payment' }, { value: 'OTHER', label: 'Failed or expired' }]} />} />
+        <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={rows}
+          empty={all.length ? <EmptyState icon={Receipt} title="No orders match" description="Try a different search or filter." /> : <EmptyState icon={Receipt} title="No orders yet" description="Courses you buy appear here with their invoices." action={<Link className="text-sm text-primary-600 underline" to="/courses">Browse courses</Link>} />}
           columns={[
-            { key: 'number', header: 'Order', cell: (r) => <Link className="font-mono text-xs text-primary-600 hover:underline" to={`/learn/orders/${r.id}`}>{r.number}</Link> },
-            { key: 'items', header: 'Course', cell: (r) => r.items.map((i) => i.title).join(', ') },
-            { key: 'createdAt', header: 'Date', cell: (r) => formatDate(r.createdAt) },
-            { key: 'totalAmount', header: 'Amount', align: 'right', cell: (r) => <span className="tabular-nums">{formatMoney(r.totalAmount, r.currency)}</span> },
-            { key: 'status', header: 'Status', cell: (r) => (WAITING.includes(r.status) ? <span className="inline-flex items-center gap-1 text-xs text-muted"><Clock className="size-3.5" />Awaiting payment</span> : <StatusBadge status={r.status} />) },
-            { key: 'invoice', header: '', align: 'right', cell: (r) => (['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(r.status) ? <InvoiceButton order={r} /> : null) },
+            { key: 'createdAt', header: 'Date', cell: (r) => <div className="leading-tight"><p className="text-fg-2">{formatDate(r.paidAt ?? r.createdAt)}</p><Link className="font-mono text-xs text-primary-600 hover:underline" to={`/learn/orders/${r.id}`}>{r.number}</Link></div> },
+            { key: 'items', header: 'Item', cell: (r) => <div className="max-w-72"><p className="line-clamp-1 text-fg">{r.items.map((i) => i.title).join(', ')}</p><p className="text-xs text-muted">{Number(r.totalAmount) === 0 ? 'FREE' : 'Paid'} | {r.items[0] ? KIND(r.items[0]) : ''}{r.items.length > 1 ? ` +${r.items.length - 1}` : ''}</p></div> },
+            { key: 'totalAmount', header: 'Amount', cell: (r) => <span className="font-medium tabular-nums">{formatMoney(r.totalAmount, r.currency)}</span> },
+            { key: 'status', header: 'Status', cell: (r) => (WAITING.includes(r.status) ? <Link to={`/learn/orders/${r.id}`} className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline"><Clock className="size-3.5" />Complete payment</Link> : r.status === 'PAID' ? <Badge tone="success">Success</Badge> : <StatusBadge status={r.status} />) },
+            { key: 'invoice', header: '', align: 'right', cell: (r) => (PAID.includes(r.status) && Number(r.totalAmount) > 0 ? <InvoiceButton order={r} /> : null) },
           ]} />
       </Card>
     </>
