@@ -28,6 +28,7 @@ export interface ProgramInput {
   planName?: string | null;
   priceAmount?: number;
   compareAtAmount?: number | null;
+  passTransactionFee?: boolean;
   coaches?: { userId: string; weight: number }[];
   /** Ordered sessions; `id` keeps an existing one. */
   sessions?: { id?: string; title: string; durationMin: number; agenda: Doc; notes?: string | null; attachmentIds?: string[] }[];
@@ -116,7 +117,7 @@ export class CoachingService {
     const assets = await this.db.fileAsset.findMany({ where: { id: { in: sessions.flatMap((s) => s.attachmentIds as string[]) } }, select: { id: true, fileName: true, sizeBytes: true } });
     return {
       id: p.id, title: p.title, slug: p.slug, description: p.description, faqs: p.faqs, planName: p.planName, status: p.status, publishedAt: p.publishedAt,
-      priceAmount: p.priceAmount.toString(), compareAtAmount: p.compareAtAmount?.toString() ?? null, currency: p.currency, isFree: Number(p.priceAmount) === 0,
+      priceAmount: p.priceAmount.toString(), compareAtAmount: p.compareAtAmount?.toString() ?? null, currency: p.currency, isFree: Number(p.priceAmount) === 0, passTransactionFee: p.passTransactionFee,
       coverFileId: p.coverFileId, coverUrl: await this.files.urlFor(p.coverFileId, apiOrigin, 86_400),
       coaches,
       sessions: sessions.map((s) => ({
@@ -210,7 +211,7 @@ export class CoachingService {
       data: {
         title: input.title.trim(), slug: await this.uniqueSlug(input.title), description: (input.description ?? null) as never, coverFileId: input.coverFileId ?? null,
         faqs: (input.faqs ?? []).map((f) => ({ question: f.question.trim(), answer: f.answer.trim() })) as never, planName: input.planName?.trim() || null,
-        priceAmount: input.priceAmount ?? 0, compareAtAmount: input.compareAtAmount ?? null, currency: tenant.defaultCurrency, createdById: actorUserId,
+        priceAmount: input.priceAmount ?? 0, compareAtAmount: input.compareAtAmount ?? null, currency: tenant.defaultCurrency, createdById: actorUserId, passTransactionFee: input.passTransactionFee ?? false,
       } as never,
     });
     await this.writeParts(p.id, { coaches: input.coaches ?? [{ userId: actorUserId, weight: 1 }], sessions: input.sessions });
@@ -231,6 +232,7 @@ export class CoachingService {
         ...(input.planName !== undefined ? { planName: input.planName?.trim() || null } : {}),
         ...(input.priceAmount !== undefined ? { priceAmount: input.priceAmount } : {}),
         ...(input.compareAtAmount !== undefined ? { compareAtAmount: input.compareAtAmount } : {}),
+        ...(input.passTransactionFee !== undefined ? { passTransactionFee: input.passTransactionFee } : {}),
       },
     });
     await this.writeParts(id, input);

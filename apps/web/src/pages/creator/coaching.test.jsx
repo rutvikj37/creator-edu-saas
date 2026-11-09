@@ -101,7 +101,7 @@ it('wizard saves the landing page, program details and pricing, then publishes',
   expect(screen.getByText('33% off')).toBeInTheDocument();
   expect(screen.getAllByText('Mentorship pack').length).toBeGreaterThan(0);
   await userEvent.click(screen.getByRole('button', { name: 'Publish' }));
-  await waitFor(() => expect(coachingApi.update).toHaveBeenLastCalledWith('p1', { planName: 'Mentorship pack', priceAmount: 999, compareAtAmount: 1499 }));
+  await waitFor(() => expect(coachingApi.update).toHaveBeenLastCalledWith('p1', { planName: 'Mentorship pack', priceAmount: 999, compareAtAmount: 1499, passTransactionFee: false }));
   await waitFor(() => expect(coachingApi.setStatus).toHaveBeenCalledWith('p1', 'PUBLISHED'));
   await waitFor(() => expect(router.state.location.pathname).toBe('/creator/coaching'));
 });

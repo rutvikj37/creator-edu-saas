@@ -268,6 +268,7 @@ export function CheckoutPage() {
                     <div className="flex justify-between"><dt className="text-muted">Price</dt><dd className="tabular-nums">{m(qd.subtotal)}</dd></div>
                     {Number(qd.discount) > 0 && <div className="flex justify-between text-green-700"><dt>Discount</dt><dd className="tabular-nums">−{m(qd.discount)}</dd></div>}
                     {Number(qd.tax) > 0 && <div className="flex justify-between"><dt className="text-muted">GST {qd.taxRate}%{qd.taxInclusive ? ' (included)' : ''}</dt><dd className="tabular-nums">{m(qd.tax)}</dd></div>}
+                    {Number(qd.transactionFee) > 0 && <div className="flex justify-between"><dt className="text-muted">Transaction fee</dt><dd className="tabular-nums">{m(qd.transactionFee)}</dd></div>}
                     <div className="flex justify-between border-t border-line pt-2 text-base font-semibold"><dt>Total</dt><dd className="tabular-nums">{m(qd.total)}</dd></div>
                   </dl>
                   {!qd.paymentsEnabled ? <Alert tone="info">Online checkout opens once this academy enables payments.</Alert> : (

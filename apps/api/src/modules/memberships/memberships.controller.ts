@@ -31,6 +31,7 @@ class PlanDto {
   @IsOptional() @Transform(trim) @IsString() @MaxLength(40) buttonText?: string | null;
   @IsOptional() @IsBoolean() lifetime?: boolean;
   @IsOptional() @IsBoolean() taxExclusive?: boolean | null;
+  @IsOptional() @IsBoolean() passTransactionFee?: boolean;
   @IsOptional() @IsArray() @ArrayMaxSize(30) @ValidateNested({ each: true }) @Type(() => FaqDto) faqs?: FaqDto[];
 }
 /** Name only → a draft for the step-by-step builder; with price, interval and courses → on sale at once. */

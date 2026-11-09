@@ -195,4 +195,21 @@ describe('Memberships and communities (e2e)', () => {
     await authed(app, m.s).post('/api/v1/learn/checkout').send({ membershipPlanId: p.id, billing: { name: 'Member' } }).expect(409);
     await prisma.tenantBusinessProfile.update({ where: { tenantId: c.tenant.id }, data: { gstRegistered: false } });
   });
+  it('charge transaction fee: the buyer pays 2.36% on top, shown in the quote, order and invoice', async () => {
+    const p = (await authed(app, cs).post('/api/v1/creator/memberships').send({ name: 'Fee plan' }).expect(201)).body.data;
+    const live = (await authed(app, cs).patch(`/api/v1/creator/memberships/${p.id}`).send({ courseIds: [courses[0].id], priceAmount: 1000, passTransactionFee: true, status: 'ACTIVE' }).expect(200)).body.data;
+    expect(live.passTransactionFee).toBe(true);
+    const m = await student('Fee Buyer');
+    const q = (await authed(app, m.s).post('/api/v1/learn/checkout/quote').send({ membershipPlanId: p.id }).expect(200)).body.data;
+    expect(q).toMatchObject({ subtotal: '1000.00', transactionFee: '23.60', total: '1023.60' });
+    const o = await buyPlan(m.s, p.id);
+    const order = await prisma.order.findUniqueOrThrow({ where: { id: o.id } });
+    expect([order.totalAmount.toString(), order.transactionFeeAmount.toString()]).toEqual(['1023.6', '23.6']);
+    const inv = await prisma.invoice.findFirstOrThrow({ where: { orderId: o.id } });
+    expect(inv.lines).toEqual(expect.arrayContaining([expect.objectContaining({ description: 'Transaction fee (payment gateway charges)', totalAmount: '23.6' })]));
+    // Off again: no fee.
+    await authed(app, cs).patch(`/api/v1/creator/memberships/${p.id}`).send({ passTransactionFee: false }).expect(200);
+    const m2 = await student('No Fee Buyer');
+    expect((await authed(app, m2.s).post('/api/v1/learn/checkout/quote').send({ membershipPlanId: p.id }).expect(200)).body.data).toMatchObject({ transactionFee: '0.00', total: '1000.00' });
+  });
 });

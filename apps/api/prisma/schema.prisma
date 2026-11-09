@@ -1639,50 +1639,52 @@ enum OrderStatus {
 }
 
 model Order {
-  id                 String              @id @default(cuid()) @db.Char(25)
-  tenantId           String              @db.Char(25)
-  number             String              @db.VarChar(32)
-  userId             String              @db.Char(25)
-  status             OrderStatus         @default(PENDING)
-  currency           String              @db.Char(3)
-  subtotalAmount     Decimal             @db.Decimal(19, 4)
-  discountAmount     Decimal             @default(0) @db.Decimal(19, 4)
-  taxAmount          Decimal             @default(0) @db.Decimal(19, 4)
-  totalAmount        Decimal             @db.Decimal(19, 4)
-  refundedAmount     Decimal             @default(0) @db.Decimal(19, 4)
-  taxRate            Decimal?            @db.Decimal(5, 2)
-  taxInclusive       Boolean             @default(true)
-  couponId           String?             @db.Char(25)
-  couponCode         String?             @db.VarChar(40)
-  provider           PaymentProviderKey?
+  id                   String              @id @default(cuid()) @db.Char(25)
+  tenantId             String              @db.Char(25)
+  number               String              @db.VarChar(32)
+  userId               String              @db.Char(25)
+  status               OrderStatus         @default(PENDING)
+  currency             String              @db.Char(3)
+  subtotalAmount       Decimal             @db.Decimal(19, 4)
+  discountAmount       Decimal             @default(0) @db.Decimal(19, 4)
+  taxAmount            Decimal             @default(0) @db.Decimal(19, 4)
+  totalAmount          Decimal             @db.Decimal(19, 4)
+  refundedAmount       Decimal             @default(0) @db.Decimal(19, 4)
+  taxRate              Decimal?            @db.Decimal(5, 2)
+  taxInclusive         Boolean             @default(true)
+  couponId             String?             @db.Char(25)
+  couponCode           String?             @db.VarChar(40)
+  provider             PaymentProviderKey?
   /// How it was paid: RAZORPAY, or an offline mode recorded by the academy (CASH, BANK_TRANSFER, UPI, CHEQUE, OTHER).
-  paymentMode        String?             @db.VarChar(20)
+  paymentMode          String?             @db.VarChar(20)
+  /// Fee the buyer paid to cover the gateway charge (items with "Charge transaction fee" on). Included in totalAmount.
+  transactionFeeAmount Decimal             @default(0) @db.Decimal(19, 4)
   /// Transaction ID / reference for an offline payment.
-  externalReference  String?             @db.VarChar(191)
+  externalReference    String?             @db.VarChar(191)
   /// Staff member who recorded an offline payment.
-  recordedById       String?             @db.Char(25)
-  gatewayAccountId   String?             @db.Char(25)
-  billing            Json
-  idempotencyKey     String?             @db.VarChar(64)
-  affiliateId        String?             @db.Char(25)
+  recordedById         String?             @db.Char(25)
+  gatewayAccountId     String?             @db.Char(25)
+  billing              Json
+  idempotencyKey       String?             @db.VarChar(64)
+  affiliateId          String?             @db.Char(25)
   /// First-touch marketing attribution captured at checkout: { visitorId, source, medium, campaign, referrerHost, landingPath }.
-  attribution        Json?
+  attribution          Json?
   /// Bought through a shareable payment link.
-  paymentLinkId      String?             @db.Char(25)
+  paymentLinkId        String?             @db.Char(25)
   /// Abandoned-checkout reminders sent so far (99 = no reminder needed: bought later or superseded).
-  recoveryStage      Int                 @default(0)
-  recoveryLastAt     DateTime?           @db.DateTime(3)
+  recoveryStage        Int                 @default(0)
+  recoveryLastAt       DateTime?           @db.DateTime(3)
   /// A later paid order by the same buyer for the same items, after a reminder.
-  recoveredAt        DateTime?           @db.DateTime(3)
-  recoveredByOrderId String?             @db.Char(25)
-  paidAt             DateTime?           @db.DateTime(3)
-  failureReason      String?             @db.VarChar(500)
-  expiresAt          DateTime            @db.DateTime(3)
-  createdAt          DateTime            @default(now()) @db.DateTime(3)
-  updatedAt          DateTime            @updatedAt @db.DateTime(3)
-  items              OrderItem[]
-  payments           Payment[]
-  refunds            Refund[]
+  recoveredAt          DateTime?           @db.DateTime(3)
+  recoveredByOrderId   String?             @db.Char(25)
+  paidAt               DateTime?           @db.DateTime(3)
+  failureReason        String?             @db.VarChar(500)
+  expiresAt            DateTime            @db.DateTime(3)
+  createdAt            DateTime            @default(now()) @db.DateTime(3)
+  updatedAt            DateTime            @updatedAt @db.DateTime(3)
+  items                OrderItem[]
+  payments             Payment[]
+  refunds              Refund[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, number])
@@ -2990,34 +2992,36 @@ model CommunityReport {
 
 /// Paid access to a set of courses (and member communities) for a period; renewed by paying again.
 model MembershipPlan {
-  id              String          @id @default(cuid()) @db.Char(25)
-  tenantId        String          @db.Char(25)
-  name            String          @db.VarChar(120)
-  description     String?         @db.VarChar(1000)
+  id                 String          @id @default(cuid()) @db.Char(25)
+  tenantId           String          @db.Char(25)
+  name               String          @db.VarChar(120)
+  description        String?         @db.VarChar(1000)
   /// What the buyer pays per period; 0 while a draft has no price yet.
-  priceAmount     Decimal         @db.Decimal(19, 4)
+  priceAmount        Decimal         @db.Decimal(19, 4)
   /// Original price shown struck through.
-  compareAtAmount Decimal?        @db.Decimal(19, 4)
-  currency        String          @db.Char(3)
-  interval        BillingInterval
-  courseIds       Json
+  compareAtAmount    Decimal?        @db.Decimal(19, 4)
+  currency           String          @db.Char(3)
+  interval           BillingInterval
+  courseIds          Json
   /// Pricing plan label shown on the buy button card.
-  planName        String?         @db.VarChar(100)
-  coverFileId     String?         @db.Char(25)
+  planName           String?         @db.VarChar(100)
+  coverFileId        String?         @db.Char(25)
   /// [{ question, answer }]
-  faqs            Json?
+  faqs               Json?
   /// Label on the buy button (default: Get Access Now).
-  buttonText      String?         @db.VarChar(40)
+  buttonText         String?         @db.VarChar(40)
   /// Unlimited plan duration: one payment, access never ends (no renewals).
-  lifetime        Boolean         @default(false)
+  lifetime           Boolean         @default(false)
   /// true = GST is added on top of the price, false = included, null = the academy's setting.
-  taxExclusive    Boolean?
+  taxExclusive       Boolean?
+  /// Buyer pays the Razorpay charge as a transaction fee.
+  passTransactionFee Boolean         @default(false)
   /// DRAFT (being built), ACTIVE (on sale) or ARCHIVED.
-  status          String          @default("ACTIVE") @db.VarChar(16)
-  createdById     String          @db.Char(25)
-  createdAt       DateTime        @default(now()) @db.DateTime(3)
-  updatedAt       DateTime        @updatedAt @db.DateTime(3)
-  memberships     Membership[]
+  status             String          @default("ACTIVE") @db.VarChar(16)
+  createdById        String          @db.Char(25)
+  createdAt          DateTime        @default(now()) @db.DateTime(3)
+  updatedAt          DateTime        @updatedAt @db.DateTime(3)
+  memberships        Membership[]
 
   @@unique([tenantId, id])
   @@index([tenantId, status])
@@ -3092,26 +3096,28 @@ enum CoachingBookingStatus {
 
 /// A sellable 1:1 coaching program: a set of sessions a buyer books with the program's coaches.
 model CoachingProgram {
-  id              String       @id @default(cuid()) @db.Char(25)
-  tenantId        String       @db.Char(25)
-  title           String       @db.VarChar(100)
-  slug            String       @db.VarChar(120)
+  id                 String       @id @default(cuid()) @db.Char(25)
+  tenantId           String       @db.Char(25)
+  title              String       @db.VarChar(100)
+  slug               String       @db.VarChar(120)
   /// Rich-text (TipTap) document.
-  description     Json?
-  coverFileId     String?      @db.Char(25)
+  description        Json?
+  coverFileId        String?      @db.Char(25)
   /// [{ question, answer }]
-  faqs            Json
-  planName        String?      @db.VarChar(100)
+  faqs               Json
+  planName           String?      @db.VarChar(100)
   /// What the buyer pays; 0 = free.
-  priceAmount     Decimal      @db.Decimal(19, 4)
+  priceAmount        Decimal      @db.Decimal(19, 4)
   /// Original price shown struck through.
-  compareAtAmount Decimal?     @db.Decimal(19, 4)
-  currency        String       @db.Char(3)
-  status          BundleStatus @default(DRAFT)
-  publishedAt     DateTime?    @db.DateTime(3)
-  createdById     String       @db.Char(25)
-  createdAt       DateTime     @default(now()) @db.DateTime(3)
-  updatedAt       DateTime     @updatedAt @db.DateTime(3)
+  compareAtAmount    Decimal?     @db.Decimal(19, 4)
+  currency           String       @db.Char(3)
+  /// Buyer pays the Razorpay charge as a transaction fee.
+  passTransactionFee Boolean      @default(false)
+  status             BundleStatus @default(DRAFT)
+  publishedAt        DateTime?    @db.DateTime(3)
+  createdById        String       @db.Char(25)
+  createdAt          DateTime     @default(now()) @db.DateTime(3)
+  updatedAt          DateTime     @updatedAt @db.DateTime(3)
 
   @@unique([tenantId, id])
   @@unique([tenantId, slug])

@@ -27,13 +27,13 @@ export function MembershipBuilderPage() {
   const [faqEdit, setFaqEdit] = useState(null); // { index, question, answer }
   const [picker, setPicker] = useState(false);
   const [leave, setLeave] = useState(false);
-  const [f, setF] = useState({ name: '', description: '', cover: null, faqs: [], courseIds: [], planName: '', interval: 'MONTH', price: '', sale: '', status: 'DRAFT', buttonText: '', lifetime: false, taxExclusive: null });
+  const [f, setF] = useState({ name: '', description: '', cover: null, faqs: [], courseIds: [], planName: '', interval: 'MONTH', price: '', sale: '', status: 'DRAFT', buttonText: '', lifetime: false, taxExclusive: null, passFee: false });
   useEffect(() => {
     const p = existing.data;
     if (!p) return;
     setF({ name: p.name, description: p.description ?? '', cover: p.coverFileId ? { id: p.coverFileId, url: p.coverUrl } : null, faqs: p.faqs ?? [], courseIds: p.courseIds, planName: p.planName ?? '', interval: p.interval,
       price: p.compareAtAmount ? Number(p.compareAtAmount) : Number(p.priceAmount) || '', sale: p.compareAtAmount ? Number(p.priceAmount) : '', status: p.status,
-      buttonText: p.buttonText ?? '', lifetime: p.lifetime, taxExclusive: p.taxExclusive });
+      buttonText: p.buttonText ?? '', lifetime: p.lifetime, taxExclusive: p.taxExclusive, passFee: Boolean(p.passTransactionFee) });
   }, [existing.data]);
   const set = (patch) => setF((x) => ({ ...x, ...patch }));
   const all = courses.data?.items ?? [];
@@ -44,7 +44,8 @@ export function MembershipBuilderPage() {
   const pricing = stats.data?.pricing ?? { gstRegistered: false, taxRate: 0, pricesIncludeTax: true, commissionPercent: 0 };
   const exclusive = f.taxExclusive ?? !pricing.pricesIncludeTax;
   const rate = pricing.gstRegistered ? pricing.taxRate : 0;
-  const effective = rate && exclusive ? charge * (1 + rate / 100) : charge;
+  const fee = f.passFee ? Math.round((rate && exclusive ? charge * (1 + rate / 100) : charge) * 2.36) / 100 : 0;
+  const effective = (rate && exclusive ? charge * (1 + rate / 100) : charge) + fee;
   const net = rate && !exclusive ? charge / (1 + rate / 100) : charge;
   const receive = net * (1 - (pricing.commissionPercent ?? 0) / 100);
 
@@ -64,7 +65,7 @@ export function MembershipBuilderPage() {
     if (step === 1) return { courseIds: f.courseIds };
     return {
       planName: f.planName.trim() || null, interval: f.interval, priceAmount: charge, compareAtAmount: sale !== null && sale < price ? price : null,
-      buttonText: f.buttonText.trim() || null, lifetime: f.lifetime, taxExclusive: f.taxExclusive, ...(publish ? { status: 'ACTIVE' } : {}),
+      buttonText: f.buttonText.trim() || null, lifetime: f.lifetime, taxExclusive: f.taxExclusive, passTransactionFee: f.passFee, ...(publish ? { status: 'ACTIVE' } : {}),
     };
   };
   const save = async (publish = false) => {
@@ -194,9 +195,17 @@ export function MembershipBuilderPage() {
                   <MoneyInput label="Price" value={f.price} error={errors.price} onChange={(v) => set({ price: v })} />
                   <MoneyInput label="Sale price" value={f.sale} error={errors.sale} hint="Optional. Lower than the price; shown with the price struck through." onChange={(v) => set({ sale: v })} />
                 </div>
+                <div>
+                  <p className="mb-1.5 text-sm font-medium text-fg">Transaction fees</p>
+                  <div className="flex items-center gap-3 rounded-lg border border-line p-3">
+                    <span className="grid size-10 place-items-center rounded-lg bg-surface-2"><Wallet className="size-5" aria-hidden /></span>
+                    <div className="flex-1"><label htmlFor="pass-fee" className="font-medium">Charge transaction fee</label><p className="text-sm text-muted">When on, members pay Razorpay’s 2.36% charge. When off, you cover it.</p></div>
+                    <Switch id="pass-fee" checked={f.passFee} onChange={(v) => set({ passFee: v })} />
+                  </div>
+                </div>
                 <div className="grid gap-4 rounded-lg bg-surface-2/60 p-4 sm:grid-cols-2">
-                  <div><p className="text-sm font-medium">Effective price</p><p className="text-xl font-semibold" title="What the member pays, including GST">{formatMoney(effective, 'INR')}</p><p className="text-xs text-muted">{rate ? `${exclusive ? 'Price + ' : 'Includes '}${rate}% GST` : 'No GST charged'}</p></div>
-                  <div><p className="text-sm font-medium">You will receive</p><p className="text-xl font-semibold">{formatMoney(receive, 'INR')}</p><p className="text-xs text-muted">After {rate ? 'GST' : ''}{rate && pricing.commissionPercent ? ' and ' : ''}{pricing.commissionPercent ? `${pricing.commissionPercent}% platform commission` : rate ? '' : 'no deductions'}, before Razorpay fees</p></div>
+                  <div><p className="text-sm font-medium">Effective price</p><p className="text-xl font-semibold" title="What the member pays, including GST">{formatMoney(effective, 'INR')}</p><p className="text-xs text-muted">{rate ? `${exclusive ? 'Price + ' : 'Includes '}${rate}% GST` : 'No GST charged'}{fee ? ` + ${formatMoney(fee, 'INR')} transaction fee` : ''}</p></div>
+                  <div><p className="text-sm font-medium">You will receive</p><p className="text-xl font-semibold">{formatMoney(receive, 'INR')}</p><p className="text-xs text-muted">After {rate ? 'GST' : ''}{rate && pricing.commissionPercent ? ' and ' : ''}{pricing.commissionPercent ? `${pricing.commissionPercent}% platform commission` : rate ? '' : 'no deductions'}, {f.passFee ? 'Razorpay’s charge is paid by the member' : 'before Razorpay fees'}</p></div>
                 </div>
                 <button type="button" aria-expanded={advanced} onClick={() => setAdvanced((x) => !x)} className="inline-flex items-center gap-1 text-sm font-medium text-primary-700 dark:text-primary-300">Advanced settings<ChevronDown className={cn('size-4 transition-transform', advanced && 'rotate-180')} aria-hidden /></button>
                 {advanced && (

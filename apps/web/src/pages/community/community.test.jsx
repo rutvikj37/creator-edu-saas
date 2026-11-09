@@ -114,7 +114,7 @@ it('builder: details with FAQs, courses from the picker, then pricing and publis
   await userEvent.click(screen.getByRole('switch', { name: 'Show taxes separately' }));
   expect(screen.queryByText('+ taxes')).toBeNull();
   await userEvent.click(screen.getByRole('button', { name: 'Publish' }));
-  await waitFor(() => expect(membershipsApi.update).toHaveBeenLastCalledWith('p9', { planName: 'Yearly pass', interval: 'YEAR', priceAmount: 999, compareAtAmount: 1499, buttonText: 'Join now', lifetime: false, taxExclusive: false, status: 'ACTIVE' }));
+  await waitFor(() => expect(membershipsApi.update).toHaveBeenLastCalledWith('p9', { planName: 'Yearly pass', interval: 'YEAR', priceAmount: 999, compareAtAmount: 1499, buttonText: 'Join now', lifetime: false, taxExclusive: false, passTransactionFee: false, status: 'ACTIVE' }));
   await waitFor(() => expect(router.state.location.pathname).toBe('/creator/memberships'));
 });
 

@@ -1,7 +1,7 @@
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsDateString, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, Length, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, Length, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import type { Request } from 'express';
 import { PERMISSIONS } from '@ce/shared';
 import { CurrentAuth, RequirePermissions, RequireRealm, TenantScoped } from '../../../common/decorators/auth.decorators.js';
@@ -36,6 +36,7 @@ class UpdateProgramDto {
   @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(100) planName?: string | null;
   @ApiPropertyOptional({ description: 'What the buyer pays; 0 = free' }) @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(10_000_000) priceAmount?: number;
   @ApiPropertyOptional({ description: 'Original price shown struck through' }) @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(10_000_000) compareAtAmount?: number | null;
+  @ApiPropertyOptional({ description: 'Buyer pays the Razorpay charge as a transaction fee' }) @IsOptional() @IsBoolean() passTransactionFee?: boolean;
   @ApiPropertyOptional({ type: [CoachDto] }) @IsOptional() @IsArray() @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => CoachDto) coaches?: CoachDto[];
   @ApiPropertyOptional({ type: [SessionDto] }) @IsOptional() @IsArray() @ArrayMaxSize(50) @ValidateNested({ each: true }) @Type(() => SessionDto) sessions?: SessionDto[];
 }

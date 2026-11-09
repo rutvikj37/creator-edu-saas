@@ -24,7 +24,7 @@ import { CoachingService } from './coaching/coaching.service.js';
 import { FunnelService, itemKey } from './funnel.service.js';
 import { GatewayService } from './gateway.service.js';
 import { renderInvoicePdf } from './invoice-pdf.js';
-import { commissionMinor, computeLinesQuote, proportional, type Quote } from './pricing.js';
+import { commissionMinor, computeLinesQuote, proportional, transactionFeeMinor, type Quote } from './pricing.js';
 import { fromMinor, toMinor } from './providers/money.js';
 import { PaymentProviders } from './providers/registry.js';
 import { type NormalizedPayment, ProviderError } from './providers/types.js';
@@ -87,6 +87,8 @@ interface Line {
   taxInclusive?: boolean;
   /** A lifetime membership: bought once. */
   lifetime?: boolean;
+  /** The seller passes the Razorpay charge to the buyer as a transaction fee. */
+  passFee?: boolean;
 }
 
 /** Order states a buyer can come back from (reminders, recovery). */
@@ -173,7 +175,7 @@ export class OrdersService {
     return {
       id: o.id, number: o.number, status: o.status, currency: o.currency,
       subtotalAmount: m(o.subtotalAmount), discountAmount: m(o.discountAmount), taxAmount: m(o.taxAmount), totalAmount: m(o.totalAmount), refundedAmount: m(o.refundedAmount),
-      taxRate: m(o.taxRate), taxInclusive: o.taxInclusive, couponCode: o.couponCode, provider: o.provider, billing: o.billing, paymentMode: o.paymentMode ?? (o.provider ?? null), externalReference: o.externalReference ?? null,
+      taxRate: m(o.taxRate), taxInclusive: o.taxInclusive, transactionFeeAmount: m(o.transactionFeeAmount ?? 0), couponCode: o.couponCode, provider: o.provider, billing: o.billing, paymentMode: o.paymentMode ?? (o.provider ?? null), externalReference: o.externalReference ?? null,
       paidAt: o.paidAt, failureReason: o.failureReason, expiresAt: o.expiresAt, createdAt: o.createdAt, userId: o.userId,
       items: o.items?.map((i: any) => ({ id: i.id, courseId: i.courseId, bundleId: i.bundleId ?? null, membershipPlanId: i.membershipPlanId ?? null, liveClassId: i.liveClassId ?? null, digitalProductId: i.digitalProductId ?? null, coachingProgramId: i.coachingProgramId ?? null, title: i.title, unitAmount: m(i.unitAmount), discountAmount: m(i.discountAmount), totalAmount: m(i.totalAmount), source: i.source ?? null, offerId: i.offerId ?? null })),
       paymentLinkId: o.paymentLinkId ?? null,
@@ -214,7 +216,7 @@ export class OrdersService {
       const p = await this.memberships.sellable(ref.membershipPlanId);
       return {
         kind: 'membership', id: p.id, title: `${p.name} membership (${p.lifetime ? 'lifetime' : p.interval === 'YEAR' ? 'yearly' : 'monthly'})`, slug: null, unitMinor: toMinor(p.priceAmount, p.currency), currency: p.currency, grant: [],
-        ...(p.taxExclusive === null || p.taxExclusive === undefined ? {} : { taxInclusive: !p.taxExclusive }), lifetime: p.lifetime,
+        ...(p.taxExclusive === null || p.taxExclusive === undefined ? {} : { taxInclusive: !p.taxExclusive }), lifetime: p.lifetime, passFee: p.passTransactionFee,
       };
     }
     if (!ref.courseId) throw AppException.validation([{ field: 'courseId', message: 'Choose what to buy' }]);
@@ -240,7 +242,7 @@ export class OrdersService {
     const p = await this.db.coachingProgram.findFirst({ where: { id, status: 'PUBLISHED' } });
     if (!p) throw AppException.notFound('Coaching program not found');
     if (Number(p.priceAmount) <= 0) throw AppException.conflict('This program is free — get it on its page.');
-    return { kind: 'coaching', id: p.id, title: `${p.title} (1:1 coaching)`.slice(0, 200), slug: p.slug, unitMinor: toMinor(p.priceAmount, p.currency), currency: p.currency, grant: [] };
+    return { kind: 'coaching', id: p.id, title: `${p.title} (1:1 coaching)`.slice(0, 200), slug: p.slug, unitMinor: toMinor(p.priceAmount, p.currency), currency: p.currency, grant: [], passFee: p.passTransactionFee };
   }
 
   /** A paid webinar with upcoming sessions and seats left. */
@@ -389,7 +391,10 @@ export class OrdersService {
     let tax = rule && own.length === 1 && own[0] !== undefined ? { ...rule, inclusive: own[0] } : rule;
     // Exports under a valid LUT are zero-rated: no GST for buyers outside India.
     if (tax && buyerCountry && buyerCountry !== 'IN' && (await this.prisma.tenantBusinessProfile.findUnique({ where: { tenantId }, select: { exportsUnderLut: true } }))?.exportsUnderLut) tax = { ...tax, rate: 0 };
-    const q = computeLinesQuote(lines.map((l) => l.unitMinor), eligible, coupon?.rule ?? null, tax);
+    const base = computeLinesQuote(lines.map((l) => l.unitMinor), eligible, coupon?.rule ?? null, tax);
+    // Sellers can pass the gateway charge to buyers ("Charge transaction fee"); it isn't taxed or discounted.
+    const fee = transactionFeeMinor(base.lines.map((l) => l.total), lines.map((l) => Boolean(l.passFee)));
+    const q = { ...base, total: base.total + fee, net: base.net + fee, fee };
     return { coupon, tax, q, cur };
   }
 
@@ -406,7 +411,7 @@ export class OrdersService {
       kind: main.length > 1 ? ('cart' as const) : first.kind, course: { id: first.id, title: first.title, slug: first.slug }, currency: cur, couponCode: coupon?.code ?? null,
       items: lines.map((l, i) => ({ kind: l.kind, id: l.id, title: l.title, slug: l.slug, unit: fromMinor(l.unitMinor, cur), discount: fromMinor(q.lines[i].discount, cur), total: fromMinor(q.lines[i].total, cur), courseCount: l.grant.length, source: l.source ?? null, offerId: l.offerId ?? null })),
       subtotal: fromMinor(q.subtotal, cur), discount: fromMinor(q.discount, cur), tax: fromMinor(q.tax, cur), total: fromMinor(q.total, cur),
-      taxRate: tax?.rate ?? null, taxInclusive: tax?.inclusive ?? true, paymentsEnabled: Boolean(selling) || (q.total === 0 && active),
+      taxRate: tax?.rate ?? null, taxInclusive: tax?.inclusive ?? true, transactionFee: fromMinor(q.fee, cur), paymentsEnabled: Boolean(selling) || (q.total === 0 && active),
       bumps: bumps.map((b) => ({
         offerId: b.offer.id, headline: b.offer.headline, description: b.offer.description, kind: b.line.kind, itemId: b.line.id, title: b.line.title, slug: b.line.slug,
         price: fromMinor(b.line.unitMinor, cur), regularPrice: fromMinor(b.regularMinor, cur), selected: chosen.includes(b.offer.id),
@@ -457,7 +462,7 @@ export class OrdersService {
       const o = await tx.order.create({
         data: {
           number: `ORD-${String(n).padStart(6, '0')}`, userId, currency: cur,
-          subtotalAmount: fromMinor(q.subtotal, cur), discountAmount: fromMinor(q.discount, cur), taxAmount: fromMinor(q.tax, cur), totalAmount: fromMinor(q.total, cur),
+          subtotalAmount: fromMinor(q.subtotal, cur), discountAmount: fromMinor(q.discount, cur), taxAmount: fromMinor(q.tax, cur), totalAmount: fromMinor(q.total, cur), transactionFeeAmount: fromMinor(q.fee, cur),
           taxRate: tax?.rate ?? null, taxInclusive: tax?.inclusive ?? true, couponId: coupon?.id ?? null, couponCode: coupon?.code ?? null,
           billing, idempotencyKey: idempotencyKey ?? null, expiresAt: new Date(Date.now() + ORDER_TTL_MS), affiliateId, attribution: cleanAttribution(input.attribution),
           paymentLinkId: link?.id ?? null, recoveryStage: reminded._max.recoveryStage ?? 0,
@@ -705,7 +710,10 @@ export class OrdersService {
             details: business?.taxDetails ?? null, note: business?.invoiceNote ?? null,
           },
           buyer: billing,
-          lines: order.items.map((i) => ({ description: i.title, quantity: 1, unitAmount: i.unitAmount.toString(), discountAmount: i.discountAmount.toString(), totalAmount: i.totalAmount.toString() })),
+          lines: [
+            ...order.items.map((i) => ({ description: i.title, quantity: 1, unitAmount: i.unitAmount.toString(), discountAmount: i.discountAmount.toString(), totalAmount: i.totalAmount.toString() })),
+            ...(Number(order.transactionFeeAmount) > 0 ? [{ description: 'Transaction fee (payment gateway charges)', quantity: 1, unitAmount: order.transactionFeeAmount.toString(), discountAmount: '0', totalAmount: order.transactionFeeAmount.toString() }] : []),
+          ],
           totals: { currency: cur, subtotal: order.subtotalAmount.toString(), discount: order.discountAmount.toString(), tax: order.taxAmount.toString(), taxRate: order.taxRate?.toString() ?? null, taxInclusive: order.taxInclusive, total: order.totalAmount.toString(), zeroRated, paidVia: paid ? `Razorpay ${paid.result.method ?? ''}`.trim() : opts.offline ? OFFLINE_LABEL[opts.offline.mode] ?? 'Offline payment' : 'Free (100% discount)', paymentId: paid?.result.providerPaymentId ?? opts.offline?.reference ?? null },
         } as never,
       });
@@ -818,7 +826,7 @@ export class OrdersService {
       if (e instanceof AppException && /free/i.test(e.message)) throw AppException.conflict('This item is free — enrol the learner instead of recording a payment.');
       throw e;
     });
-    const line: Line = { ...base, unitMinor: toMinor(input.amount, base.currency), couponable: false };
+    const line: Line = { ...base, unitMinor: toMinor(input.amount, base.currency), couponable: false, passFee: false };
     await this.assertBuyable(user.id, [line]);
     const { tax, q, cur } = await this.price(user.id, [line], null, user.country);
     const ref = input.reference?.trim() || null;

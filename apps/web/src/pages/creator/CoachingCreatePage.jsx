@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Calendar, Check, ChevronDown, Clock, ImageIcon, Paperclip, Pencil, Plus, Trash2, Wallet, X } from 'lucide-react';
 import { RichTextEditor } from '../../components/forms/RichTextEditor.jsx';
 import { FileUpload } from '../../components/forms/FileUpload.jsx';
-import { Button, Card, ConfirmDialog, Input, Select, Skeleton, Textarea, toast } from '../../components/ui/index.js';
+import { Button, Card, ConfirmDialog, Input, Select, Skeleton, Switch, Textarea, toast } from '../../components/ui/index.js';
 import { coachingApi } from '../../services/api/coaching.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { cn } from '../../utils/cn.js';
@@ -27,7 +27,7 @@ export function CoachingCreatePage() {
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState({});
   const [leave, setLeave] = useState(false);
-  const [f, setF] = useState({ title: '', description: null, cover: null, faqs: [], coaches: [], sessions: [newSession(1)], planName: '', price: '', sale: '' });
+  const [f, setF] = useState({ title: '', description: null, cover: null, faqs: [], coaches: [], sessions: [newSession(1)], planName: '', price: '', sale: '', passFee: false });
 
   useEffect(() => {
     const p = existing.data;
@@ -36,7 +36,7 @@ export function CoachingCreatePage() {
       title: p.title, description: p.description, cover: p.coverFileId ? { id: p.coverFileId, url: p.coverUrl } : null, faqs: p.faqs ?? [],
       coaches: p.coaches.map((c) => ({ userId: c.userId, weight: c.weight })),
       sessions: p.sessions.length ? p.sessions.map((s) => ({ key: s.id, id: s.id, title: s.title, durationMin: s.durationMin % 60 === 0 && s.durationMin >= 60 ? s.durationMin / 60 : s.durationMin, unit: s.durationMin % 60 === 0 && s.durationMin >= 60 ? 'hr' : 'min', agenda: s.agenda, notes: s.notes ?? '', attachments: s.attachments, open: false })) : [newSession(1)],
-      planName: p.planName ?? '', price: p.compareAtAmount ? Number(p.compareAtAmount) : Number(p.priceAmount) || '', sale: p.compareAtAmount ? Number(p.priceAmount) : '',
+      passFee: Boolean(p.passTransactionFee), planName: p.planName ?? '', price: p.compareAtAmount ? Number(p.compareAtAmount) : Number(p.priceAmount) || '', sale: p.compareAtAmount ? Number(p.priceAmount) : '',
     });
   }, [existing.data]);
   useEffect(() => {
@@ -73,7 +73,7 @@ export function CoachingCreatePage() {
       coaches: f.coaches,
       sessions: f.sessions.map((s) => ({ ...(s.id ? { id: s.id } : {}), title: s.title.trim(), durationMin: s.unit === 'hr' ? s.durationMin * 60 : Number(s.durationMin), agenda: s.agenda ?? emptyDoc, notes: s.notes.trim() || null, attachmentIds: s.attachments.map((a) => a.id) })),
     };
-    return { planName: f.planName.trim() || null, priceAmount: charge, compareAtAmount: sale !== null && sale < price ? price : null };
+    return { planName: f.planName.trim() || null, priceAmount: charge, compareAtAmount: sale !== null && sale < price ? price : null, passTransactionFee: f.passFee };
   };
 
   const save = async (publish = false) => {
@@ -259,6 +259,10 @@ export function CoachingCreatePage() {
                 <div className="grid gap-4 rounded-lg bg-surface-2/60 p-4 sm:grid-cols-2">
                   <div><p className="text-sm font-medium">Learners pay</p><p className="text-xl font-semibold">{charge ? formatMoney(charge, 'INR') : 'Free'}</p></div>
                   <div><p className="text-sm font-medium">Discount</p><p className="text-xl font-semibold">{sale !== null && sale < price ? `${Math.round(((price - sale) / price) * 100)}% off` : '—'}</p></div>
+                </div>
+                <div className="flex items-center gap-3 rounded-lg border border-line p-3">
+                  <div className="flex-1"><label htmlFor="coach-fee" className="font-medium">Charge transaction fee</label><p className="text-sm text-muted">When on, learners pay Razorpay’s 2.36% charge{charge ? ` (${formatMoney(Math.round(charge * 2.36) / 100, 'INR')})` : ''}. When off, you cover it.</p></div>
+                  <Switch id="coach-fee" checked={f.passFee} onChange={(v) => set({ passFee: v })} />
                 </div>
                 <p className="text-xs text-muted">Payments go to your own Razorpay account. GST and your plan’s commission are applied at checkout as for your other products.</p>
               </Card>

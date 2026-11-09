@@ -97,3 +97,16 @@ export function computeLinesQuote(units: number[], eligible: boolean[], coupon: 
   const extra = tax && !tax.inclusive ? allocate(q.tax, after) : after.map(() => 0);
   return { ...order, lines: units.map((u, i) => ({ unit: u, discount: discounts[i], total: after[i] + extra[i] })) };
 }
+
+/** Razorpay's standard domestic charge passed to buyers when an item turns on "Charge transaction fee": 2% + 18% GST. */
+export const PASS_THROUGH_FEE_PERCENT = 2.36;
+
+/**
+ * The transaction fee the buyer pays for the items that pass it on: the gateway charge on their
+ * share of the amount charged. `lineTotals` are what each line costs after discount (and any
+ * GST added on top); `passes` marks the lines whose seller turned the fee on.
+ */
+export function transactionFeeMinor(lineTotals: number[], passes: boolean[]) {
+  const share = lineTotals.reduce((n, t, i) => n + (passes[i] ? t : 0), 0);
+  return share > 0 ? Math.round((share * PASS_THROUGH_FEE_PERCENT) / 100) : 0;
+}

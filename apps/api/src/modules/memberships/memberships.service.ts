@@ -34,6 +34,7 @@ export interface PlanInput {
   buttonText?: string | null;
   lifetime?: boolean;
   taxExclusive?: boolean | null;
+  passTransactionFee?: boolean;
 }
 
 /**
@@ -58,7 +59,7 @@ export class MembershipsService {
   private view(p: any, extra: Record<string, unknown> = {}) {
     return {
       id: p.id, name: p.name, description: p.description, priceAmount: p.priceAmount.toString(), compareAtAmount: p.compareAtAmount?.toString() ?? null, currency: p.currency, interval: p.interval,
-      courseIds: p.courseIds as string[], status: p.status, planName: p.planName ?? null, buttonText: p.buttonText ?? null, lifetime: Boolean(p.lifetime), taxExclusive: p.taxExclusive ?? null, coverFileId: p.coverFileId ?? null, faqs: (p.faqs as unknown[] | null) ?? [], createdAt: p.createdAt, ...extra,
+      courseIds: p.courseIds as string[], status: p.status, planName: p.planName ?? null, buttonText: p.buttonText ?? null, lifetime: Boolean(p.lifetime), taxExclusive: p.taxExclusive ?? null, passTransactionFee: Boolean(p.passTransactionFee), coverFileId: p.coverFileId ?? null, faqs: (p.faqs as unknown[] | null) ?? [], createdAt: p.createdAt, ...extra,
     };
   }
 
@@ -145,7 +146,7 @@ export class MembershipsService {
         name: input.name.trim(), description: input.description?.trim() || null, priceAmount: input.priceAmount ?? 0, compareAtAmount: input.compareAtAmount ?? null, currency: input.currency ?? t.defaultCurrency,
         interval: input.interval ?? 'MONTH', courseIds: [...new Set(input.courseIds ?? [])], planName: input.planName?.trim() || null, coverFileId: input.coverFileId ?? null,
         faqs: (input.faqs ?? []).map((f) => ({ question: f.question.trim(), answer: f.answer.trim() })), status: draft ? 'DRAFT' : 'ACTIVE', createdById: actorUserId,
-        buttonText: input.buttonText?.trim() || null, lifetime: input.lifetime ?? false, taxExclusive: input.taxExclusive ?? null,
+        buttonText: input.buttonText?.trim() || null, lifetime: input.lifetime ?? false, taxExclusive: input.taxExclusive ?? null, passTransactionFee: input.passTransactionFee ?? false,
       } as never,
     });
     await this.audit.record({ action: 'membership.plan_create', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'MembershipPlan', targetId: p.id });
@@ -175,6 +176,7 @@ export class MembershipsService {
         ...(input.buttonText !== undefined ? { buttonText: input.buttonText?.trim() || null } : {}),
         ...(input.lifetime !== undefined ? { lifetime: input.lifetime } : {}),
         ...(input.taxExclusive !== undefined ? { taxExclusive: input.taxExclusive } : {}),
+        ...(input.passTransactionFee !== undefined ? { passTransactionFee: input.passTransactionFee } : {}),
       },
     });
     await this.audit.record({ action: 'membership.plan_update', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'MembershipPlan', targetId: id, after: input as never });
