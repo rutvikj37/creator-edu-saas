@@ -1655,6 +1655,12 @@ model Order {
   couponId           String?             @db.Char(25)
   couponCode         String?             @db.VarChar(40)
   provider           PaymentProviderKey?
+  /// How it was paid: RAZORPAY, or an offline mode recorded by the academy (CASH, BANK_TRANSFER, UPI, CHEQUE, OTHER).
+  paymentMode        String?             @db.VarChar(20)
+  /// Transaction ID / reference for an offline payment.
+  externalReference  String?             @db.VarChar(191)
+  /// Staff member who recorded an offline payment.
+  recordedById       String?             @db.Char(25)
   gatewayAccountId   String?             @db.Char(25)
   billing            Json
   idempotencyKey     String?             @db.VarChar(64)

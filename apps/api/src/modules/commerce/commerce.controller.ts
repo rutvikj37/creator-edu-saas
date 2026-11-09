@@ -93,10 +93,21 @@ class ListQuery {
   @IsOptional() @IsIn(ORDER_STATUSES) status?: string;
   @IsOptional() @IsString() @MaxLength(100) q?: string;
   @IsOptional() @IsString() @Length(25, 25) courseId?: string;
+  @IsOptional() @IsIn(['razorpay', 'offline', 'free']) channel?: string;
+  @IsOptional() @IsIn(['course', 'bundle', 'membership', 'webinar', 'product', 'coaching']) type?: string;
   @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Use YYYY-MM-DD' }) from?: string;
   @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Use YYYY-MM-DD' }) to?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize?: number;
+}
+class OfflineOrderDto {
+  @ApiProperty({ enum: ['course', 'bundle', 'membership', 'webinar', 'product', 'coaching'] }) @IsIn(['course', 'bundle', 'membership', 'webinar', 'product', 'coaching']) itemKind: string;
+  @ApiProperty() @IsString() @Length(25, 25) itemId: string;
+  @ApiProperty({ description: 'The learner (a student of this academy)' }) @IsString() @Length(25, 25) userId: string;
+  @ApiProperty({ enum: ['CASH', 'BANK_TRANSFER', 'UPI', 'CHEQUE', 'OTHER'] }) @IsIn(['CASH', 'BANK_TRANSFER', 'UPI', 'CHEQUE', 'OTHER']) mode: string;
+  @ApiPropertyOptional({ description: 'Transaction ID / reference' }) @IsOptional() @Transform(trim) @IsString() @MaxLength(191) reference?: string | null;
+  @ApiProperty({ description: 'Amount received' }) @IsNumber({ maxDecimalPlaces: 2 }) @Min(1) @Max(10_000_000) amount: number;
+  @ApiPropertyOptional({ description: 'Email the learner a receipt' }) @IsOptional() @IsBoolean() sendEmail?: boolean;
 }
 class PaymentsQuery {
   @IsOptional() @IsIn(['CREATED', 'CAPTURED', 'FAILED', 'REFUNDED', 'PARTIALLY_REFUNDED']) status?: string;
@@ -178,6 +189,10 @@ export class CreatorOrdersController {
   @Get('orders/summary') @RequirePermissions(PERMISSIONS.ORDERS_READ)
   @ApiOperation({ summary: 'Revenue from the ledger: gross, refunds, GST, Razorpay fees, platform commission, net' })
   summary(@Query() q: RangeQuery) { return this.orders.summary(q.from ? new Date(q.from) : undefined, q.to ? new Date(q.to) : undefined); }
+
+  @Post('orders/offline') @RequirePermissions(PERMISSIONS.REFUNDS_MANAGE)
+  @ApiOperation({ summary: 'Record a payment received outside checkout (cash, bank transfer, UPI…) and give access' })
+  offline(@Body() dto: OfflineOrderDto, @CurrentAuth() auth: AuthContext) { return this.orders.recordOffline({ ...dto, sendEmail: dto.sendEmail ?? true }, auth.userId); }
 
   @Get('orders/:id') @RequirePermissions(PERMISSIONS.ORDERS_READ)
   get(@Param('id') id: string) { return this.orders.get(id); }

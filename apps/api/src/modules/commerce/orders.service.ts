@@ -33,6 +33,8 @@ import { type NormalizedPayment, ProviderError } from './providers/types.js';
 const ORDER_TTL_MS = 2 * 3600_000;
 /** Orders in these states become PAID when a matching capture is confirmed (money was taken). */
 const PAYABLE = ['PENDING', 'PAYMENT_INITIATED', 'FAILED', 'EXPIRED', 'CANCELLED'] as const;
+export const OFFLINE_MODES = ['CASH', 'BANK_TRANSFER', 'UPI', 'CHEQUE', 'OTHER'] as const;
+const OFFLINE_LABEL: Record<string, string> = { CASH: 'Cash', BANK_TRANSFER: 'Bank transfer', UPI: 'UPI (direct)', CHEQUE: 'Cheque', OTHER: 'Offline payment' };
 
 export interface BillingInput {
   name: string;
@@ -171,7 +173,7 @@ export class OrdersService {
     return {
       id: o.id, number: o.number, status: o.status, currency: o.currency,
       subtotalAmount: m(o.subtotalAmount), discountAmount: m(o.discountAmount), taxAmount: m(o.taxAmount), totalAmount: m(o.totalAmount), refundedAmount: m(o.refundedAmount),
-      taxRate: m(o.taxRate), taxInclusive: o.taxInclusive, couponCode: o.couponCode, provider: o.provider, billing: o.billing,
+      taxRate: m(o.taxRate), taxInclusive: o.taxInclusive, couponCode: o.couponCode, provider: o.provider, billing: o.billing, paymentMode: o.paymentMode ?? (o.provider ?? null), externalReference: o.externalReference ?? null,
       paidAt: o.paidAt, failureReason: o.failureReason, expiresAt: o.expiresAt, createdAt: o.createdAt, userId: o.userId,
       items: o.items?.map((i: any) => ({ id: i.id, courseId: i.courseId, bundleId: i.bundleId ?? null, membershipPlanId: i.membershipPlanId ?? null, liveClassId: i.liveClassId ?? null, digitalProductId: i.digitalProductId ?? null, coachingProgramId: i.coachingProgramId ?? null, title: i.title, unitAmount: m(i.unitAmount), discountAmount: m(i.discountAmount), totalAmount: m(i.totalAmount), source: i.source ?? null, offerId: i.offerId ?? null })),
       paymentLinkId: o.paymentLinkId ?? null,
@@ -633,7 +635,7 @@ export class OrdersService {
   }
 
   /** Returns false when another path already fulfilled the order. */
-  private async fulfil(orderId: string, paid: { paymentId: string; result: NormalizedPayment } | null, q: Quote): Promise<boolean> {
+  private async fulfil(orderId: string, paid: { paymentId: string; result: NormalizedPayment } | null, q: Quote, opts: { offline?: { mode: string; reference: string | null }; notify?: boolean } = {}): Promise<boolean> {
     const tenantId = this.ctx.requireTenantId();
     const ent = await this.entitlements.get(tenantId);
     const commissionPct = ent.features[FEATURES.COMMISSION_PERCENT.key]?.limit ?? 0;
@@ -704,7 +706,7 @@ export class OrdersService {
           },
           buyer: billing,
           lines: order.items.map((i) => ({ description: i.title, quantity: 1, unitAmount: i.unitAmount.toString(), discountAmount: i.discountAmount.toString(), totalAmount: i.totalAmount.toString() })),
-          totals: { currency: cur, subtotal: order.subtotalAmount.toString(), discount: order.discountAmount.toString(), tax: order.taxAmount.toString(), taxRate: order.taxRate?.toString() ?? null, taxInclusive: order.taxInclusive, total: order.totalAmount.toString(), zeroRated, paidVia: paid ? `Razorpay ${paid.result.method ?? ''}`.trim() : 'Free (100% discount)', paymentId: paid?.result.providerPaymentId ?? null },
+          totals: { currency: cur, subtotal: order.subtotalAmount.toString(), discount: order.discountAmount.toString(), tax: order.taxAmount.toString(), taxRate: order.taxRate?.toString() ?? null, taxInclusive: order.taxInclusive, total: order.totalAmount.toString(), zeroRated, paidVia: paid ? `Razorpay ${paid.result.method ?? ''}`.trim() : opts.offline ? OFFLINE_LABEL[opts.offline.mode] ?? 'Offline payment' : 'Free (100% discount)', paymentId: paid?.result.providerPaymentId ?? opts.offline?.reference ?? null },
         } as never,
       });
       return { order, invoice, tickets };
@@ -717,7 +719,7 @@ export class OrdersService {
     await this.audit.record({ action: 'order.paid', tenantId, actorRealm: 'SYSTEM', targetType: 'Order', targetId: order.id, after: { number: order.number, total: order.totalAmount.toString(), paymentId: paid?.result.providerPaymentId ?? null } });
     await this.events.emit('order.paid', { tenantId, userId: order.userId, orderId: order.id, courseIds: grantedCourses(order.items), total: order.totalAmount.toString(), currency: order.currency });
     await this.notifications.notify({ userId: order.userId, tenantId, category: 'orders', title: 'Purchase confirmed', body: `You now have access to ${order.items.map((i) => i.title).join(', ')}.`, link: '/learn', brand: tenant.name, skipEmail: true }).catch(() => undefined);
-    if (billing.email) {
+    if (billing.email && opts.notify !== false) {
       await this.mail.send({
         to: billing.email, tenantId, tag: 'purchase-receipt',
         ...emailTemplates.purchaseReceipt({ brand: tenant.name, name: billing.name ?? '', orderNumber: order.number, items: order.items.map((i) => i.title), total: fmtMoney(q.total, order.currency), url: `${origin}/learn` }),
@@ -772,16 +774,23 @@ export class OrdersService {
   }
 
   // ── creator views ─────────────────────────────────────────
-  async list(params: { status?: string; q?: string; courseId?: string; from?: string; to?: string; page?: number; pageSize?: number }) {
+  async list(params: { status?: string; q?: string; courseId?: string; channel?: string; type?: string; from?: string; to?: string; page?: number; pageSize?: number }) {
     const page = Math.max(1, params.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 20));
     const where: Record<string, unknown> = { status: params.status ? params.status : { notIn: ['CANCELLED'] } };
     if (params.q) {
       const q = params.q.trim();
       const users = await this.prisma.user.findMany({ where: { tenantId: this.ctx.requireTenantId(), OR: [{ email: { contains: q } }, { fullName: { contains: q } }] }, select: { id: true }, take: 200 });
-      where.OR = [{ number: { contains: q.toUpperCase() } }, { userId: { in: users.map((u) => u.id) } }];
+      where.OR = [{ number: { contains: q.toUpperCase() } }, { userId: { in: users.map((u) => u.id) } }, { couponCode: { contains: q.toUpperCase() } }, { externalReference: { contains: q } }, { payments: { some: { providerPaymentId: { contains: q } } } }];
     }
-    if (params.courseId) where.items = { some: { courseId: params.courseId } };
+    const items: Record<string, unknown>[] = [];
+    if (params.courseId) items.push({ courseId: params.courseId });
+    const TYPE: Record<string, Record<string, unknown>> = { course: { courseId: { not: null }, bundleId: null }, bundle: { bundleId: { not: null } }, membership: { membershipPlanId: { not: null } }, webinar: { liveClassId: { not: null } }, product: { digitalProductId: { not: null } }, coaching: { coachingProgramId: { not: null } } };
+    if (params.type && TYPE[params.type]) items.push(TYPE[params.type]);
+    if (items.length) where.items = { some: items.length === 1 ? items[0] : { AND: items } };
+    if (params.channel === 'razorpay') where.provider = 'RAZORPAY';
+    if (params.channel === 'offline') where.paymentMode = { in: [...OFFLINE_MODES] };
+    if (params.channel === 'free') where.totalAmount = 0;
     if (params.from || params.to) {
       // Whole days, inclusive of `to`
       where.createdAt = { ...(params.from ? { gte: new Date(`${params.from}T00:00:00.000Z`) } : {}), ...(params.to ? { lt: new Date(new Date(`${params.to}T00:00:00.000Z`).getTime() + 86_400_000) } : {}) };
@@ -793,6 +802,43 @@ export class OrdersService {
     const users = await this.prisma.user.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.userId))] } }, select: { id: true, fullName: true, email: true } });
     const byId = new Map(users.map((u) => [u.id, u]));
     return { items: rows.map((o) => ({ ...this.view(o), buyer: byId.get(o.userId) ?? null })), meta: { page, pageSize, total } };
+  }
+
+  /**
+   * Records a payment the academy received outside the checkout (cash, bank transfer, direct UPI…):
+   * a paid order for the learner at the amount received, fulfilled like any other (access, ledger,
+   * invoice), with the mode and reference kept on the order.
+   */
+  async recordOffline(input: { itemKind: string; itemId: string; userId: string; mode: string; reference?: string | null; amount: number; sendEmail: boolean }, actorUserId: string) {
+    const tenantId = this.ctx.requireTenantId();
+    if (!OFFLINE_MODES.includes(input.mode as never)) throw AppException.validation([{ field: 'mode', message: 'Choose a payment mode' }]);
+    const user = await this.prisma.user.findFirst({ where: { id: input.userId, tenantId, realm: 'TENANT', deletedAt: null } });
+    if (!user) throw AppException.validation([{ field: 'userId', message: 'Choose a learner of your academy' }]);
+    const base = await this.sellableItem(input.itemKind, input.itemId).catch((e) => {
+      if (e instanceof AppException && /free/i.test(e.message)) throw AppException.conflict('This item is free — enrol the learner instead of recording a payment.');
+      throw e;
+    });
+    const line: Line = { ...base, unitMinor: toMinor(input.amount, base.currency), couponable: false };
+    await this.assertBuyable(user.id, [line]);
+    const { tax, q, cur } = await this.price(user.id, [line], null, user.country);
+    const ref = input.reference?.trim() || null;
+    const order = await this.db.$transaction(async (tx) => {
+      const n = await nextSequence(tx, tenantId, 'order');
+      const o = await tx.order.create({
+        data: {
+          number: `ORD-${String(n).padStart(6, '0')}`, userId: user.id, currency: cur,
+          subtotalAmount: fromMinor(q.subtotal, cur), discountAmount: '0', taxAmount: fromMinor(q.tax, cur), totalAmount: fromMinor(q.total, cur), taxRate: tax?.rate ?? null, taxInclusive: tax?.inclusive ?? true,
+          billing: { name: user.fullName, email: user.email, phone: user.phone ?? null, country: user.country ?? null, state: null, gstin: null },
+          paymentMode: input.mode, externalReference: ref, recordedById: actorUserId, expiresAt: new Date(Date.now() + ORDER_TTL_MS),
+        } as never,
+      });
+      const kindRef = line.kind === 'course' ? { courseId: line.id } : line.kind === 'bundle' ? { bundleId: line.id } : line.kind === 'webinar' ? { liveClassId: line.id } : line.kind === 'product' ? { digitalProductId: line.id } : line.kind === 'coaching' ? { coachingProgramId: line.id } : { membershipPlanId: line.id };
+      await tx.orderItem.create({ data: { orderId: o.id, ...kindRef, grantCourseIds: line.grant.length ? line.grant : undefined, title: line.title.slice(0, 200), unitAmount: fromMinor(q.lines[0].unit, cur), discountAmount: '0', totalAmount: fromMinor(q.lines[0].total, cur) } as never });
+      return o;
+    });
+    await this.fulfil(order.id, null, q, { offline: { mode: input.mode, reference: ref }, notify: input.sendEmail });
+    await this.audit.record({ action: 'order.offline_recorded', tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'Order', targetId: order.id, after: { mode: input.mode, reference: ref, total: fromMinor(q.total, cur), item: `${line.kind}:${line.id}` } });
+    return this.get(order.id);
   }
 
   async get(id: string) {

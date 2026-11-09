@@ -1,14 +1,20 @@
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { Download, ReceiptText, ShoppingCart } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Download, Info, MoreHorizontal, Plus, ReceiptText, ShoppingCart } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
 import { SearchInput } from '../../components/common/SearchInput.jsx';
 import { FilterChip } from '../../components/common/FilterChip.jsx';
 import { ListToolbar, MetricCard } from '../../components/common/ListToolbar.jsx';
 import { presetRange } from '../../components/common/DateRangeFilter.jsx';
 import { Alert } from '../../components/auth/Alert.jsx';
-import { Avatar, Button, Card, DataTable, EmptyState, Select, Skeleton, StatusBadge, toast } from '../../components/ui/index.js';
-import { creatorCommerceApi } from '../../services/api/commerce.js';
+import { Avatar, Badge, Button, Card, DataTable, Dropdown, DropdownItem, EmptyState, Input, Modal, Select, Skeleton, StatusBadge, toast } from '../../components/ui/index.js';
+import { bundlesApi, creatorCommerceApi, productsApi } from '../../services/api/commerce.js';
+import { membershipsApi } from '../../services/api/community.js';
+import { coachingApi } from '../../services/api/coaching.js';
+import { creatorLearnApi } from '../../services/api/learn.js';
+import { useDebouncedValue } from '../../hooks/useDebouncedValue.js';
+import { cn } from '../../utils/cn.js';
 import { analyticsApi } from '../../services/api/analytics.js';
 import { coursesApi } from '../../services/api/creator.js';
 import { useListParams } from '../../hooks/useListParams.js';
@@ -105,28 +111,146 @@ export function OrdersPage() {
   );
 }
 
+const CHANNEL = { RAZORPAY: 'Razorpay', CASH: 'Cash', BANK_TRANSFER: 'Bank transfer', UPI: 'UPI (direct)', CHEQUE: 'Cheque', OTHER: 'Offline' };
+const TYPES = [{ value: 'course', label: 'Course' }, { value: 'bundle', label: 'Bundle' }, { value: 'membership', label: 'Membership' }, { value: 'webinar', label: 'Webinar ticket' }, { value: 'product', label: 'Digital product' }, { value: 'coaching', label: 'Coaching' }];
+const STATUS_LABEL = { PAID: 'Success', PAYMENT_INITIATED: 'Initiated payment', PENDING: 'Initiated payment', FAILED: 'Failed', REFUNDED: 'Refunded', PARTIALLY_REFUNDED: 'Partially refunded', EXPIRED: 'Expired' };
+
+/** Transactions (Graphy style): every order with channel, type and period filters, plus offline payments. */
 export function TransactionsPage() {
   const [params, update] = useListParams();
-  const q = useQuery({ queryKey: ['creator', 'transactions', params], queryFn: () => creatorCommerceApi.transactions(params), placeholderData: (p) => p });
+  const navigate = useNavigate();
+  const [adding, setAdding] = useState(false);
+  const range = params.period ? presetRange(params.period) : {};
+  const query = { q: params.q, status: params.status, courseId: params.courseId, channel: params.channel, type: params.type, ...range, page: params.page, pageSize: params.pageSize };
+  const q = useQuery({ queryKey: ['creator', 'orders', query], queryFn: () => creatorCommerceApi.orders(query), placeholderData: (p) => p });
+  const s = useQuery({ queryKey: ['creator', 'orders', 'summary', range], queryFn: () => creatorCommerceApi.summary(range) });
+  const courses = useQuery({ queryKey: ['creator', 'courses', 'picker'], queryFn: () => coursesApi.list({ pageSize: 100, sort: 'title' }) });
+  const csv = useMutation({
+    mutationFn: () => analyticsApi.exportCsv('orders', range.from ? range : presetRange('90d')),
+    onSuccess: (b) => saveBlob(b, `orders-${range.from ?? 'last-90-days'}.csv`),
+    onError: (e) => toast.error(e.status === 422 ? 'Too much data for one file — choose a shorter period.' : e.message),
+  });
+  const invoice = useMutation({ mutationFn: (o) => creatorCommerceApi.invoice(o.id).then((b) => saveBlob(b, `${o.number}.pdf`)), onError: (e) => toast.error(e.message) });
+  const t = s.data?.totals?.[0];
+  const filtered = Boolean(params.q || params.status || params.courseId || params.channel || params.type || params.period);
   return (
     <>
-      <PageHeader title="Transactions" count={q.data?.meta?.total} description="Every payment attempt recorded with Razorpay, including failed ones." breadcrumbs={[{ label: 'Transactions' }]} />
+      <PageHeader title="Transactions" count={q.data?.meta?.total} description="Get an in-depth breakdown of each sale." />
+      <div className="mb-6 grid gap-4 sm:grid-cols-2">
+        <MetricCard label="Total revenue" value={formatMoney(t?.gross ?? 0, t?.currency ?? 'INR')} hint={`${formatNumber(s.data?.paidOrders ?? 0)} paid orders${params.period ? ' in this period' : ''}`} loading={s.isLoading} />
+        <MetricCard label="Total refunds" value={formatMoney(t?.refunds ?? 0, t?.currency ?? 'INR')} hint={s.data?.refundsPending ? `${s.data.refundsPending} pending` : 'No refunds pending'} loading={s.isLoading} />
+      </div>
       <Card>
-        <ListToolbar count={q.data?.meta?.total} noun="transaction" filtered={Boolean(params.status)} onReset={() => update({ status: undefined })}
-          filters={<FilterChip label="Payment status" value={params.status} onChange={(v) => update({ status: v })}
-            options={[{ value: 'CAPTURED', label: 'Success' }, { value: 'CREATED', label: 'Initiated payment' }, { value: 'FAILED', label: 'Failed' }, { value: 'PARTIALLY_REFUNDED', label: 'Partially refunded' }, { value: 'REFUNDED', label: 'Refunded' }]} />} />
+        <div className="space-y-3 border-b border-line p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <SearchInput className="sm:flex-1" value={params.q ?? ''} onChange={(v) => update({ q: v })} placeholder="Search by email, name, order number, transaction ID or promo code" />
+            <Button variant="ghost" leftIcon={Download} loading={csv.isPending} onClick={() => csv.mutate()}>CSV</Button>
+            <Button variant="secondary" leftIcon={Plus} onClick={() => setAdding(true)}>Add a transaction</Button>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted">Filter by:</span>
+            <FilterChip label="Products" value={params.courseId} onChange={(v) => update({ courseId: v })} options={(courses.data?.items ?? []).map((c) => ({ value: c.id, label: c.title }))} panelClassName="w-72" />
+            <FilterChip label="Channel" value={params.channel} onChange={(v) => update({ channel: v })} options={[{ value: 'razorpay', label: 'Razorpay' }, { value: 'offline', label: 'Offline' }, { value: 'free', label: 'Free' }]} />
+            <FilterChip label="Status" value={params.status} onChange={(v) => update({ status: v })} options={STATUS_FILTERS} />
+            <FilterChip label="Type" value={params.type} onChange={(v) => update({ type: v })} options={TYPES} />
+            <FilterChip label="Time period" value={params.period} onChange={(v) => update({ period: v })} options={PERIODS} />
+            {filtered && <button type="button" className="ml-1 text-sm font-medium text-primary-700 hover:underline dark:text-primary-300" onClick={() => update({ q: undefined, status: undefined, courseId: undefined, channel: undefined, type: undefined, period: undefined })}>Reset</button>}
+          </div>
+        </div>
+        {q.data && <p className="px-4 pt-3 text-sm text-muted">{formatNumber(q.data.meta.total)} transaction{q.data.meta.total === 1 ? '' : 's'}</p>}
         <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data?.items ?? []} meta={q.data?.meta} onPageChange={(page) => update({ page }, { resetPage: false })} onPageSizeChange={(pageSize) => update({ pageSize })}
-          empty={params.status ? <EmptyState icon={ReceiptText} title="No transactions match" description="Try another status." /> : <EmptyState icon={ReceiptText} title="No transactions yet" description="Payment attempts show here as soon as students start checking out." />}
+          empty={filtered ? <EmptyState icon={ReceiptText} title="No transactions match" description="Try a different search or clear the filters." /> : <EmptyState icon={ReceiptText} title="No transactions yet" description="Sales and free enrolments through checkout appear here. Record offline payments with Add a transaction." />}
           columns={[
-            { key: 'createdAt', header: 'Payment date', cell: (r) => <TwoLineDate value={r.createdAt} /> },
-            { key: 'amount', header: 'Amount', cell: (r) => <span className="font-medium text-fg tabular-nums">{formatMoney(r.amount, r.currency)}</span> },
-            { key: 'orderNumber', header: 'Order', cell: (r) => <Link className="font-mono text-xs text-primary-600 hover:underline" to={`/creator/orders/${r.orderId}`}>{r.orderNumber}</Link> },
-            { key: 'method', header: 'Method', cell: (r) => (r.method ? r.method.toUpperCase() : '—') },
-            { key: 'feeAmount', header: 'Gateway fee', align: 'right', cell: (r) => (r.feeAmount ? formatMoney(r.feeAmount, r.currency) : '—') },
-            { key: 'status', header: 'Payment status', cell: (r) => <div><StatusBadge status={r.status} />{r.failureReason && <p className="mt-1 max-w-56 text-xs text-muted">{r.failureReason}</p>}</div> },
-            { key: 'providerPaymentId', header: 'Razorpay ID', cell: (r) => <span className="font-mono text-xs text-muted">{r.providerPaymentId ?? r.providerOrderId}</span> },
+            { key: 'createdAt', header: 'Payment date', cell: (r) => <TwoLineDate value={r.paidAt ?? r.createdAt} /> },
+            { key: 'totalAmount', header: 'Amount', cell: (r) => <span className="font-medium text-fg tabular-nums">{formatMoney(r.totalAmount, r.currency)}</span> },
+            { key: 'buyer', header: 'User', cell: (r) => { const name = r.buyer?.fullName || r.billing?.name || r.buyer?.email || 'Unknown'; return <div className="flex items-center gap-2"><Avatar name={name} size="sm" /><div className="min-w-0"><p className="truncate text-fg">{name}</p><p className="truncate text-xs text-muted">{r.buyer?.email ?? r.billing?.email}</p></div></div>; } },
+            { key: 'items', header: 'Item', cell: (r) => <div className="max-w-64"><p className="line-clamp-1 text-fg-2">{r.items?.map((i) => i.title).join(', ')}</p><p className="text-xs text-muted">{Number(r.totalAmount) === 0 ? 'FREE' : CHANNEL[r.paymentMode] ?? 'Online'} | {r.items?.[0] ? itemKind(r.items[0]) : ''}</p></div> },
+            { key: 'status', header: 'Payment status', cell: (r) => r.status === 'PAID' ? <Badge tone="success">Success</Badge> : <StatusBadge status={r.status} label={STATUS_LABEL[r.status]} /> },
+            { key: 'ref', header: 'Reference', cell: (r) => <span className="font-mono text-xs text-muted">{r.externalReference ?? r.number}</span> },
+            {
+              key: 'actions', header: '', align: 'right', cell: (r) => (
+                <Dropdown trigger={(p) => <button type="button" {...p} aria-label={`Actions for ${r.number}`} className="grid size-8 place-items-center rounded-md text-fg-2 hover:bg-surface-2"><MoreHorizontal className="size-4" aria-hidden /></button>}>
+                  <DropdownItem icon={Info} onClick={() => navigate(`/creator/orders/${r.id}`)}>More information</DropdownItem>
+                  {['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(r.status) && <DropdownItem icon={Download} onClick={() => invoice.mutate(r)}>Download invoice</DropdownItem>}
+                </Dropdown>
+              ),
+            },
           ]} />
       </Card>
+      <AddTransactionModal open={adding} onClose={() => setAdding(false)} />
     </>
+  );
+}
+
+const PICKERS = {
+  course: { label: 'Course', load: () => coursesApi.list({ pageSize: 100, sort: 'title' }).then((r) => r.items.filter((c) => c.status === 'PUBLISHED' && !c.isFree)) },
+  bundle: { label: 'Bundle', load: () => bundlesApi.list().then((r) => r.filter((b) => b.status === 'PUBLISHED')) },
+  membership: { label: 'Membership', load: () => membershipsApi.plans().then((r) => r.filter((p) => p.status === 'ACTIVE').map((p) => ({ ...p, title: p.name }))) },
+  product: { label: 'Digital product', load: () => productsApi.list().then((r) => r.filter((p) => p.status === 'PUBLISHED' && !p.isFree && Number(p.priceAmount) > 0)) },
+  coaching: { label: 'Coaching program', load: () => coachingApi.programs().then((r) => r.filter((p) => p.status === 'PUBLISHED' && !p.isFree)) },
+};
+
+/** Record a payment received outside checkout and give the learner access. */
+export function AddTransactionModal({ open, onClose }) {
+  const qc = useQueryClient();
+  const [f, setF] = useState({ kind: 'course', itemId: '', itemTerm: '', learner: null, learnerTerm: '', mode: 'CASH', reference: '', amount: '', sendEmail: true });
+  const [errors, setErrors] = useState({});
+  useEffect(() => { if (open) { setF({ kind: 'course', itemId: '', itemTerm: '', learner: null, learnerTerm: '', mode: 'CASH', reference: '', amount: '', sendEmail: true }); setErrors({}); } }, [open]);
+  const items = useQuery({ queryKey: ['offline', 'items', f.kind], queryFn: PICKERS[f.kind].load, enabled: open });
+  const debounced = useDebouncedValue(f.learnerTerm.trim(), 300);
+  const learners = useQuery({ queryKey: ['offline', 'learners', debounced], queryFn: () => creatorLearnApi.students({ q: debounced, pageSize: 8 }), enabled: open && debounced.length >= 2 && !f.learner });
+  const shownItems = (items.data ?? []).filter((i) => i.title.toLowerCase().includes(f.itemTerm.trim().toLowerCase())).slice(0, 50);
+  const save = useMutation({
+    mutationFn: () => creatorCommerceApi.recordOffline({ itemKind: f.kind, itemId: f.itemId, userId: f.learner.id, mode: f.mode, reference: f.reference.trim() || null, amount: Number(f.amount), sendEmail: f.sendEmail }),
+    onSuccess: (o) => { toast.success(`Recorded ${o.number}`, { description: 'The learner now has access.' }); qc.invalidateQueries({ queryKey: ['creator', 'orders'] }); onClose(); },
+    onError: (e) => { setErrors(Object.fromEntries((e.details ?? []).map((x) => [x.field, x.message]))); toast.error(e.details?.[0]?.message ?? e.message); },
+  });
+  const ready = f.itemId && f.learner && f.reference.trim() && Number(f.amount) >= 1;
+  return (
+    <Modal open={open} onClose={onClose} title="Add a transaction" size="lg" description="Record a payment you received outside checkout. The learner gets access right away."
+      footer={<Button disabled={!ready} loading={save.isPending} onClick={() => save.mutate()}>Add a transaction</Button>}>
+      <div className="space-y-4">
+        <div>
+          <p className="mb-1.5 text-sm font-medium text-fg">Products *</p>
+          <div className="grid gap-2 sm:grid-cols-[12rem_1fr]">
+            <Select aria-label="Product type" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value, itemId: '', itemTerm: '' })} options={Object.entries(PICKERS).map(([v, p]) => ({ value: v, label: p.label }))} />
+            <Input aria-label="Search products" placeholder="Search by title" value={f.itemTerm} onChange={(e) => setF({ ...f, itemTerm: e.target.value })} />
+          </div>
+          <div className="mt-2 max-h-40 overflow-y-auto rounded-md border border-line" role="listbox" aria-label="Products">
+            {items.isLoading ? <Skeleton className="m-2 h-16" /> : !shownItems.length ? <p className="p-3 text-sm text-muted">No paid, published {PICKERS[f.kind].label.toLowerCase()}s found.</p> : shownItems.map((i) => (
+              <button key={i.id} type="button" role="option" aria-selected={f.itemId === i.id} onClick={() => setF({ ...f, itemId: i.id, amount: f.amount || String(Number(i.priceAmount) || '') })}
+                className={cn('flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-surface-2', f.itemId === i.id && 'bg-primary-50 font-medium dark:bg-primary-500/10')}>
+                <span className="truncate">{i.title}</span>{i.priceAmount && <span className="shrink-0 text-xs text-muted">{formatMoney(i.priceAmount, i.currency ?? 'INR')}</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="mb-1.5 text-sm font-medium text-fg">Learner *</p>
+          {f.learner ? (
+            <div className="flex items-center gap-2 rounded-md border border-line p-2"><Avatar name={f.learner.fullName} size="sm" /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{f.learner.fullName}</p><p className="truncate text-xs text-muted">{f.learner.email}</p></div><Button size="sm" variant="ghost" onClick={() => setF({ ...f, learner: null })}>Change</Button></div>
+          ) : <>
+            <Input aria-label="Search learners" placeholder="Search by name, email or mobile number" value={f.learnerTerm} error={errors.userId} onChange={(e) => setF({ ...f, learnerTerm: e.target.value })} />
+            {(learners.data?.items ?? []).length > 0 && <ul className="mt-1 max-h-40 overflow-y-auto rounded-md border border-line" role="listbox" aria-label="Learners">{learners.data.items.map((u) => (
+              <li key={u.id}><button type="button" role="option" aria-selected={false} onClick={() => setF({ ...f, learner: u })} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-2"><Avatar name={u.fullName} size="sm" /><span className="truncate">{u.fullName} · <span className="text-muted">{u.email}</span></span></button></li>
+            ))}</ul>}
+            <p className="mt-1 text-xs text-muted">Not signed up yet? Add them first under Students.</p>
+          </>}
+        </div>
+        <Input label="Transaction ID *" placeholder="UTR, cheque number or receipt number" maxLength={191} value={f.reference} onChange={(e) => setF({ ...f, reference: e.target.value })} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Select label="Payment mode *" value={f.mode} onChange={(e) => setF({ ...f, mode: e.target.value })} options={[{ value: 'CASH', label: 'Cash' }, { value: 'BANK_TRANSFER', label: 'Bank transfer' }, { value: 'UPI', label: 'UPI (direct)' }, { value: 'CHEQUE', label: 'Cheque' }, { value: 'OTHER', label: 'Other' }]} />
+          <Input label="Amount *" type="number" min={1} step="0.01" placeholder="Amount received" value={f.amount} error={errors.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
+        </div>
+        <fieldset>
+          <legend className="mb-1.5 text-sm font-medium text-fg">Send the learner a receipt email</legend>
+          <div className="flex gap-6 text-sm">
+            <label className="flex items-center gap-2"><input type="radio" name="send-email" checked={f.sendEmail} onChange={() => setF({ ...f, sendEmail: true })} />Yes</label>
+            <label className="flex items-center gap-2"><input type="radio" name="send-email" checked={!f.sendEmail} onChange={() => setF({ ...f, sendEmail: false })} />No</label>
+          </div>
+        </fieldset>
+        <p className="text-xs text-muted">GST and your plan’s commission apply as for online sales. Offline payments can’t be refunded through Razorpay.</p>
+      </div>
+    </Modal>
   );
 }

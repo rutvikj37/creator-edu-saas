@@ -15,6 +15,7 @@ export const creatorCommerceApi = {
   updateCoupon: (id, body) => http.patch(`/creator/coupons/${id}`, body).then(d),
   deleteCoupon: (id) => http.delete(`/creator/coupons/${id}`).then(d),
   orders: (params) => http.get('/creator/orders', { params }).then(page),
+  recordOffline: (body) => http.post('/creator/orders/offline', body).then(d),
   order: (id) => http.get(`/creator/orders/${id}`).then(d),
   summary: (params) => http.get('/creator/orders/summary', { params }).then(d),
   refund: (id, body) => http.post(`/creator/orders/${id}/refunds`, body).then(d),
