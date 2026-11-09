@@ -90,7 +90,7 @@ const WORKSPACE_ROUTES_COVERED = [
   // Phase 7 — commerce (cross-tenant behaviour is also exercised in commerce.e2e-spec.ts)
   'GET /api/v1/creator/payments/razorpay', 'PUT /api/v1/creator/payments/razorpay', 'POST /api/v1/creator/payments/razorpay/verify', 'PATCH /api/v1/creator/payments/razorpay', 'DELETE /api/v1/creator/payments/razorpay',
   'GET /api/v1/creator/coupons', 'POST /api/v1/creator/coupons', 'PATCH /api/v1/creator/coupons/:id', 'DELETE /api/v1/creator/coupons/:id',
-  'GET /api/v1/creator/analytics/conversions', // isolation asserted in conversion.e2e-spec.ts
+  'GET /api/v1/creator/analytics/conversions', 'GET /api/v1/creator/analytics/reports', // isolation asserted in conversion.e2e-spec.ts
   'GET /api/v1/creator/roles', 'GET /api/v1/creator/roles/permissions', 'POST /api/v1/creator/roles', 'PATCH /api/v1/creator/roles/:id', 'DELETE /api/v1/creator/roles/:id', // isolation asserted in custom-roles.e2e-spec.ts
   'GET /api/v1/creator/products', 'GET /api/v1/creator/products/:id', 'GET /api/v1/creator/products/:id/buyers', 'POST /api/v1/creator/products', 'PATCH /api/v1/creator/products/:id', 'POST /api/v1/creator/products/:id/status', // isolation asserted in digital-products.e2e-spec.ts
   'GET /api/v1/creator/settings/security', 'PUT /api/v1/creator/settings/security', // isolation asserted in academy-security.e2e-spec.ts

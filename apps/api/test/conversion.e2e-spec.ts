@@ -77,6 +77,15 @@ describe('Conversion tracking (e2e)', () => {
     expect(ins.daily.reduce((a: number, d: any) => a + d.sales, 0)).toBe(1);
     expect(ins.daily.at(-1)).toMatchObject({ visitors: 3, checkouts: 2 });
 
+    // Reports page: the last 7 days against the 7 before.
+    const rep = (await authed(app, cs).get('/api/v1/creator/analytics/reports?days=7').expect(200)).body.data;
+    expect(rep.range.days).toBe(7);
+    expect(rep.series).toHaveLength(7);
+    expect(rep.totals).toMatchObject({ revenue: '999.00', transactionAmount: '999.00', successfulTransactions: 1, signups: 1, enrollments: 1, paidUsers: 1 });
+    expect(rep.change).toMatchObject({ signups: 100, enrollments: 100 });
+    expect(rep.series.at(-1)).toMatchObject({ revenue: 999, paidUsers: 1 });
+    expect((await authed(app, cs).get('/api/v1/creator/analytics/reports?days=365').expect(200)).body.data.series.length).toBeGreaterThan(360);
+    expect((await authed(app, s).get('/api/v1/creator/analytics/reports')).status).not.toBe(200);
     // Permissions and isolation.
     const other = await registerCreator(app);
     expect((await authed(app, other.session).get('/api/v1/creator/analytics/conversions').expect(200)).body.data.funnel.visitors).toBe(0);

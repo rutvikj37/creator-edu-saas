@@ -1,3 +1,4 @@
+import { change, MOBILE_UA, sessionSeconds } from './reports.js';
 import { Inject, Injectable } from '@nestjs/common';
 import { AppException } from '../../common/errors/app-exception.js';
 import { toCsv } from '../../common/csv/csv.js';
@@ -93,6 +94,98 @@ export class AnalyticsService {
         .map((t) => ({ courseId: t.courseId, title: titles.find((c) => c.id === t.courseId)?.title ?? 'Deleted course', sales: t._count._all, revenue: t._sum.totalAmount?.toString() ?? '0' }))
         .sort((a, b) => Number(b.revenue) - Number(a.revenue))
         .slice(0, 10),
+    };
+  }
+
+  /**
+   * Reports page: the last `days` days (7/30/90/365) against the period before, for the Overview,
+   * Sales, Usage and Activity tabs. Learning time comes from video playback sessions (capped per
+   * session); "mobile" means a phone or tablet browser, from the session's user agent.
+   */
+  async reports(days: number) {
+    const base = await this.range({});
+    const n = [7, 30, 90, 365].includes(days) ? days : 7;
+    const dayStr = (offset: number) => localDate(new Date(Date.now() - offset * DAY), base.tz);
+    const cur = await this.range({ from: dayStr(n - 1), to: dayStr(0) });
+    const prev = await this.range({ from: dayStr(2 * n - 1), to: dayStr(n) });
+    const [a, b] = await Promise.all([this.reportPeriod(cur), this.reportPeriod(prev, true)]);
+    const ch = (k: keyof typeof a.totals) => change(Number(a.totals[k]), Number(b.totals[k]));
+    return {
+      range: { from: cur.fromDay, to: cur.toDay, days: n, currency: cur.currency, timezone: cur.tz }, asOf: new Date(),
+      totals: a.totals,
+      change: Object.fromEntries((Object.keys(a.totals) as (keyof typeof a.totals)[]).map((k) => [k, ch(k)])),
+      series: a.series, topCourses: a.topCourses,
+    };
+  }
+
+  private async reportPeriod(r: Range, totalsOnly = false) {
+    const tenantId = this.ctx.requireTenantId();
+    const at = { gte: r.from, lt: r.to };
+    const [ledger, payments, signups, enrolments, paid, progress, playback, completions, certificates, quizzes, submissions, comments] = await Promise.all([
+      this.db.ledgerEntry.findMany({ where: { createdAt: at, type: { in: ['SALE', 'REFUND'] }, currency: r.currency }, select: { createdAt: true, amount: true } }),
+      this.db.payment.findMany({ where: { createdAt: at }, select: { createdAt: true, status: true, amount: true } }),
+      this.prisma.user.findMany({ where: { tenantId, realm: 'TENANT', deletedAt: null, createdAt: at }, select: { createdAt: true } }),
+      this.db.enrollment.findMany({ where: { createdAt: at }, select: { createdAt: true } }),
+      this.db.order.findMany({ where: { status: { in: [...PAID] }, paidAt: at }, select: { paidAt: true, userId: true } }),
+      this.db.lessonProgress.findMany({ where: { updatedAt: at }, select: { updatedAt: true, enrollmentId: true } }),
+      this.db.videoPlaybackSession.findMany({ where: { createdAt: at }, select: { createdAt: true, lastSeenAt: true, userId: true, userAgent: true, lessonId: true } }),
+      this.db.enrollment.count({ where: { completedAt: at } }),
+      this.db.certificate.count({ where: { issuedAt: at } }),
+      this.db.quizAttempt.count({ where: { submittedAt: at } }),
+      this.db.assignmentSubmission.count({ where: { submittedAt: at } }),
+      this.db.lessonComment.count({ where: { createdAt: at, hiddenAt: null } }),
+    ]);
+    const blank = () => ({ revenue: 0, transactions: 0, successful: 0, signups: 0, enrollments: 0, paidUsers: new Set<string>(), active: new Set<string>(), webSeconds: 0, mobileSeconds: 0 });
+    const days = new Map(r.days.map((d) => [d, blank()]));
+    const day = (t: Date | null) => (t ? days.get(localDate(t, r.tz)) : undefined);
+    let amount = 0;
+    for (const l of ledger) { const s = day(l.createdAt); if (s) s.revenue += toMinor(l.amount, r.currency); }
+    for (const p of payments) {
+      const s = day(p.createdAt);
+      if (s) s.transactions += 1;
+      if (['CAPTURED', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(p.status)) { if (s) s.successful += 1; amount += toMinor(p.amount, r.currency); }
+    }
+    for (const u of signups) { const s = day(u.createdAt); if (s) s.signups += 1; }
+    for (const e of enrolments) { const s = day(e.createdAt); if (s) s.enrollments += 1; }
+    for (const o of paid) day(o.paidAt)?.paidUsers.add(o.userId);
+    const owners = progress.length ? await this.db.enrollment.findMany({ where: { id: { in: [...new Set(progress.map((p) => p.enrollmentId))] } }, select: { id: true, userId: true } }) : [];
+    for (const p of progress) { const u = owners.find((o) => o.id === p.enrollmentId)?.userId; if (u) day(p.updatedAt)?.active.add(u); }
+    const byLesson = new Map<string, { seconds: number; users: Set<string> }>();
+    for (const v of playback) {
+      const sec = sessionSeconds(v.createdAt, v.lastSeenAt);
+      const s = day(v.createdAt);
+      if (s) { s.active.add(v.userId); if (MOBILE_UA.test(v.userAgent ?? '')) s.mobileSeconds += sec; else s.webSeconds += sec; }
+      const e = byLesson.get(v.lessonId) ?? { seconds: 0, users: new Set<string>() };
+      e.seconds += sec; e.users.add(v.userId); byLesson.set(v.lessonId, e);
+    }
+    const all = [...days.values()];
+    const sum = (f: (x: ReturnType<typeof blank>) => number) => all.reduce((n, x) => n + f(x), 0);
+    const union = (f: (x: ReturnType<typeof blank>) => Set<string>) => new Set(all.flatMap((x) => [...f(x)])).size;
+    const totals = {
+      revenue: fromMinor(sum((x) => x.revenue), r.currency), transactions: sum((x) => x.transactions), successfulTransactions: sum((x) => x.successful),
+      transactionAmount: fromMinor(amount, r.currency), signups: sum((x) => x.signups), enrollments: sum((x) => x.enrollments),
+      activeUsers: union((x) => x.active), paidUsers: union((x) => x.paidUsers),
+      timeSpentSeconds: sum((x) => x.webSeconds + x.mobileSeconds), webSeconds: sum((x) => x.webSeconds), mobileSeconds: sum((x) => x.mobileSeconds),
+      completions, certificates, quizAttempts: quizzes, assignmentSubmissions: submissions, comments,
+    };
+    if (totalsOnly) return { totals, series: [], topCourses: [] };
+    const lessons = await this.db.courseLesson.findMany({ where: { id: { in: [...byLesson.keys()] } }, select: { id: true, courseId: true } });
+    const byCourse = new Map<string, { seconds: number; users: Set<string> }>();
+    for (const [lessonId, v] of byLesson) {
+      const cid = lessons.find((l) => l.id === lessonId)?.courseId;
+      if (!cid) continue;
+      const e = byCourse.get(cid) ?? { seconds: 0, users: new Set<string>() };
+      e.seconds += v.seconds; v.users.forEach((u) => e.users.add(u)); byCourse.set(cid, e);
+    }
+    const titles = await this.db.course.findMany({ where: { id: { in: [...byCourse.keys()] } }, select: { id: true, title: true } });
+    return {
+      totals,
+      series: [...days.entries()].map(([date, x]) => ({
+        date, revenue: Number(fromMinor(x.revenue, r.currency)), transactions: x.transactions, successful: x.successful, signups: x.signups, enrollments: x.enrollments,
+        activeUsers: x.active.size, paidUsers: x.paidUsers.size, webSeconds: x.webSeconds, mobileSeconds: x.mobileSeconds,
+      })),
+      topCourses: [...byCourse.entries()].map(([id, v]) => ({ courseId: id, title: titles.find((t) => t.id === id)?.title ?? 'Deleted course', seconds: v.seconds, learners: v.users.size }))
+        .sort((x, y) => y.seconds - x.seconds).slice(0, 10),
     };
   }
 

@@ -35,6 +35,9 @@ export class AnalyticsController {
   @Get('conversions') @RequirePermissions(PERMISSIONS.ANALYTICS_READ)
   conversions(@Query() q: RangeDto) { return this.conversion.insights(q); }
 
+  @Get('reports') @RequirePermissions(PERMISSIONS.ANALYTICS_READ)
+  reports(@Query('days') days?: string) { return this.svc.reports(Number(days) || 7); }
+
   @Get('overview') @RequirePermissions(PERMISSIONS.ANALYTICS_READ)
   overview(@Query() q: RangeDto) { return this.svc.overview(q); }
 
