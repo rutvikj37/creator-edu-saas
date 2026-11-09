@@ -3119,16 +3119,24 @@ model CoachingSession {
 
 /// A coach's booking settings in this academy.
 model CoachProfile {
-  id             String   @id @default(cuid()) @db.Char(25)
-  tenantId       String   @db.Char(25)
-  userId         String   @db.Char(25)
-  timezone       String   @db.VarChar(64)
+  id                    String   @id @default(cuid()) @db.Char(25)
+  tenantId              String   @db.Char(25)
+  userId                String   @db.Char(25)
+  timezone              String   @db.VarChar(64)
   /// Personal meeting room (Zoom/Meet link) used for bookings.
-  meetingUrl     String?  @db.VarChar(500)
-  minNoticeHours Int      @default(12)
-  bufferMin      Int      @default(0)
-  createdAt      DateTime @default(now()) @db.DateTime(3)
-  updatedAt      DateTime @updatedAt @db.DateTime(3)
+  meetingUrl            String?  @db.VarChar(500)
+  minNoticeHours        Int      @default(12)
+  bufferMin             Int      @default(0)
+  /// Shown to learners instead of the account name when set.
+  displayName           String?  @db.VarChar(100)
+  bio                   String?  @db.VarChar(400)
+  photoFileId           String?  @db.Char(25)
+  /// Connected Google Calendar: busy times block slots; bookings become events with a Meet link.
+  googleEmail           String?  @db.VarChar(191)
+  googleRefreshTokenEnc String?  @db.Text
+  googleError           String?  @db.VarChar(500)
+  createdAt             DateTime @default(now()) @db.DateTime(3)
+  updatedAt             DateTime @updatedAt @db.DateTime(3)
 
   @@unique([tenantId, id])
   @@unique([tenantId, userId])
@@ -3165,21 +3173,23 @@ model CoachingAccess {
 }
 
 model CoachingBooking {
-  id          String                @id @default(cuid()) @db.Char(25)
-  tenantId    String                @db.Char(25)
-  programId   String                @db.Char(25)
-  sessionId   String                @db.Char(25)
-  accessId    String                @db.Char(25)
-  userId      String                @db.Char(25)
-  coachId     String                @db.Char(25)
-  startsAt    DateTime              @db.DateTime(3)
-  endsAt      DateTime              @db.DateTime(3)
-  status      CoachingBookingStatus @default(BOOKED)
-  meetingUrl  String?               @db.VarChar(500)
-  cancelledAt DateTime?             @db.DateTime(3)
-  cancelledBy String?               @db.VarChar(16)
-  createdAt   DateTime              @default(now()) @db.DateTime(3)
-  updatedAt   DateTime              @updatedAt @db.DateTime(3)
+  id            String                @id @default(cuid()) @db.Char(25)
+  tenantId      String                @db.Char(25)
+  programId     String                @db.Char(25)
+  sessionId     String                @db.Char(25)
+  accessId      String                @db.Char(25)
+  userId        String                @db.Char(25)
+  coachId       String                @db.Char(25)
+  startsAt      DateTime              @db.DateTime(3)
+  endsAt        DateTime              @db.DateTime(3)
+  status        CoachingBookingStatus @default(BOOKED)
+  meetingUrl    String?               @db.VarChar(500)
+  /// Event on the coach's Google Calendar.
+  googleEventId String?               @db.VarChar(255)
+  cancelledAt   DateTime?             @db.DateTime(3)
+  cancelledBy   String?               @db.VarChar(16)
+  createdAt     DateTime              @default(now()) @db.DateTime(3)
+  updatedAt     DateTime              @updatedAt @db.DateTime(3)
 
   @@unique([tenantId, id])
   @@index([tenantId, coachId, startsAt])

@@ -1,5 +1,5 @@
 import {
-  Activity, MessageCircle, Award, Banknote, BarChart3, BookOpen, Boxes, Brush, Building2, ClipboardCheck, Component,
+  Activity, CalendarClock, MessageCircle, Award, Banknote, BarChart3, BookOpen, Boxes, Brush, Building2, ClipboardCheck, Component,
   CreditCard, Crown, FileText, FolderTree, Globe, GraduationCap, Handshake, HeartPulse, Inbox, LayoutDashboard, LifeBuoy,
   KeyRound, Layers, Library, Link2, Package, Mail, Megaphone, MessagesSquare, Palette, Percent, Plug, Radio, Receipt, ScrollText, Settings, ShieldCheck,
   ShoppingCart, Sparkles, Star, Tag, Ticket, UserCog, Users, Video, Wallet,
@@ -53,6 +53,7 @@ export const NAV = {
         item('Certificates', '/creator/certificates', Award, 5, { available: true, perm: 'certificates.manage' }),
         item('Bundles', '/creator/bundles', Layers, 7, { available: true, perm: 'courses.read' }),
         item('Digital products', '/creator/products', Package, 7, { available: true, perm: 'courses.read' }),
+        item('Coaching', '/creator/coaching', CalendarClock, 10, { available: true, perm: 'courses.read' }),
         item('Ratings & reviews', '/creator/reviews', Star, 5, { available: true, perm: 'courses.read' }),
         item('Question bank', '/creator/question-bank', Library, 5, { available: true, perm: 'courses.read' }),
         item('Memberships', '/creator/memberships', Crown, 10, { available: true, perm: 'courses.manage' }),
@@ -108,6 +109,7 @@ export const NAV = {
         item('Communities', '/learn/communities', MessagesSquare, 10, { available: true }),
         item('Memberships', '/memberships', Crown, 10, { available: true }),
         item('Downloads', '/learn/downloads', Package, 7, { available: true }),
+        item('My coaching', '/learn/coaching', CalendarClock, 10, { available: true }),
         item('Orders', '/learn/orders', Receipt, 7, { available: true }),
         item('Chat with us', '/learn/chat', MessageCircle, 10, { available: true }),
         item('Earn by sharing', '/learn/affiliate', Handshake, 10, { available: true }),

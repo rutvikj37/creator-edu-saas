@@ -8,6 +8,7 @@ import { Gift, Lock, ShieldCheck, Tag, X } from 'lucide-react';
 import { academyApi } from '../../services/api/auth.js';
 import { catalogApi } from '../../services/api/learn.js';
 import { bundlesApi, checkoutApi, productsApi } from '../../services/api/commerce.js';
+import { coachingApi } from '../../services/api/coaching.js';
 import { webinarApi } from '../../services/api/live.js';
 import { useQueryClient } from '@tanstack/react-query';
 import { Alert } from '../../components/auth/Alert.jsx';
@@ -32,19 +33,19 @@ const schema = z.object({
 const newKey = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
 export function CheckoutPage() {
-  const { slug, planId, bundleSlug, webinarSlug, productSlug, linkCode, offerId } = useParams();
+  const { slug, planId, bundleSlug, webinarSlug, productSlug, coachingSlug, linkCode, offerId } = useParams();
   const [search] = useSearchParams();
   const sourceOrderId = search.get('from');
   const isPlan = Boolean(planId);
   // What is being bought: a course, a membership plan, a bundle, a webinar ticket, a payment link, a post-purchase upsell, or the whole cart (/cart/checkout).
-  const mode = isPlan ? 'plan' : bundleSlug ? 'bundle' : webinarSlug ? 'webinar' : productSlug ? 'product' : linkCode ? 'link' : offerId ? 'offer' : slug ? 'course' : 'cart';
+  const mode = isPlan ? 'plan' : bundleSlug ? 'bundle' : webinarSlug ? 'webinar' : productSlug ? 'product' : coachingSlug ? 'coaching' : linkCode ? 'link' : offerId ? 'offer' : slug ? 'course' : 'cart';
   const qc = useQueryClient();
   const auth = useAuth();
   const navigate = useNavigate();
   const site = useQuery({ queryKey: ['brand', 'academy'], queryFn: academyApi.site, staleTime: 5 * 60_000 });
   // A checkout sells either a course (by slug) or a membership plan (by id).
   const course = useQuery({
-    queryKey: ['checkout', 'product', mode, planId ?? bundleSlug ?? webinarSlug ?? productSlug ?? linkCode ?? offerId ?? slug ?? 'cart'],
+    queryKey: ['checkout', 'product', mode, planId ?? bundleSlug ?? webinarSlug ?? productSlug ?? coachingSlug ?? linkCode ?? offerId ?? slug ?? 'cart'],
     queryFn: mode === 'plan'
       ? async () => {
           const p = (await membershipsApi.publicPlans()).find((x) => x.id === planId);
@@ -54,6 +55,7 @@ export function CheckoutPage() {
       : mode === 'bundle' ? () => bundlesApi.publicGet(bundleSlug)
       : mode === 'webinar' ? () => webinarApi.get(webinarSlug)
       : mode === 'product' ? () => productsApi.publicGet(productSlug)
+      : mode === 'coaching' ? () => coachingApi.publicGet(coachingSlug)
       : mode === 'cart' ? async () => ({ id: 'cart', title: 'Your cart' })
       : mode === 'link' ? async () => { const l = await checkoutApi.paymentLink(linkCode); return { ...l, id: l.code }; }
       : mode === 'offer' ? async () => ({ id: offerId, title: 'Special offer' })
@@ -69,7 +71,7 @@ export function CheckoutPage() {
   // One idempotency key per distinct checkout attempt; changes when the coupon or the chosen add-ons change.
   const attempt = useRef({ key: newKey(), orderId: null, signature: null });
   const courseId = mode === 'course' ? course.data?.id : undefined;
-  const base = mode === 'plan' ? { membershipPlanId: planId } : mode === 'bundle' ? { bundleId: course.data?.id } : mode === 'webinar' ? { webinarId: course.data?.id } : mode === 'product' ? { digitalProductId: course.data?.id }
+  const base = mode === 'plan' ? { membershipPlanId: planId } : mode === 'bundle' ? { bundleId: course.data?.id } : mode === 'webinar' ? { webinarId: course.data?.id } : mode === 'product' ? { digitalProductId: course.data?.id } : mode === 'coaching' ? { coachingProgramId: course.data?.id }
     : mode === 'link' ? { paymentLinkCode: linkCode } : mode === 'offer' ? { upsellOfferId: offerId, sourceOrderId: sourceOrderId ?? undefined } : mode === 'cart' ? { fromCart: true } : { courseId };
   const product = { ...base, ...(bumpIds.length ? { bumpOfferIds: bumpIds } : {}) };
   const quote = useQuery({
@@ -83,7 +85,7 @@ export function CheckoutPage() {
   const offers = useQuery({ queryKey: ['checkout', 'offers', courseId ?? mode], queryFn: () => checkoutApi.offers(courseId), enabled: Boolean(course.data) && !['plan', 'link', 'offer'].includes(mode), retry: false });
   useEffect(() => {
     if (!course.data) return;
-    const kind = { plan: 'membership', bundle: 'bundle', webinar: 'webinar', product: 'product', course: 'course', cart: 'cart', link: course.data.kind, offer: 'offer' }[mode];
+    const kind = { plan: 'membership', bundle: 'bundle', webinar: 'webinar', product: 'product', coaching: 'coaching', course: 'course', cart: 'cart', link: course.data.kind, offer: 'offer' }[mode];
     track('checkout_started', window.location.pathname, { kind, ...(mode === 'cart' ? {} : { id: mode === 'plan' ? planId : mode === 'link' ? course.data.itemId : course.data.id }) });
   }, [course.data?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const startedAd = useRef(false);
@@ -157,7 +159,7 @@ export function CheckoutPage() {
     }
   });
 
-  const noun = { plan: 'membership', bundle: 'bundle', cart: 'cart', course: 'course', webinar: 'webinar', product: 'product', link: 'payment link', offer: 'offer' }[mode];
+  const noun = { plan: 'membership', bundle: 'bundle', cart: 'cart', course: 'course', webinar: 'webinar', product: 'product', coaching: 'coaching program', link: 'payment link', offer: 'offer' }[mode];
   if (course.isError) return <div className="grid min-h-dvh place-items-center"><ErrorState title={`${noun[0].toUpperCase()}${noun.slice(1)} not found`} error={course.error} /></div>;
   const c = course.data;
   const qd = quote.data;
@@ -167,7 +169,7 @@ export function CheckoutPage() {
   const bumpItems = (qd?.items ?? []).filter((i) => i.source === 'BUMP');
   const title = mode === 'link' ? c?.itemTitle : mode === 'offer' ? mainItems[0]?.title : c?.title;
   const toggleBump = (id, on) => setBumpIds((ids) => (on ? [...new Set([...ids, id])] : ids.filter((x) => x !== id)));
-  const back = { plan: '/memberships', bundle: `/bundles/${bundleSlug}`, cart: '/cart', course: `/courses/${slug}`, webinar: `/webinars/${webinarSlug}`, product: `/products/${productSlug}`, link: `/pay/${linkCode}`, offer: sourceOrderId ? `/learn/orders/${sourceOrderId}` : '/learn/orders' }[mode];
+  const back = { plan: '/memberships', bundle: `/bundles/${bundleSlug}`, cart: '/cart', course: `/courses/${slug}`, webinar: `/webinars/${webinarSlug}`, product: `/products/${productSlug}`, coaching: `/coaching/${coachingSlug}`, link: `/pay/${linkCode}`, offer: sourceOrderId ? `/learn/orders/${sourceOrderId}` : '/learn/orders' }[mode];
   return (
     <div className="min-h-dvh bg-surface-2" style={{ fontFamily: site.data?.theme?.fontBody }}>
       <AcademyHeader site={site.data} />

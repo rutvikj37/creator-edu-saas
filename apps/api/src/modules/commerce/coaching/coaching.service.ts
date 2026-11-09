@@ -4,6 +4,8 @@ import { randomBytes } from 'node:crypto';
 import { AppException } from '../../../common/errors/app-exception.js';
 import { validateRichText } from '../../../common/richtext/richtext.js';
 import { AuditService } from '../../../core/audit/audit.service.js';
+import { CryptoService } from '../../../core/crypto/crypto.service.js';
+import { COACH_CALENDAR_SCOPES, GoogleMeetService } from '../../live/google-meet.service.js';
 import { escapeHtml } from '../../../core/mail/templates.js';
 import { MailService } from '../../../core/mail/mail.service.js';
 import { PrismaService } from '../../../core/prisma/prisma.service.js';
@@ -31,6 +33,9 @@ export interface ProgramInput {
   sessions?: { id?: string; title: string; durationMin: number; agenda: Doc; notes?: string | null; attachmentIds?: string[] }[];
 }
 export interface ProfileInput {
+  displayName?: string | null;
+  bio?: string | null;
+  photoFileId?: string | null;
   timezone?: string;
   meetingUrl?: string | null;
   minNoticeHours?: number;
@@ -65,6 +70,8 @@ export class CoachingService {
     private readonly mail: MailService,
     private readonly notifications: NotificationsService,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
+    private readonly google: GoogleMeetService,
+    private readonly crypto: CryptoService,
   ) {}
 
   // ── programs (academy) ────────────────────────────────────
@@ -83,17 +90,24 @@ export class CoachingService {
     return p;
   }
 
-  private async parts(programId: string) {
+  private async parts(programId: string, apiOrigin: string) {
     const [coaches, sessions] = await Promise.all([
       this.db.coachingCoach.findMany({ where: { programId }, orderBy: { id: 'asc' } }),
       this.db.coachingSession.findMany({ where: { programId }, orderBy: { position: 'asc' } }),
     ]);
     const users = await this.prisma.user.findMany({ where: { id: { in: coaches.map((c) => c.userId) } }, select: { id: true, fullName: true, email: true } });
-    return { coaches: coaches.map((c) => ({ userId: c.userId, weight: c.weight, name: users.find((u) => u.id === c.userId)?.fullName ?? '', email: users.find((u) => u.id === c.userId)?.email ?? '' })), sessions };
+    const profiles = await this.db.coachProfile.findMany({ where: { userId: { in: coaches.map((c) => c.userId) } }, select: { userId: true, displayName: true, bio: true, photoFileId: true } });
+    return {
+      coaches: await Promise.all(coaches.map(async (c) => {
+        const pr = profiles.find((x) => x.userId === c.userId);
+        return { userId: c.userId, weight: c.weight, name: users.find((u) => u.id === c.userId)?.fullName ?? '', email: users.find((u) => u.id === c.userId)?.email ?? '', displayName: pr?.displayName ?? null, bio: pr?.bio ?? null, photoUrl: await this.files.urlFor(pr?.photoFileId ?? null, apiOrigin, 86_400) };
+      })),
+      sessions,
+    };
   }
 
   private async view(p: Awaited<ReturnType<CoachingService['load']>>, apiOrigin: string) {
-    const { coaches, sessions } = await this.parts(p.id);
+    const { coaches, sessions } = await this.parts(p.id, apiOrigin);
     const [buyers, bookings, revenue] = await Promise.all([
       this.db.coachingAccess.count({ where: { programId: p.id, revokedAt: null } }),
       this.db.coachingBooking.count({ where: { programId: p.id, status: { in: [...LIVE] } } }),
@@ -242,7 +256,7 @@ export class CoachingService {
   }
 
   // ── coach profiles and hours ──────────────────────────────
-  async profile(userId: string) {
+  async profile(userId: string, apiOrigin?: string) {
     const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: this.ctx.requireTenantId() }, select: { timezone: true } });
     const [p, hours, user] = await Promise.all([
       this.db.coachProfile.findFirst({ where: { userId } }),
@@ -250,7 +264,9 @@ export class CoachingService {
       this.prisma.user.findUnique({ where: { id: userId }, select: { fullName: true, email: true } }),
     ]);
     return {
-      userId, name: user?.fullName ?? '', email: user?.email ?? '',
+      userId, name: user?.fullName ?? '', email: user?.email ?? '', displayName: p?.displayName ?? null, bio: p?.bio ?? null,
+      photoFileId: p?.photoFileId ?? null, photoUrl: apiOrigin ? await this.files.urlFor(p?.photoFileId ?? null, apiOrigin, 86_400) : null,
+      google: { configured: this.google.isConfigured(), connected: Boolean(p?.googleRefreshTokenEnc), email: p?.googleEmail ?? null, error: p?.googleError ?? null },
       timezone: p?.timezone ?? tenant.timezone, meetingUrl: p?.meetingUrl ?? null, minNoticeHours: p?.minNoticeHours ?? 12, bufferMin: p?.bufferMin ?? 0,
       hours: hours.map((h) => ({ weekday: h.weekday, startMinute: h.startMinute, endMinute: h.endMinute })), configured: Boolean(p),
     };
@@ -259,13 +275,20 @@ export class CoachingService {
   /** Coaches on any program plus all active team members, for pickers and the availability screen. */
   async team() {
     const members = await this.db.tenantMember.findMany({ where: { status: 'ACTIVE' }, select: { userId: true, user: { select: { fullName: true, email: true } } } });
-    const profiles = await this.db.coachProfile.findMany({ where: { userId: { in: members.map((m) => m.userId) } }, select: { userId: true } });
-    return members.map((m) => ({ userId: m.userId, name: m.user.fullName, email: m.user.email, hasHours: profiles.some((p) => p.userId === m.userId) }));
+    const profiles = await this.db.coachProfile.findMany({ where: { userId: { in: members.map((m) => m.userId) } }, select: { userId: true, displayName: true, googleRefreshTokenEnc: true, googleError: true } });
+    const coaching = await this.db.coachingCoach.findMany({ where: { userId: { in: members.map((m) => m.userId) } }, select: { userId: true } });
+    return members.map((m) => {
+      const p = profiles.find((x) => x.userId === m.userId);
+      return { userId: m.userId, name: p?.displayName ?? m.user.fullName, email: m.user.email, hasHours: Boolean(p), isCoach: coaching.some((c) => c.userId === m.userId), googleConnected: Boolean(p?.googleRefreshTokenEnc), googleError: p?.googleError ?? null };
+    });
   }
 
-  async saveProfile(userId: string, input: ProfileInput, actorUserId: string) {
+  async saveProfile(userId: string, input: ProfileInput, actorUserId: string, apiOrigin?: string) {
     if (!(await this.db.tenantMember.findFirst({ where: { userId, status: 'ACTIVE' } }))) throw AppException.notFound('Team member not found');
     const errors: { field: string; message: string }[] = [];
+    if (input.displayName && input.displayName.trim().length > 100) errors.push({ field: 'displayName', message: 'Up to 100 characters' });
+    if (input.bio && input.bio.length > 400) errors.push({ field: 'bio', message: 'Up to 400 characters' });
+    if (input.photoFileId) await this.files.assertUsable(input.photoFileId, ['IMAGE']).catch(() => errors.push({ field: 'photoFileId', message: 'Upload a JPG or PNG' }));
     if (input.timezone !== undefined && !isTimeZone(input.timezone)) errors.push({ field: 'timezone', message: 'Choose a valid timezone' });
     if (input.meetingUrl && !/^https:\/\/[^\s]{4,490}$/.test(input.meetingUrl)) errors.push({ field: 'meetingUrl', message: 'Paste an https:// meeting link (Zoom, Google Meet…)' });
     if (input.minNoticeHours !== undefined && !(Number.isInteger(input.minNoticeHours) && input.minNoticeHours >= 0 && input.minNoticeHours <= 720)) errors.push({ field: 'minNoticeHours', message: '0 to 720 hours' });
@@ -287,6 +310,9 @@ export class CoachingService {
     const data = {
       timezone: input.timezone ?? current.timezone, meetingUrl: input.meetingUrl !== undefined ? input.meetingUrl || null : current.meetingUrl,
       minNoticeHours: input.minNoticeHours ?? current.minNoticeHours, bufferMin: input.bufferMin ?? current.bufferMin,
+      displayName: input.displayName !== undefined ? input.displayName?.trim() || null : current.displayName,
+      bio: input.bio !== undefined ? input.bio?.trim() || null : current.bio,
+      photoFileId: input.photoFileId !== undefined ? input.photoFileId : current.photoFileId,
     };
     const existing = await this.db.coachProfile.findFirst({ where: { userId } });
     if (existing) await this.db.coachProfile.update({ where: { id: existing.id }, data });
@@ -296,7 +322,49 @@ export class CoachingService {
       for (const h of input.hours) await this.db.coachAvailability.create({ data: { userId, weekday: h.weekday, startMinute: h.startMinute, endMinute: h.endMinute } as never });
     }
     await this.audit.record({ action: 'coaching.availability', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'User', targetId: userId });
-    return this.profile(userId);
+    return this.profile(userId, apiOrigin);
+  }
+
+  // ── Google Calendar (per coach) ───────────────────────────
+  /** Starts Google sign-in for a coach's calendar; the shared Google callback stores it on the coach. */
+  async googleConnectUrl(coachUserId: string, actorUserId: string) {
+    if (!(await this.db.tenantMember.findFirst({ where: { userId: coachUserId, status: 'ACTIVE' } }))) throw AppException.notFound('Team member not found');
+    if (!this.google.isConfigured()) throw AppException.integrationNotConfigured('Google Calendar');
+    const state = randomBytes(24).toString('base64url');
+    await this.redis.set(`live-int:state:${state}`, JSON.stringify({ tenantId: this.ctx.requireTenantId(), userId: actorUserId, provider: 'GOOGLE_MEET', coachUserId }), 'EX', 600);
+    return { url: this.google.authorizeUrl(state, COACH_CALENDAR_SCOPES) };
+  }
+
+  async googleDisconnect(coachUserId: string, actorUserId: string, apiOrigin?: string) {
+    const p = await this.db.coachProfile.findFirst({ where: { userId: coachUserId } });
+    if (p?.googleRefreshTokenEnc) {
+      await this.google.revoke(this.crypto.decrypt(p.googleRefreshTokenEnc));
+      await this.db.coachProfile.update({ where: { id: p.id }, data: { googleEmail: null, googleRefreshTokenEnc: null, googleError: null } });
+      await this.redis.del(this.busyKey(coachUserId));
+      await this.audit.record({ action: 'coaching.google_disconnect', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'User', targetId: coachUserId });
+    }
+    return this.profile(coachUserId, apiOrigin);
+  }
+
+  private busyKey(coachUserId: string) {
+    return `coach-busy:${this.ctx.requireTenantId()}:${coachUserId}`;
+  }
+
+  /** The coach's Google busy times for the booking window (cached for a minute). Failures are recorded and skipped. */
+  private async googleBusy(p: { id: string; userId: string; googleRefreshTokenEnc: string | null }, now: Date) {
+    if (!p.googleRefreshTokenEnc || !this.google.isConfigured()) return [];
+    const cached = await this.redis.get(this.busyKey(p.userId));
+    if (cached) return (JSON.parse(cached) as { start: string; end: string }[]).map((b) => ({ start: new Date(b.start), end: new Date(b.end) }));
+    try {
+      const busy = await this.google.freeBusy(this.crypto.decrypt(p.googleRefreshTokenEnc), now, new Date(now.getTime() + (HORIZON_DAYS + 1) * DAY));
+      await this.redis.set(this.busyKey(p.userId), JSON.stringify(busy), 'EX', 60);
+      await this.db.coachProfile.updateMany({ where: { id: p.id, googleError: { not: null } }, data: { googleError: null } });
+      return busy;
+    } catch (e) {
+      this.log.warn(`google free/busy for coach ${p.userId}: ${(e as Error).message}`);
+      await this.db.coachProfile.update({ where: { id: p.id }, data: { googleError: 'We could not read this calendar. Reconnect Google Calendar.' } });
+      return [];
+    }
   }
 
   // ── slots and booking ─────────────────────────────────────
@@ -314,7 +382,7 @@ export class CoachingService {
       const p = profiles.find((x) => x.userId === coachId);
       if (!p) continue; // no hours set yet
       const earliest = now.getTime() + p.minNoticeHours * 3_600_000;
-      const mine = busy.filter((b) => b.coachId === coachId);
+      const mine = [...busy.filter((b) => b.coachId === coachId), ...(await this.googleBusy(p, now)).map((g) => ({ coachId, startsAt: g.start, endsAt: g.end }))];
       const buffer = p.bufferMin * 60_000;
       for (let i = 0; i <= HORIZON_DAYS; i++) {
         const day = localDay(now.getTime(), p.timezone, i);
@@ -375,6 +443,7 @@ export class CoachingService {
         const clash = await this.db.coachingBooking.findFirst({ where: { coachId, status: 'BOOKED', startsAt: { lt: new Date(end.getTime() + buffer) }, endsAt: { gt: new Date(start.getTime() - buffer) } } });
         if (clash) continue;
         const b = await this.db.coachingBooking.create({ data: { programId, sessionId, accessId: access.id, userId, coachId, startsAt: start, endsAt: end, meetingUrl: profile?.meetingUrl ?? null } as never });
+        if (profile?.googleRefreshTokenEnc) await this.calendarEvent(profile, b.id, `${s.title} · ${program.title}`, start, end);
         await this.announce(b.id, 'booked').catch((e) => this.log.warn(`booking email: ${(e as Error).message}`));
         return this.bookingView(b.id, program.title, s.title);
       } finally {
@@ -382,6 +451,29 @@ export class CoachingService {
       }
     }
     throw AppException.conflict('That time was just taken. Pick another slot.');
+  }
+
+  /** Adds the booking to the coach's Google Calendar with a Meet link (used as the join link). */
+  private async calendarEvent(profile: { id: string; userId: string; timezone: string; googleRefreshTokenEnc: string | null }, bookingId: string, summary: string, start: Date, end: Date) {
+    if (!profile.googleRefreshTokenEnc || !this.google.isConfigured()) return;
+    try {
+      const student = await this.db.coachingBooking.findFirstOrThrow({ where: { id: bookingId }, select: { userId: true } });
+      const u = await this.prisma.user.findUnique({ where: { id: student.userId }, select: { fullName: true, email: true } });
+      const ev = await this.google.createEvent(this.crypto.decrypt(profile.googleRefreshTokenEnc), { summary, description: `1:1 coaching with ${u?.fullName ?? 'a learner'} (${u?.email ?? ''})`, start, end, timezone: profile.timezone });
+      await this.db.coachingBooking.update({ where: { id: bookingId }, data: { googleEventId: ev.eventId, meetingUrl: ev.joinUrl } });
+      await this.redis.del(this.busyKey(profile.userId));
+    } catch (e) {
+      this.log.warn(`google event for booking ${bookingId}: ${(e as Error).message}`);
+      await this.db.coachProfile.update({ where: { id: profile.id }, data: { googleError: 'The last booking could not be added to Google Calendar. Reconnect Google Calendar.' } });
+    }
+  }
+
+  private async removeCalendarEvent(b: { id: string; coachId: string; googleEventId: string | null }) {
+    if (!b.googleEventId) return;
+    const p = await this.db.coachProfile.findFirst({ where: { userId: b.coachId } });
+    if (!p?.googleRefreshTokenEnc) return;
+    await this.google.deleteEvent(this.crypto.decrypt(p.googleRefreshTokenEnc), b.googleEventId).catch((e) => this.log.warn(`google event delete ${b.id}: ${(e as Error).message}`));
+    await this.redis.del(this.busyKey(b.coachId));
   }
 
   private async bookingView(id: string, programTitle?: string, sessionTitle?: string) {
@@ -399,6 +491,7 @@ export class CoachingService {
     const notice = (p?.minNoticeHours ?? 12) * 3_600_000;
     if (b.startsAt.getTime() - Date.now() < notice) throw AppException.conflict(`Bookings can be cancelled up to ${p?.minNoticeHours ?? 12} hours before they start. Contact the academy.`);
     await this.db.coachingBooking.update({ where: { id: b.id }, data: { status: 'CANCELLED', cancelledAt: new Date(), cancelledBy: 'STUDENT' } });
+    await this.removeCalendarEvent(b);
     await this.announce(b.id, 'cancelled').catch(() => undefined);
     return { cancelled: true };
   }
@@ -410,7 +503,10 @@ export class CoachingService {
     if (status === 'COMPLETED' && b.startsAt > new Date()) throw AppException.conflict('A session can be marked completed once it has started.');
     await this.db.coachingBooking.update({ where: { id: b.id }, data: { status, ...(status === 'CANCELLED' ? { cancelledAt: new Date(), cancelledBy: 'ACADEMY' } : {}) } });
     await this.audit.record({ action: `coaching.booking_${status.toLowerCase()}`, tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'CoachingBooking', targetId: b.id });
-    if (status === 'CANCELLED') await this.announce(b.id, 'cancelled').catch(() => undefined);
+    if (status === 'CANCELLED') {
+      await this.removeCalendarEvent(b);
+      await this.announce(b.id, 'cancelled').catch(() => undefined);
+    }
     return { status };
   }
 
@@ -481,7 +577,7 @@ export class CoachingService {
   private publicView(v: Awaited<ReturnType<CoachingService['view']>>) {
     return {
       id: v.id, slug: v.slug, title: v.title, description: v.description, faqs: v.faqs, planName: v.planName, priceAmount: v.priceAmount, compareAtAmount: v.compareAtAmount, currency: v.currency, isFree: v.isFree, coverUrl: v.coverUrl,
-      coaches: v.coaches.map((c) => ({ name: c.name })),
+      coaches: v.coaches.map((c) => ({ name: c.displayName ?? c.name, bio: c.bio, photoUrl: c.photoUrl })),
       sessions: v.sessions.map((s) => ({ title: s.title, durationMin: s.durationMin, agenda: s.agenda })),
     };
   }

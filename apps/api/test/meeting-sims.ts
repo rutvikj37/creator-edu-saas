@@ -147,8 +147,12 @@ export class GoogleCalendarSim {
   accessTokens = new Set<string>();
   revoked: string[] = [];
   events = new Map<string, any>();
+  /** Busy intervals returned by free/busy queries. */
+  busy: { start: string; end: string }[] = [];
   calls: string[] = [];
   email = 'teacher@gmail.example';
+  /** Scopes the user grants on the consent screen. */
+  scope = 'openid email https://www.googleapis.com/auth/calendar.events.owned';
   private server!: Server;
 
   constructor(readonly clientId: string, readonly clientSecret: string) {}
@@ -186,7 +190,7 @@ export class GoogleCalendarSim {
       const access = `ga_${randomBytes(8).toString('hex')}`;
       this.accessTokens.add(access);
       const idToken = `${Buffer.from('{"alg":"none"}').toString('base64url')}.${Buffer.from(JSON.stringify({ email: this.email, sub: 'g-sub-123' })).toString('base64url')}.sig`;
-      return send(res, 200, { access_token: access, expires_in: 3599, token_type: 'Bearer', scope: 'openid email https://www.googleapis.com/auth/calendar.events.owned', id_token: idToken, ...(refresh && p.get('grant_type') === 'authorization_code' ? { refresh_token: refresh } : {}) });
+      return send(res, 200, { access_token: access, expires_in: 3599, token_type: 'Bearer', scope: this.scope, id_token: idToken, ...(refresh && p.get('grant_type') === 'authorization_code' ? { refresh_token: refresh } : {}) });
     }
     if (u.pathname === '/revoke') {
       const t = new URLSearchParams(raw).get('token') ?? u.searchParams.get('token') ?? '';
@@ -203,6 +207,11 @@ export class GoogleCalendarSim {
       const ev = { id, ...body, hangoutLink: `https://meet.google.com/${code}`, conferenceData: { conferenceId: code, conferenceSolution: { key: { type: 'hangoutsMeet' } }, entryPoints: [{ entryPointType: 'video', uri: `https://meet.google.com/${code}` }] }, sendUpdates: u.searchParams.get('sendUpdates') };
       this.events.set(id, ev);
       return send(res, 200, ev);
+    }
+    if (u.pathname === '/calendar/v3/freeBusy' && method === 'POST') {
+      const from = Date.parse(body.timeMin);
+      const to = Date.parse(body.timeMax);
+      return send(res, 200, { kind: 'calendar#freeBusy', timeMin: body.timeMin, timeMax: body.timeMax, calendars: { primary: { busy: this.busy.filter((b) => Date.parse(b.end) > from && Date.parse(b.start) < to) } } });
     }
     const em = /^\/calendar\/v3\/calendars\/primary\/events\/([\w]+)$/.exec(u.pathname);
     if (em) {

@@ -13,6 +13,8 @@ export class GoogleMeetError extends Error {
 
 /** Create/edit/delete events only on calendars the academy owns; email identifies the account. */
 export const GOOGLE_MEET_SCOPES = ['openid', 'email', 'https://www.googleapis.com/auth/calendar.events.owned'];
+/** A coach's own calendar: their busy times (free/busy only, no event details) plus events for bookings. */
+export const COACH_CALENDAR_SCOPES = [...GOOGLE_MEET_SCOPES, 'https://www.googleapis.com/auth/calendar.freebusy'];
 
 export interface MeetEventInput {
   summary: string;
@@ -55,9 +57,9 @@ export class GoogleMeetService {
     });
   }
 
-  authorizeUrl(state: string) {
+  authorizeUrl(state: string, scopes: string[] = GOOGLE_MEET_SCOPES) {
     // offline + consent: Google returns a refresh token so sessions can be created later without the creator.
-    return this.oauth().generateAuthUrl({ access_type: 'offline', prompt: 'consent', scope: GOOGLE_MEET_SCOPES, state, include_granted_scopes: false });
+    return this.oauth().generateAuthUrl({ access_type: 'offline', prompt: 'consent', scope: scopes, state, include_granted_scopes: false });
   }
 
   /** Exchanges the code; the email comes from the ID token issued in the same token response. */
@@ -124,6 +126,16 @@ export class GoogleMeetService {
       const c = classify(err);
       if (c.status === 404 || c.status === 410) return; // already deleted
       throw c;
+    }
+  }
+
+  /** Busy intervals on the account's primary calendar between `from` and `to`. */
+  async freeBusy(refreshToken: string, from: Date, to: Date) {
+    try {
+      const res = await this.calendar(refreshToken).freebusy.query({ requestBody: { timeMin: from.toISOString(), timeMax: to.toISOString(), items: [{ id: 'primary' }] } });
+      return (res.data.calendars?.primary?.busy ?? []).filter((b) => b.start && b.end).map((b) => ({ start: new Date(b.start!), end: new Date(b.end!) }));
+    } catch (err) {
+      throw classify(err);
     }
   }
 

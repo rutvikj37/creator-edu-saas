@@ -51,6 +51,9 @@ class HoursDto {
   @ApiProperty() @IsInt() @Min(0) @Max(1440) endMinute: number;
 }
 class ProfileDto {
+  @ApiPropertyOptional({ description: 'Name shown to learners' }) @IsOptional() @Transform(trim) @IsString() @MaxLength(100) displayName?: string | null;
+  @ApiPropertyOptional({ description: 'About the coach' }) @IsOptional() @Transform(trim) @IsString() @MaxLength(400) bio?: string | null;
+  @ApiPropertyOptional({ description: 'Uploaded image (purpose IMAGE)' }) @IsOptional() @IsString() @Length(25, 25) photoFileId?: string | null;
   @ApiPropertyOptional({ example: 'Asia/Kolkata' }) @IsOptional() @IsString() @MaxLength(64) timezone?: string;
   @ApiPropertyOptional({ description: 'Personal Zoom/Meet link used for bookings' }) @IsOptional() @Transform(trim) @IsString() @MaxLength(500) meetingUrl?: string | null;
   @ApiPropertyOptional() @IsOptional() @IsInt() @Min(0) @Max(720) minNoticeHours?: number;
@@ -110,16 +113,28 @@ export class CreatorCoachingController {
   team() { return this.coaching.team(); }
 
   @Get('availability/me') @ApiOperation({ summary: 'My coaching hours (any team member)' })
-  myProfile(@CurrentAuth() auth: AuthContext) { return this.coaching.profile(auth.userId); }
+  myProfile(@CurrentAuth() auth: AuthContext, @Req() req: Request) { return this.coaching.profile(auth.userId, apiOrigin(req)); }
 
   @Put('availability/me')
-  saveMine(@Body() dto: ProfileDto, @CurrentAuth() auth: AuthContext) { return this.coaching.saveProfile(auth.userId, dto, auth.userId); }
+  saveMine(@Body() dto: ProfileDto, @CurrentAuth() auth: AuthContext, @Req() req: Request) { return this.coaching.saveProfile(auth.userId, dto, auth.userId, apiOrigin(req)); }
+
+  @Post('availability/me/google/connect') @HttpCode(200) @ApiOperation({ summary: 'Connect my Google Calendar (returns the Google sign-in URL)' })
+  connectMine(@CurrentAuth() auth: AuthContext) { return this.coaching.googleConnectUrl(auth.userId, auth.userId); }
+
+  @Post('availability/me/google/disconnect') @HttpCode(200)
+  disconnectMine(@CurrentAuth() auth: AuthContext, @Req() req: Request) { return this.coaching.googleDisconnect(auth.userId, auth.userId, apiOrigin(req)); }
 
   @Get('availability/:userId') @RequirePermissions(PERMISSIONS.COURSES_MANAGE)
-  profile(@Param('userId') userId: string) { return this.coaching.profile(userId); }
+  profile(@Param('userId') userId: string, @Req() req: Request) { return this.coaching.profile(userId, apiOrigin(req)); }
 
-  @Put('availability/:userId') @RequirePermissions(PERMISSIONS.COURSES_MANAGE) @ApiOperation({ summary: "Set a coach's hours on their behalf" })
-  saveProfile(@Param('userId') userId: string, @Body() dto: ProfileDto, @CurrentAuth() auth: AuthContext) { return this.coaching.saveProfile(userId, dto, auth.userId); }
+  @Put('availability/:userId') @RequirePermissions(PERMISSIONS.COURSES_MANAGE) @ApiOperation({ summary: "Set a coach's profile and hours on their behalf" })
+  saveProfile(@Param('userId') userId: string, @Body() dto: ProfileDto, @CurrentAuth() auth: AuthContext, @Req() req: Request) { return this.coaching.saveProfile(userId, dto, auth.userId, apiOrigin(req)); }
+
+  @Post('availability/:userId/google/connect') @HttpCode(200) @RequirePermissions(PERMISSIONS.COURSES_MANAGE) @ApiOperation({ summary: "Start connecting a coach's Google Calendar (they sign in with their Google account)" })
+  connect(@Param('userId') userId: string, @CurrentAuth() auth: AuthContext) { return this.coaching.googleConnectUrl(userId, auth.userId); }
+
+  @Post('availability/:userId/google/disconnect') @HttpCode(200) @RequirePermissions(PERMISSIONS.COURSES_MANAGE)
+  disconnect(@Param('userId') userId: string, @CurrentAuth() auth: AuthContext, @Req() req: Request) { return this.coaching.googleDisconnect(userId, auth.userId, apiOrigin(req)); }
 }
 
 @ApiTags('Academy (public) · Coaching')

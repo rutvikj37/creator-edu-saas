@@ -6,6 +6,7 @@ import { CreatorCouponsController, CreatorOrdersController, CreatorPaymentsContr
 import { CouponsService } from './coupons.service.js';
 import { DigitalProductsService } from './digital-products.service.js';
 import { CoachingService } from './coaching/coaching.service.js';
+import { GoogleMeetService } from '../live/google-meet.service.js';
 import { CreatorCoachingController, LearnCoachingController, PublicCoachingController } from './coaching/coaching.controller.js';
 import { CreatorProductsController, LearnProductsController, PublicProductsController } from './digital-products.controller.js';
 import { BundlesService } from './bundles.service.js';
@@ -20,7 +21,7 @@ import { PROVIDER_CLASSES } from './providers/registry.js';
 import { WebhooksService } from './webhooks.service.js';
 import { FilesService } from '../files/files.service.js';
 
-const SERVICES = [PaymentHttp, ...PROVIDER_CLASSES, GatewayService, CouponsService, DigitalProductsService, CoachingService, FunnelService, OrdersService, WebhooksService, BillingService, RecoveryService];
+const SERVICES = [PaymentHttp, ...PROVIDER_CLASSES, GatewayService, CouponsService, DigitalProductsService, CoachingService, GoogleMeetService, FunnelService, OrdersService, WebhooksService, BillingService, RecoveryService];
 
 /** Razorpay commerce (academy sales) and SaaS plan billing: HTTP API. */
 @Module({

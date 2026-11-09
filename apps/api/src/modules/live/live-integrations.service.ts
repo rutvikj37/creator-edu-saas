@@ -75,7 +75,8 @@ export class LiveIntegrationsService {
     const key = p === 'ZOOM' ? 'zoom' : 'google-meet';
     const raw = params.state ? await this.redis.getdel(`live-int:state:${params.state.slice(0, 64)}`) : null;
     if (!raw) return this.webUrl(`error=${encodeURIComponent('This connection link expired. Try again.')}&provider=${key}`);
-    const st = JSON.parse(raw) as { tenantId: string; userId: string; provider: IntegrationKind };
+    const st = JSON.parse(raw) as { tenantId: string; userId: string; provider: IntegrationKind; coachUserId?: string };
+    if (st.coachUserId && p === 'GOOGLE_MEET') return this.coachCallback(st as Required<typeof st>, params);
     if (st.provider !== p) return this.webUrl(`error=${encodeURIComponent('Connection mismatch. Try again.')}&provider=${key}`);
     if (params.error || !params.code) return this.webUrl(`error=${encodeURIComponent(params.error === 'access_denied' ? 'Access was not granted.' : 'The connection was cancelled.')}&provider=${key}`);
     try {
@@ -100,6 +101,30 @@ export class LiveIntegrationsService {
     } catch (e) {
       this.log.warn(`${p} connect failed: ${(e as Error).message}`);
       return this.webUrl(`error=${encodeURIComponent((e as Error).message.slice(0, 200))}&provider=${key}`);
+    }
+  }
+
+  /** A coach connected their own Google Calendar from Coaching settings. */
+  private async coachCallback(st: { tenantId: string; userId: string; coachUserId: string }, params: { code?: string; error?: string }) {
+    const back = (q: string) => `${this.config.get('WEB_PUBLIC_URL').replace(/\/+$/, '')}/creator/coaching?settings=1&${q}`;
+    if (params.error || !params.code) return back(`error=${encodeURIComponent(params.error === 'access_denied' ? 'Access was not granted.' : 'The connection was cancelled.')}`);
+    try {
+      const t = await this.meet.exchangeCode(params.code);
+      if (!t.scopes.includes('calendar.freebusy')) throw new Error('Allow access to your calendar’s free/busy times so bookings avoid your other events.');
+      await this.ctx.run(st.tenantId, async () => {
+        const data = { googleEmail: t.email, googleRefreshTokenEnc: this.crypto.encrypt(t.refreshToken), googleError: null };
+        const existing = await this.db.coachProfile.findFirst({ where: { userId: st.coachUserId } });
+        if (existing) await this.db.coachProfile.update({ where: { id: existing.id }, data });
+        else {
+          const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: st.tenantId }, select: { timezone: true } });
+          await this.db.coachProfile.create({ data: { userId: st.coachUserId, timezone: tenant.timezone, ...data } as never });
+        }
+        await this.audit.record({ action: 'coaching.google_connect', tenantId: st.tenantId, actorUserId: st.userId, actorRealm: 'PLATFORM', targetType: 'User', targetId: st.coachUserId, after: { email: t.email } });
+      });
+      return back('connected=google');
+    } catch (e) {
+      this.log.warn(`coach calendar connect failed: ${(e as Error).message}`);
+      return back(`error=${encodeURIComponent((e as Error).message.slice(0, 200))}`);
     }
   }
 
