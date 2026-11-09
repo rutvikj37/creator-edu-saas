@@ -11,9 +11,10 @@ export const LINK_ITEM_KINDS = ['course', 'bundle', 'product', 'webinar', 'membe
 /** "kind:id" — how offers name the purchases that trigger them. */
 export const itemKey = (kind: string, id: string) => `${kind}:${id}`;
 
-export function orderItemKey(i: { courseId?: string | null; bundleId?: string | null; digitalProductId?: string | null; liveClassId?: string | null; membershipPlanId?: string | null }) {
+export function orderItemKey(i: { courseId?: string | null; bundleId?: string | null; digitalProductId?: string | null; coachingProgramId?: string | null; liveClassId?: string | null; membershipPlanId?: string | null }) {
   if (i.bundleId) return itemKey('bundle', i.bundleId);
   if (i.digitalProductId) return itemKey('product', i.digitalProductId);
+  if (i.coachingProgramId) return itemKey('coaching', i.coachingProgramId);
   if (i.liveClassId) return itemKey('webinar', i.liveClassId);
   if (i.membershipPlanId) return itemKey('membership', i.membershipPlanId);
   return itemKey('course', i.courseId ?? '');

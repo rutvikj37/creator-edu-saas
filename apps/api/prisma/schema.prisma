@@ -1678,28 +1678,30 @@ model Order {
 }
 
 model OrderItem {
-  id               String   @id @default(cuid()) @db.Char(25)
-  tenantId         String   @db.Char(25)
-  orderId          String   @db.Char(25)
-  courseId         String?  @db.Char(25)
-  membershipPlanId String?  @db.Char(25)
-  bundleId         String?  @db.Char(25)
+  id                String   @id @default(cuid()) @db.Char(25)
+  tenantId          String   @db.Char(25)
+  orderId           String   @db.Char(25)
+  courseId          String?  @db.Char(25)
+  membershipPlanId  String?  @db.Char(25)
+  bundleId          String?  @db.Char(25)
   /// Paid webinar ticket.
-  liveClassId      String?  @db.Char(25)
+  liveClassId       String?  @db.Char(25)
   /// Digital product (download).
-  digitalProductId String?  @db.Char(25)
+  digitalProductId  String?  @db.Char(25)
+  /// 1:1 coaching program.
+  coachingProgramId String?  @db.Char(25)
   /// Courses this line grants, fixed at purchase (a bundle's courses; the course itself otherwise).
-  grantCourseIds   Json?
-  title            String   @db.VarChar(200)
-  unitAmount       Decimal  @db.Decimal(19, 4)
-  discountAmount   Decimal  @default(0) @db.Decimal(19, 4)
-  totalAmount      Decimal  @db.Decimal(19, 4)
+  grantCourseIds    Json?
+  title             String   @db.VarChar(200)
+  unitAmount        Decimal  @db.Decimal(19, 4)
+  discountAmount    Decimal  @default(0) @db.Decimal(19, 4)
+  totalAmount       Decimal  @db.Decimal(19, 4)
   /// Sold at a special price through an order bump or post-purchase upsell (SalesOffer).
-  offerId          String?  @db.Char(25)
+  offerId           String?  @db.Char(25)
   /// BUMP | UPSELL | LINK — how this line was added.
-  source           String?  @db.VarChar(16)
-  createdAt        DateTime @default(now()) @db.DateTime(3)
-  order            Order    @relation(fields: [tenantId, orderId], references: [tenantId, id], onDelete: Cascade)
+  source            String?  @db.VarChar(16)
+  createdAt         DateTime @default(now()) @db.DateTime(3)
+  order             Order    @relation(fields: [tenantId, orderId], references: [tenantId, id], onDelete: Cascade)
 
   @@unique([tenantId, id])
   @@index([tenantId, courseId])
@@ -3046,4 +3048,142 @@ model AiRequest {
   @@unique([tenantId, id])
   @@index([tenantId, createdAt])
   @@index([tenantId, userId, feature, createdAt])
+}
+
+// ── 1:1 coaching ─────────────────────────────────────────────
+
+enum CoachingBookingStatus {
+  BOOKED
+  CANCELLED
+  COMPLETED
+}
+
+/// A sellable 1:1 coaching program: a set of sessions a buyer books with the program's coaches.
+model CoachingProgram {
+  id              String       @id @default(cuid()) @db.Char(25)
+  tenantId        String       @db.Char(25)
+  title           String       @db.VarChar(100)
+  slug            String       @db.VarChar(120)
+  /// Rich-text (TipTap) document.
+  description     Json?
+  coverFileId     String?      @db.Char(25)
+  /// [{ question, answer }]
+  faqs            Json
+  planName        String?      @db.VarChar(100)
+  /// What the buyer pays; 0 = free.
+  priceAmount     Decimal      @db.Decimal(19, 4)
+  /// Original price shown struck through.
+  compareAtAmount Decimal?     @db.Decimal(19, 4)
+  currency        String       @db.Char(3)
+  status          BundleStatus @default(DRAFT)
+  publishedAt     DateTime?    @db.DateTime(3)
+  createdById     String       @db.Char(25)
+  createdAt       DateTime     @default(now()) @db.DateTime(3)
+  updatedAt       DateTime     @updatedAt @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, slug])
+  @@index([tenantId, status])
+}
+
+/// A staff member who coaches a program. Bookings are spread by weight (2 = twice as often as 1).
+model CoachingCoach {
+  id        String @id @default(cuid()) @db.Char(25)
+  tenantId  String @db.Char(25)
+  programId String @db.Char(25)
+  userId    String @db.Char(25)
+  weight    Int    @default(1)
+
+  @@unique([tenantId, id])
+  @@unique([programId, userId])
+  @@index([tenantId, userId])
+}
+
+/// One session of a program (booked once per buyer).
+model CoachingSession {
+  id            String  @id @default(cuid()) @db.Char(25)
+  tenantId      String  @db.Char(25)
+  programId     String  @db.Char(25)
+  position      Int
+  title         String  @db.VarChar(100)
+  durationMin   Int
+  /// Rich-text (TipTap) document.
+  agenda        Json
+  notes         String? @db.VarChar(1000)
+  /// FileAsset ids (purpose LESSON_FILE) shared with the buyer once booked.
+  attachmentIds Json
+
+  @@unique([tenantId, id])
+  @@index([tenantId, programId, position])
+}
+
+/// A coach's booking settings in this academy.
+model CoachProfile {
+  id             String   @id @default(cuid()) @db.Char(25)
+  tenantId       String   @db.Char(25)
+  userId         String   @db.Char(25)
+  timezone       String   @db.VarChar(64)
+  /// Personal meeting room (Zoom/Meet link) used for bookings.
+  meetingUrl     String?  @db.VarChar(500)
+  minNoticeHours Int      @default(12)
+  bufferMin      Int      @default(0)
+  createdAt      DateTime @default(now()) @db.DateTime(3)
+  updatedAt      DateTime @updatedAt @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, userId])
+}
+
+/// Weekly working hours, in the coach's timezone. weekday 0 = Sunday.
+model CoachAvailability {
+  id          String @id @default(cuid()) @db.Char(25)
+  tenantId    String @db.Char(25)
+  userId      String @db.Char(25)
+  weekday     Int
+  startMinute Int
+  endMinute   Int
+
+  @@unique([tenantId, id])
+  @@index([tenantId, userId])
+}
+
+/// A buyer's access to a program.
+model CoachingAccess {
+  id        String    @id @default(cuid()) @db.Char(25)
+  tenantId  String    @db.Char(25)
+  programId String    @db.Char(25)
+  userId    String    @db.Char(25)
+  source    String    @db.VarChar(16)
+  orderId   String?   @db.Char(25)
+  revokedAt DateTime? @db.DateTime(3)
+  createdAt DateTime  @default(now()) @db.DateTime(3)
+  updatedAt DateTime  @updatedAt @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, programId, userId])
+  @@index([tenantId, userId])
+}
+
+model CoachingBooking {
+  id          String                @id @default(cuid()) @db.Char(25)
+  tenantId    String                @db.Char(25)
+  programId   String                @db.Char(25)
+  sessionId   String                @db.Char(25)
+  accessId    String                @db.Char(25)
+  userId      String                @db.Char(25)
+  coachId     String                @db.Char(25)
+  startsAt    DateTime              @db.DateTime(3)
+  endsAt      DateTime              @db.DateTime(3)
+  status      CoachingBookingStatus @default(BOOKED)
+  meetingUrl  String?               @db.VarChar(500)
+  cancelledAt DateTime?             @db.DateTime(3)
+  cancelledBy String?               @db.VarChar(16)
+  createdAt   DateTime              @default(now()) @db.DateTime(3)
+  updatedAt   DateTime              @updatedAt @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, coachId, startsAt])
+  @@index([tenantId, programId, status])
+  @@index([tenantId, userId])
+  @@index([accessId, sessionId])
 }

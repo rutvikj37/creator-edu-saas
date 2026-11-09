@@ -5,6 +5,8 @@ import { CreatorPlanBillingController, PlatformBillingController } from '../bill
 import { CreatorCouponsController, CreatorOrdersController, CreatorPaymentsController, LearnCommerceController, RazorpayWebhookController } from './commerce.controller.js';
 import { CouponsService } from './coupons.service.js';
 import { DigitalProductsService } from './digital-products.service.js';
+import { CoachingService } from './coaching/coaching.service.js';
+import { CreatorCoachingController, LearnCoachingController, PublicCoachingController } from './coaching/coaching.controller.js';
 import { CreatorProductsController, LearnProductsController, PublicProductsController } from './digital-products.controller.js';
 import { BundlesService } from './bundles.service.js';
 import { CartService } from './cart.service.js';
@@ -18,11 +20,11 @@ import { PROVIDER_CLASSES } from './providers/registry.js';
 import { WebhooksService } from './webhooks.service.js';
 import { FilesService } from '../files/files.service.js';
 
-const SERVICES = [PaymentHttp, ...PROVIDER_CLASSES, GatewayService, CouponsService, DigitalProductsService, FunnelService, OrdersService, WebhooksService, BillingService, RecoveryService];
+const SERVICES = [PaymentHttp, ...PROVIDER_CLASSES, GatewayService, CouponsService, DigitalProductsService, CoachingService, FunnelService, OrdersService, WebhooksService, BillingService, RecoveryService];
 
 /** Razorpay commerce (academy sales) and SaaS plan billing: HTTP API. */
 @Module({
-  controllers: [CreatorProductsController, PublicProductsController, LearnProductsController, CreatorBundlesController, PublicBundlesController, LearnCartController, CreatorPaymentsController, CreatorCouponsController, CreatorOrdersController, LearnCommerceController, RazorpayWebhookController, CreatorPlanBillingController, PlatformBillingController],
+  controllers: [CreatorCoachingController, PublicCoachingController, LearnCoachingController, CreatorProductsController, PublicProductsController, LearnProductsController, CreatorBundlesController, PublicBundlesController, LearnCartController, CreatorPaymentsController, CreatorCouponsController, CreatorOrdersController, LearnCommerceController, RazorpayWebhookController, CreatorPlanBillingController, PlatformBillingController],
   providers: [...SERVICES, BundlesService, CartService],
   exports: [OrdersService, GatewayService, FunnelService, RecoveryService],
 })

@@ -20,6 +20,7 @@ import { MembershipsService } from '../memberships/memberships.service.js';
 import { enrollmentExpiry, isEnrollmentUsable } from '../learning/access.js';
 import { CouponsService } from './coupons.service.js';
 import { DigitalProductsService } from './digital-products.service.js';
+import { CoachingService } from './coaching/coaching.service.js';
 import { FunnelService, itemKey } from './funnel.service.js';
 import { GatewayService } from './gateway.service.js';
 import { renderInvoicePdf } from './invoice-pdf.js';
@@ -49,6 +50,8 @@ export interface ProductRef {
   webinarId?: string;
   /** A paid digital product (download). */
   digitalProductId?: string;
+  /** A paid 1:1 coaching program. */
+  coachingProgramId?: string;
   bundleId?: string;
   membershipPlanId?: string;
   /** Buy everything in the student's cart (courses and bundles). */
@@ -64,7 +67,7 @@ export interface ProductRef {
 
 /** One thing being bought. `grant` = courses it unlocks. */
 interface Line {
-  kind: 'course' | 'bundle' | 'membership' | 'webinar' | 'product';
+  kind: 'course' | 'bundle' | 'membership' | 'webinar' | 'product' | 'coaching';
   id: string;
   title: string;
   slug: string | null;
@@ -155,6 +158,7 @@ export class OrdersService {
     private readonly affiliates: AffiliatesService,
     private readonly memberships: MembershipsService,
     private readonly digital: DigitalProductsService,
+    private readonly coaching: CoachingService,
     private readonly funnel: FunnelService,
   ) {}
 
@@ -166,7 +170,7 @@ export class OrdersService {
       subtotalAmount: m(o.subtotalAmount), discountAmount: m(o.discountAmount), taxAmount: m(o.taxAmount), totalAmount: m(o.totalAmount), refundedAmount: m(o.refundedAmount),
       taxRate: m(o.taxRate), taxInclusive: o.taxInclusive, couponCode: o.couponCode, provider: o.provider, billing: o.billing,
       paidAt: o.paidAt, failureReason: o.failureReason, expiresAt: o.expiresAt, createdAt: o.createdAt, userId: o.userId,
-      items: o.items?.map((i: any) => ({ id: i.id, courseId: i.courseId, bundleId: i.bundleId ?? null, membershipPlanId: i.membershipPlanId ?? null, liveClassId: i.liveClassId ?? null, digitalProductId: i.digitalProductId ?? null, title: i.title, unitAmount: m(i.unitAmount), discountAmount: m(i.discountAmount), totalAmount: m(i.totalAmount), source: i.source ?? null, offerId: i.offerId ?? null })),
+      items: o.items?.map((i: any) => ({ id: i.id, courseId: i.courseId, bundleId: i.bundleId ?? null, membershipPlanId: i.membershipPlanId ?? null, liveClassId: i.liveClassId ?? null, digitalProductId: i.digitalProductId ?? null, coachingProgramId: i.coachingProgramId ?? null, title: i.title, unitAmount: m(i.unitAmount), discountAmount: m(i.discountAmount), totalAmount: m(i.totalAmount), source: i.source ?? null, offerId: i.offerId ?? null })),
       paymentLinkId: o.paymentLinkId ?? null,
       payments: o.payments?.map((p: any) => ({
         id: p.id, provider: p.provider, providerOrderId: p.providerOrderId, providerPaymentId: p.providerPaymentId, status: p.status,
@@ -223,6 +227,14 @@ export class OrdersService {
     return { kind: 'product', id: p.id, title: p.title.slice(0, 200), slug: p.slug, unitMinor: toMinor(p.priceAmount, p.currency), currency: p.currency, grant: [] };
   }
 
+  /** A published, paid coaching program with at least one coach and session. */
+  async sellableCoaching(id: string): Promise<Line> {
+    const p = await this.db.coachingProgram.findFirst({ where: { id, status: 'PUBLISHED' } });
+    if (!p) throw AppException.notFound('Coaching program not found');
+    if (Number(p.priceAmount) <= 0) throw AppException.conflict('This program is free — get it on its page.');
+    return { kind: 'coaching', id: p.id, title: `${p.title} (1:1 coaching)`.slice(0, 200), slug: p.slug, unitMinor: toMinor(p.priceAmount, p.currency), currency: p.currency, grant: [] };
+  }
+
   /** A paid webinar with upcoming sessions and seats left. */
   async sellableWebinar(id: string): Promise<Line> {
     const c = await this.db.liveClass.findFirst({ where: { id, kind: 'WEBINAR', status: 'ACTIVE' }, include: { sessions: { where: { status: { in: ['SCHEDULED', 'LIVE'] } }, take: 1 } } });
@@ -250,6 +262,7 @@ export class OrdersService {
     if (kind === 'bundle') return this.sellableBundle(id);
     if (kind === 'product') return this.sellableProduct(id);
     if (kind === 'webinar') return this.sellableWebinar(id);
+    if (kind === 'coaching') return this.sellableCoaching(id);
     throw AppException.validation([{ field: 'itemKind', message: 'Unknown item type' }]);
   }
 
@@ -317,6 +330,8 @@ export class OrdersService {
       lines = [await this.sellableWebinar(ref.webinarId)];
     } else if (ref.digitalProductId) {
       lines = [await this.sellableProduct(ref.digitalProductId)];
+    } else if (ref.coachingProgramId) {
+      lines = [await this.sellableCoaching(ref.coachingProgramId)];
     } else {
       lines = [await this.product(ref)];
     }
@@ -334,6 +349,9 @@ export class OrdersService {
     }
     for (const p of lines.filter((l) => l.kind === 'product')) {
       if (await this.db.digitalProductAccess.findFirst({ where: { productId: p.id, userId, revokedAt: null } })) throw AppException.conflict(lines.length > 1 ? `You already have “${p.title}”. Remove it from your cart.` : 'You already have this product. Find it under My downloads.');
+    }
+    for (const c of lines.filter((l) => l.kind === 'coaching')) {
+      if (await this.db.coachingAccess.findFirst({ where: { programId: c.id, userId, revokedAt: null } })) throw AppException.conflict('You already have this coaching program. Book your sessions under My coaching.');
     }
     for (const w of lines.filter((l) => l.kind === 'webinar')) {
       const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
@@ -381,14 +399,14 @@ export class OrdersService {
     };
   }
 
-  private static signature(items: { courseId?: string | null; bundleId?: string | null; membershipPlanId?: string | null; liveClassId?: string | null; digitalProductId?: string | null }[]) {
-    return items.map((i) => (i.bundleId ? `b:${i.bundleId}` : i.membershipPlanId ? `m:${i.membershipPlanId}` : i.liveClassId ? `w:${i.liveClassId}` : i.digitalProductId ? `p:${i.digitalProductId}` : `c:${i.courseId}`)).sort().join(',');
+  private static signature(items: { courseId?: string | null; bundleId?: string | null; membershipPlanId?: string | null; liveClassId?: string | null; digitalProductId?: string | null; coachingProgramId?: string | null }[]) {
+    return items.map((i) => (i.coachingProgramId ? `k:${i.coachingProgramId}` : i.bundleId ? `b:${i.bundleId}` : i.membershipPlanId ? `m:${i.membershipPlanId}` : i.liveClassId ? `w:${i.liveClassId}` : i.digitalProductId ? `p:${i.digitalProductId}` : `c:${i.courseId}`)).sort().join(',');
   }
 
   async checkout(userId: string, input: CheckoutInput, idempotencyKey?: string) {
     const tenantId = this.ctx.requireTenantId();
     const { lines, link, upsell } = await this.resolve(userId, input);
-    const sig = OrdersService.signature(lines.map((l) => ({ courseId: l.kind === 'course' ? l.id : null, bundleId: l.kind === 'bundle' ? l.id : null, membershipPlanId: l.kind === 'membership' ? l.id : null, liveClassId: l.kind === 'webinar' ? l.id : null, digitalProductId: l.kind === 'product' ? l.id : null })));
+    const sig = OrdersService.signature(lines.map((l) => ({ courseId: l.kind === 'course' ? l.id : null, bundleId: l.kind === 'bundle' ? l.id : null, membershipPlanId: l.kind === 'membership' ? l.id : null, liveClassId: l.kind === 'webinar' ? l.id : null, digitalProductId: l.kind === 'product' ? l.id : null, coachingProgramId: l.kind === 'coaching' ? l.id : null })));
     if (idempotencyKey) {
       const prior = await this.db.order.findFirst({ where: { userId, idempotencyKey }, include: { items: true } });
       if (prior) {
@@ -409,7 +427,7 @@ export class OrdersService {
     const affiliateId = await this.affiliates.attribute(input.affiliateCode, userId);
     const order = await this.db.$transaction(async (tx) => {
       // A new checkout supersedes this buyer's earlier unpaid orders for any of the same items.
-      const ref = (l: Line) => (l.kind === 'course' ? { courseId: l.id } : l.kind === 'bundle' ? { bundleId: l.id } : l.kind === 'webinar' ? { liveClassId: l.id } : l.kind === 'product' ? { digitalProductId: l.id } : { membershipPlanId: l.id });
+      const ref = (l: Line) => (l.kind === 'course' ? { courseId: l.id } : l.kind === 'bundle' ? { bundleId: l.id } : l.kind === 'webinar' ? { liveClassId: l.id } : l.kind === 'product' ? { digitalProductId: l.id } : l.kind === 'coaching' ? { coachingProgramId: l.id } : { membershipPlanId: l.id });
       const match = lines.map(ref);
       const open = await tx.order.findMany({ where: { userId, status: { in: ['PENDING', 'PAYMENT_INITIATED'] }, items: { some: { OR: match } } }, select: { id: true } });
       if (open.length) await tx.order.updateMany({ where: { id: { in: open.map((o) => o.id) } }, data: { status: 'CANCELLED', failureReason: 'Superseded by a newer checkout' } });
@@ -639,6 +657,7 @@ export class OrdersService {
       const bundles = order.items.map((i) => i.bundleId).filter((x): x is string => Boolean(x));
       const products = order.items.map((i) => i.digitalProductId).filter((x): x is string => Boolean(x));
       for (const pid of products) await this.digital.grant(tx, order.userId, pid, 'PURCHASE', order.id);
+      for (const item of order.items) if (item.coachingProgramId) await this.coaching.grant(tx, order.userId, item.coachingProgramId, 'PURCHASE', order.id);
       await tx.cartItem.deleteMany({ where: { userId: order.userId, OR: [{ courseId: { in: granted } }, ...(bundles.length ? [{ bundleId: { in: bundles } }] : []), ...(products.length ? [{ digitalProductId: { in: products } }] : [])] } });
       if (order.couponId) {
         await tx.couponRedemption.create({ data: { couponId: order.couponId, orderId: order.id, userId: order.userId, amount: order.discountAmount } as never });
@@ -691,9 +710,9 @@ export class OrdersService {
   }
 
   /** Upsells in the order count as accepted; reminded orders for the same items count as recovered. */
-  private async afterPaid(order: { id: string; userId: string; recoveryStage: number; items: { courseId: string | null; bundleId: string | null; liveClassId: string | null; digitalProductId: string | null; membershipPlanId: string | null; offerId: string | null; source: string | null }[] }) {
+  private async afterPaid(order: { id: string; userId: string; recoveryStage: number; items: { courseId: string | null; bundleId: string | null; liveClassId: string | null; digitalProductId: string | null; coachingProgramId?: string | null; membershipPlanId: string | null; offerId: string | null; source: string | null }[] }) {
     await this.funnel.markAccepted(order.userId, order.items);
-    const match = order.items.map((i) => (i.bundleId ? { bundleId: i.bundleId } : i.liveClassId ? { liveClassId: i.liveClassId } : i.digitalProductId ? { digitalProductId: i.digitalProductId } : i.membershipPlanId ? { membershipPlanId: i.membershipPlanId } : { courseId: i.courseId }));
+    const match = order.items.map((i) => (i.coachingProgramId ? { coachingProgramId: i.coachingProgramId } : i.bundleId ? { bundleId: i.bundleId } : i.liveClassId ? { liveClassId: i.liveClassId } : i.digitalProductId ? { digitalProductId: i.digitalProductId } : i.membershipPlanId ? { membershipPlanId: i.membershipPlanId } : { courseId: i.courseId }));
     const now = new Date();
     const earlier = await this.db.order.updateMany({
       where: { userId: order.userId, id: { not: order.id }, recoveryStage: { gt: 0, lt: RECOVERY_DONE }, recoveredAt: null, status: { in: [...UNPAID, 'CANCELLED'] }, createdAt: { gte: new Date(now.getTime() - 14 * 86_400_000) }, items: { some: { OR: match } } },
@@ -882,6 +901,11 @@ export class OrdersService {
         for (const i of o.items) if (i.membershipPlanId) await this.memberships.revokeForRefund(tx, o.userId, i.membershipPlanId);
         await tx.webinarRegistration.updateMany({ where: { orderId: o.id, cancelledAt: null }, data: { cancelledAt: new Date() } });
         await tx.digitalProductAccess.updateMany({ where: { orderId: o.id, revokedAt: null }, data: { revokedAt: new Date() } });
+        const coachingAccess = await tx.coachingAccess.findMany({ where: { orderId: o.id, revokedAt: null }, select: { id: true } });
+        if (coachingAccess.length) {
+          await tx.coachingAccess.updateMany({ where: { id: { in: coachingAccess.map((a) => a.id) } }, data: { revokedAt: new Date() } });
+          await tx.coachingBooking.updateMany({ where: { accessId: { in: coachingAccess.map((a) => a.id) }, status: 'BOOKED', startsAt: { gt: new Date() } }, data: { status: 'CANCELLED', cancelledAt: new Date(), cancelledBy: 'REFUND' } });
+        }
       }
       return { r, o, amount };
     });

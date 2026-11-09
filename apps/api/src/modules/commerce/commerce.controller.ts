@@ -63,6 +63,7 @@ class QuoteDto {
   @ApiPropertyOptional({ description: 'Buy everything in the cart' }) @IsOptional() @IsBoolean() fromCart?: boolean;
   @ApiPropertyOptional({ description: 'Buy a paid webinar ticket' }) @IsOptional() @IsString() @Length(25, 25) webinarId?: string;
   @ApiPropertyOptional({ description: 'Buy a digital product' }) @IsOptional() @IsString() @Length(25, 25) digitalProductId?: string;
+  @ApiPropertyOptional({ description: 'Buy a 1:1 coaching program' }) @IsOptional() @IsString() @Length(25, 25) coachingProgramId?: string;
   @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(40) couponCode?: string | null;
   @ApiPropertyOptional({ description: 'Buy through a shareable payment link' }) @IsOptional() @Transform(trim) @IsString() @Length(4, 16) paymentLinkCode?: string;
   @ApiPropertyOptional({ description: 'Take a post-purchase upsell (with sourceOrderId)' }) @IsOptional() @IsString() @Length(25, 25) upsellOfferId?: string;
