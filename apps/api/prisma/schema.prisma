@@ -3245,3 +3245,16 @@ model ReportExport {
   @@unique([tenantId, id])
   @@index([tenantId, createdAt])
 }
+
+/// Internal note on an order (Transactions → details → Comments). Never shown to the buyer.
+model OrderComment {
+  id        String   @id @default(cuid()) @db.Char(25)
+  tenantId  String   @db.Char(25)
+  orderId   String   @db.Char(25)
+  authorId  String   @db.Char(25)
+  body      String   @db.VarChar(2000)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, orderId, createdAt])
+}

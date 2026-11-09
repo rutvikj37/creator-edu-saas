@@ -1,3 +1,4 @@
+import { SettlementsService } from './settlements.service.js';
 import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Patch, Post, Put, Query, Req, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
@@ -109,6 +110,20 @@ class OfflineOrderDto {
   @ApiProperty({ description: 'Amount received' }) @IsNumber({ maxDecimalPlaces: 2 }) @Min(1) @Max(10_000_000) amount: number;
   @ApiPropertyOptional({ description: 'Email the learner a receipt' }) @IsOptional() @IsBoolean() sendEmail?: boolean;
 }
+class OrderCommentDto {
+  @ApiProperty() @Transform(trim) @IsString() @Length(1, 2000) body: string;
+}
+class EditOrderDto {
+  @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(100) state?: string | null;
+  @ApiPropertyOptional() @IsOptional() @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value)) @Matches(/^([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z])?$/, { message: 'Invalid GSTIN format' }) gstin?: string | null;
+  @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(300) gstAddress?: string | null;
+  @ApiPropertyOptional({ description: 'Credit an affiliate (paid orders without one)' }) @IsOptional() @Transform(trim) @IsString() @MaxLength(32) affiliateCode?: string | null;
+}
+class SettlementsQuery {
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Use YYYY-MM-DD' }) from?: string;
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Use YYYY-MM-DD' }) to?: string;
+  @IsOptional() @IsString() @MaxLength(60) q?: string;
+}
 class PaymentsQuery {
   @IsOptional() @IsIn(['CREATED', 'CAPTURED', 'FAILED', 'REFUNDED', 'PARTIALLY_REFUNDED']) status?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
@@ -178,7 +193,7 @@ export class CreatorCouponsController {
 @TenantScoped('workspace')
 @Controller({ path: 'creator', version: '1' })
 export class CreatorOrdersController {
-  constructor(private readonly orders: OrdersService) {}
+  constructor(private readonly orders: OrdersService, private readonly settlementsSvc: SettlementsService) {}
 
   @Get('orders') @RequirePermissions(PERMISSIONS.ORDERS_READ)
   async list(@Query() q: ListQuery) {
@@ -194,6 +209,16 @@ export class CreatorOrdersController {
   @ApiOperation({ summary: 'Record a payment received outside checkout (cash, bank transfer, UPI…) and give access' })
   offline(@Body() dto: OfflineOrderDto, @CurrentAuth() auth: AuthContext) { return this.orders.recordOffline({ ...dto, sendEmail: dto.sendEmail ?? true }, auth.userId); }
 
+  @Get('orders/:id/comments') @RequirePermissions(PERMISSIONS.ORDERS_READ)
+  comments(@Param('id') id: string) { return this.orders.comments(id); }
+
+  @Post('orders/:id/comments') @RequirePermissions(PERMISSIONS.ORDERS_READ)
+  addComment(@Param('id') id: string, @Body() dto: OrderCommentDto, @CurrentAuth() auth: AuthContext) { return this.orders.addComment(id, dto.body, auth.userId); }
+
+  @Patch('orders/:id') @RequirePermissions(PERMISSIONS.REFUNDS_MANAGE)
+  @ApiOperation({ summary: 'Edit buyer state / GSTIN / GST address, or credit an affiliate' })
+  edit(@Param('id') id: string, @Body() dto: EditOrderDto, @CurrentAuth() auth: AuthContext) { return this.orders.editOrder(id, dto, auth.userId); }
+
   @Get('orders/:id') @RequirePermissions(PERMISSIONS.ORDERS_READ)
   get(@Param('id') id: string) { return this.orders.get(id); }
 
@@ -203,6 +228,17 @@ export class CreatorOrdersController {
   @Post('orders/:id/refunds') @RequirePermissions(PERMISSIONS.REFUNDS_MANAGE)
   @ApiOperation({ summary: 'Refund through Razorpay (full or partial)' })
   refund(@Param('id') id: string, @Body() dto: RefundDto, @CurrentAuth() auth: AuthContext) { return this.orders.refund(id, dto, auth.userId); }
+
+  @Get('settlements') @RequirePermissions(PERMISSIONS.ORDERS_READ)
+  @ApiOperation({ summary: 'Payouts from the academy’s Razorpay account, with earnings and amount still to be settled' })
+  settlements(@Query() q: SettlementsQuery) { return this.settlementsSvc.overview(q); }
+
+  @Get('settlements.csv') @RequirePermissions(PERMISSIONS.ORDERS_READ)
+  async settlementsCsv(@Query() q: SettlementsQuery, @Res() res: Response) {
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="settlements.csv"');
+    res.end(`\uFEFF${await this.settlementsSvc.csv(q)}`);
+  }
 
   @Get('transactions') @RequirePermissions(PERMISSIONS.ORDERS_READ)
   async transactions(@Query() q: PaymentsQuery) {

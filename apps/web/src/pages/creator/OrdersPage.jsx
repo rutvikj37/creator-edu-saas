@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download, Info, MoreHorizontal, Plus, ReceiptText, ShoppingCart } from 'lucide-react';
+import { Download, Info, MoreHorizontal, Pencil, Plus, ReceiptText, RotateCcw, ShoppingCart } from 'lucide-react';
+import { INDIAN_STATES } from '../../utils/indianStates.js';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
 import { SearchInput } from '../../components/common/SearchInput.jsx';
 import { FilterChip } from '../../components/common/FilterChip.jsx';
 import { ListToolbar, MetricCard } from '../../components/common/ListToolbar.jsx';
 import { presetRange } from '../../components/common/DateRangeFilter.jsx';
 import { Alert } from '../../components/auth/Alert.jsx';
-import { Avatar, Badge, Button, Card, DataTable, Dropdown, DropdownItem, EmptyState, Input, Modal, Select, Skeleton, StatusBadge, toast } from '../../components/ui/index.js';
+import { Avatar, Badge, Button, Card, DataTable, Drawer, Dropdown, DropdownItem, EmptyState, Input, Modal, Select, Skeleton, StatusBadge, toast } from '../../components/ui/index.js';
 import { bundlesApi, creatorCommerceApi, productsApi } from '../../services/api/commerce.js';
 import { membershipsApi } from '../../services/api/community.js';
 import { coachingApi } from '../../services/api/coaching.js';
@@ -120,6 +121,7 @@ export function TransactionsPage() {
   const [params, update] = useListParams();
   const navigate = useNavigate();
   const [adding, setAdding] = useState(false);
+  const [open, setOpen] = useState(null);
   const range = params.period ? presetRange(params.period) : {};
   const query = { q: params.q, status: params.status, courseId: params.courseId, channel: params.channel, type: params.type, ...range, page: params.page, pageSize: params.pageSize };
   const q = useQuery({ queryKey: ['creator', 'orders', query], queryFn: () => creatorCommerceApi.orders(query), placeholderData: (p) => p });
@@ -170,7 +172,7 @@ export function TransactionsPage() {
             {
               key: 'actions', header: '', align: 'right', cell: (r) => (
                 <Dropdown trigger={(p) => <button type="button" {...p} aria-label={`Actions for ${r.number}`} className="grid size-8 place-items-center rounded-md text-fg-2 hover:bg-surface-2"><MoreHorizontal className="size-4" aria-hidden /></button>}>
-                  <DropdownItem icon={Info} onClick={() => navigate(`/creator/orders/${r.id}`)}>More information</DropdownItem>
+                  <DropdownItem icon={Info} onClick={() => setOpen(r.id)}>More information</DropdownItem>
                   {['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(r.status) && <DropdownItem icon={Download} onClick={() => invoice.mutate(r)}>Download invoice</DropdownItem>}
                 </Dropdown>
               ),
@@ -178,7 +180,78 @@ export function TransactionsPage() {
           ]} />
       </Card>
       <AddTransactionModal open={adding} onClose={() => setAdding(false)} />
+      <TransactionDrawer orderId={open} onClose={() => setOpen(null)} onOpenFull={(id) => navigate(`/creator/orders/${id}`)} />
     </>
+  );
+}
+
+/** Transaction details: key info, internal comments, Refund and Edit order. */
+function TransactionDrawer({ orderId, onClose, onOpenFull }) {
+  const qc = useQueryClient();
+  const [all, setAll] = useState(false);
+  const [comment, setComment] = useState('');
+  const [editing, setEditing] = useState(false);
+  const o = useQuery({ queryKey: ['creator', 'order', orderId], queryFn: () => creatorCommerceApi.order(orderId), enabled: Boolean(orderId) });
+  const c = useQuery({ queryKey: ['creator', 'order', orderId, 'comments'], queryFn: () => creatorCommerceApi.comments(orderId), enabled: Boolean(orderId) });
+  const add = useMutation({ mutationFn: () => creatorCommerceApi.addComment(orderId, comment), onSuccess: (d) => { qc.setQueryData(['creator', 'order', orderId, 'comments'], d); setComment(''); }, onError: (e) => toast.error(e.message) });
+  const d = o.data;
+  const txn = d?.externalReference ?? d?.payments?.find((p) => p.providerPaymentId)?.providerPaymentId ?? null;
+  const row = (k, v) => <div className="grid grid-cols-[9rem_1fr] gap-2 py-1.5 text-sm"><dt className="text-muted">{k}</dt><dd className="break-all text-fg">{v ?? 'NA'}</dd></div>;
+  const refundable = d && d.provider === 'RAZORPAY' && ['PAID', 'PARTIALLY_REFUNDED'].includes(d.status);
+  return (
+    <Drawer open={Boolean(orderId)} onClose={() => { setAll(false); onClose(); }} title="Transaction details">
+      {!d ? <Skeleton className="m-5 h-40" /> : (
+        <div className="flex h-full flex-col">
+          <div className="flex-1 space-y-6 overflow-y-auto p-5">
+            <section>
+              <h3 className="mb-2 font-semibold">Info</h3>
+              <dl>
+                {row('Transaction ID', txn)}{row('User email', d.buyer?.email ?? d.billing?.email)}{row('User phone', d.buyer?.phone ?? d.billing?.phone)}{row('Amount', formatMoney(d.totalAmount, d.currency))}
+                {all && <>{row('Order', d.number)}{row('Status', STATUS_LABEL[d.status] ?? d.status)}{row('Channel', Number(d.totalAmount) === 0 ? 'Free' : CHANNEL[d.paymentMode] ?? 'Online')}{row('Item', d.items?.map((i) => i.title).join(', '))}{row('Promo code', d.couponCode)}{row('GST', d.taxAmount && Number(d.taxAmount) ? `${formatMoney(d.taxAmount, d.currency)} (${d.taxRate}%)` : null)}{row('State', d.billing?.state)}{row('GSTIN', d.billing?.gstin)}{row('Invoice', d.invoiceNumber)}{row('Paid at', d.paidAt ? formatDate(d.paidAt, { withTime: true }) : null)}</>}
+              </dl>
+              <div className="mt-1 flex gap-4"><button type="button" className="text-sm font-medium text-primary-700 dark:text-primary-300" onClick={() => setAll((x) => !x)}>{all ? 'Show less' : 'See all info'}</button><button type="button" className="text-sm text-muted hover:text-fg" onClick={() => onOpenFull(d.id)}>Open full order</button></div>
+            </section>
+            <section className="border-t border-line pt-5">
+              <h3 className="mb-3 font-semibold">Comments</h3>
+              <ul className="mb-3 space-y-3">{(c.data ?? []).map((x) => <li key={x.id} className="rounded-lg bg-surface-2/70 p-3 text-sm"><p className="whitespace-pre-line">{x.body}</p><p className="mt-1 text-xs text-muted">{x.author} · {formatDate(x.createdAt, { withTime: true })}</p></li>)}</ul>
+              <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); if (comment.trim()) add.mutate(); }}>
+                <Input className="flex-1" aria-label="Add comment" placeholder="Add comment…" maxLength={2000} value={comment} onChange={(e) => setComment(e.target.value)} />
+                <Button type="submit" disabled={!comment.trim()} loading={add.isPending}>Add</Button>
+              </form>
+              <p className="mt-1 text-xs text-muted">Only your team sees comments.</p>
+            </section>
+          </div>
+          <div className="grid grid-cols-2 border-t border-line">
+            <button type="button" disabled={!refundable} title={refundable ? undefined : 'Only paid Razorpay orders can be refunded'} onClick={() => onOpenFull(d.id)} className="flex flex-col items-center gap-1 py-3 text-sm text-fg-2 hover:bg-surface-2 disabled:opacity-40"><RotateCcw className="size-4" aria-hidden />Refund</button>
+            <button type="button" onClick={() => setEditing(true)} className="flex flex-col items-center gap-1 border-l border-line py-3 text-sm text-fg-2 hover:bg-surface-2"><Pencil className="size-4" aria-hidden />Edit order</button>
+          </div>
+        </div>
+      )}
+      {d && <EditOrderModal order={d} open={editing} onClose={() => setEditing(false)} />}
+    </Drawer>
+  );
+}
+
+function EditOrderModal({ order, open, onClose }) {
+  const qc = useQueryClient();
+  const [f, setF] = useState({ affiliateCode: '', state: '', gstin: '', gstAddress: '' });
+  const [errors, setErrors] = useState({});
+  useEffect(() => { if (open) { setF({ affiliateCode: '', state: order.billing?.state ?? '', gstin: order.billing?.gstin ?? '', gstAddress: order.billing?.address ?? '' }); setErrors({}); } }, [open, order]);
+  const save = useMutation({
+    mutationFn: () => creatorCommerceApi.editOrder(order.id, { state: f.state || null, gstin: f.gstin.trim() || null, gstAddress: f.gstAddress.trim() || null, ...(f.affiliateCode.trim() ? { affiliateCode: f.affiliateCode.trim() } : {}) }),
+    onSuccess: (d) => { qc.setQueryData(['creator', 'order', order.id], d); qc.invalidateQueries({ queryKey: ['creator', 'orders'] }); toast.success('Order updated'); onClose(); },
+    onError: (e) => { setErrors(Object.fromEntries((e.details ?? []).map((x) => [x.field, x.message]))); toast.error(e.details?.[0]?.message ?? e.message); },
+  });
+  return (
+    <Modal open={open} onClose={onClose} title="Edit order" footer={<Button loading={save.isPending} onClick={() => save.mutate()}>Save changes</Button>}>
+      <div className="space-y-4">
+        {!order.affiliateId && ['PAID', 'PARTIALLY_REFUNDED'].includes(order.status) && <Input label="Affiliate code" placeholder="Credit an affiliate for this sale" maxLength={32} value={f.affiliateCode} error={errors.affiliateCode} onChange={(e) => setF({ ...f, affiliateCode: e.target.value })} />}
+        <Select label="State" placeholder="Select state" value={f.state} onChange={(e) => setF({ ...f, state: e.target.value })} options={INDIAN_STATES.map((x) => ({ value: x, label: x }))} />
+        <Input label="GST number" placeholder="22AAAAA0000A1Z5" value={f.gstin} error={errors.gstin} onChange={(e) => setF({ ...f, gstin: e.target.value.toUpperCase() })} />
+        <Input label="GST address" maxLength={300} value={f.gstAddress} onChange={(e) => setF({ ...f, gstAddress: e.target.value })} />
+        <p className="text-xs text-muted">Changes also update the buyer details on the invoice.</p>
+      </div>
+    </Modal>
   );
 }
 

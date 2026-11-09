@@ -12,7 +12,7 @@ export const TENANT_MODELS = new Set<string>(['TenantMember', 'TenantSetting', '
   'Enrollment', 'LessonProgress', 'LessonNote', 'CourseBookmark', 'LessonComment', 'Quiz', 'QuizQuestion', 'QuizOption', 'QuizAttempt', 'QuizAnswer',
   'Assignment', 'AssignmentSubmission', 'CertificateTemplate', 'Certificate',
   'VideoAsset', 'VideoPlaybackSession', 'VideoStatusHistory', 'VideoUploadSession', 'VideoProcessingEvent', 'VideoBackup', 'DocumentBackup', 'VideoUsageRecord',
-  'AiRequest', 'ReportExport', 'CoachingProgram', 'CoachingCoach', 'CoachingSession', 'CoachProfile', 'CoachAvailability', 'CoachingAccess', 'CoachingBooking', 'PaymentGatewayAccount', 'Coupon', 'CouponRedemption', 'Order', 'OrderItem', 'Payment', 'Refund', 'LedgerEntry', 'Invoice', 'TenantSequence',
+  'AiRequest', 'OrderComment', 'ReportExport', 'CoachingProgram', 'CoachingCoach', 'CoachingSession', 'CoachProfile', 'CoachAvailability', 'CoachingAccess', 'CoachingBooking', 'PaymentGatewayAccount', 'Coupon', 'CouponRedemption', 'Order', 'OrderItem', 'Payment', 'Refund', 'LedgerEntry', 'Invoice', 'TenantSequence',
   'BillingInvoice', 'BillingPayment',
   'SiteSettings', 'SitePage', 'SitePageVersion', 'BlogPost',
   'Lead', 'ConsentEvent', 'Campaign', 'CampaignRecipient', 'Automation', 'AutomationRun',

@@ -65,6 +65,7 @@ export const NAV = {
       items: [
         item('Orders', '/creator/orders', ShoppingCart, 7, { available: true, perm: 'orders.read' }),
         item('Transactions', '/creator/transactions', Receipt, 7, { available: true, perm: 'orders.read' }),
+        item('Settlements', '/creator/settlements', Wallet, 10, { available: true, perm: 'orders.read' }),
         item('Promo codes', '/creator/coupons', Tag, 7, { available: true, perm: 'coupons.manage' }),
         item('Upsells & bumps', '/creator/upsells', Sparkles, 11, { available: true, perm: 'coupons.manage' }),
         item('Payment links', '/creator/payment-links', Link2, 11, { available: true, perm: 'coupons.manage' }),

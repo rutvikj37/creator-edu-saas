@@ -44,6 +44,20 @@ export class RazorpayAdapter implements PaymentAdapter {
     return res.json;
   }
 
+  /** Settlements (payouts to the academy's bank). Docs: razorpay.com/docs/api/settlements. */
+  async settlements(c: GatewayCredentials, q: { from: number; to: number; count: number; skip: number }) {
+    const r = await this.call(c, 'GET', `/settlements?from=${q.from}&to=${q.to}&count=${q.count}&skip=${q.skip}`);
+    return ((r?.items ?? []) as Record<string, unknown>[]).map((s) => ({
+      id: String(s.id), amountMinor: Number(s.amount ?? 0), feesMinor: Number(s.fees ?? 0), taxMinor: Number(s.tax ?? 0), utr: (s.utr as string | null) ?? null, status: String(s.status ?? ''), createdAt: new Date(Number(s.created_at ?? 0) * 1000),
+    }));
+  }
+
+  /** Settlement reconciliation for one day: which transactions each settlement paid out. */
+  async settlementRecon(c: GatewayCredentials, day: Date) {
+    const r = await this.call(c, 'GET', `/settlements/recon/combined?year=${day.getUTCFullYear()}&month=${day.getUTCMonth() + 1}&day=${day.getUTCDate()}&count=1000`);
+    return ((r?.items ?? []) as Record<string, unknown>[]).map((i) => ({ settlementId: (i.settlement_id as string | null) ?? null, type: String(i.type ?? '') }));
+  }
+
   async verifyCredentials(c: GatewayCredentials) {
     await this.call(c, 'GET', '/payments?count=1');
   }

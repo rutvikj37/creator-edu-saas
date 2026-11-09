@@ -841,6 +841,53 @@ export class OrdersService {
     return this.get(order.id);
   }
 
+  // ── order comments and edits (academy) ──────────────────
+  async comments(orderId: string) {
+    await this.get(orderId);
+    const rows = await this.db.orderComment.findMany({ where: { orderId }, orderBy: { createdAt: 'asc' } });
+    const users = await this.prisma.user.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.authorId))] } }, select: { id: true, fullName: true } });
+    return rows.map((r) => ({ id: r.id, body: r.body, createdAt: r.createdAt, author: users.find((u) => u.id === r.authorId)?.fullName ?? '' }));
+  }
+
+  async addComment(orderId: string, body: string, authorId: string) {
+    await this.get(orderId);
+    const text = body.trim();
+    if (!text) throw AppException.validation([{ field: 'body', message: 'Write a comment' }]);
+    await this.db.orderComment.create({ data: { orderId, authorId, body: text.slice(0, 2000) } as never });
+    return this.comments(orderId);
+  }
+
+  /**
+   * Edit order: the buyer's state, GSTIN and GST address (also updated on the invoice), and an
+   * affiliate credited after the fact — only on a paid order that has no affiliate yet.
+   */
+  async editOrder(orderId: string, input: { state?: string | null; gstin?: string | null; gstAddress?: string | null; affiliateCode?: string | null }, actorUserId: string) {
+    const o = await this.db.order.findFirst({ where: { id: orderId } });
+    if (!o) throw AppException.notFound('Order not found');
+    const billing = { ...(o.billing as Record<string, string | null>) };
+    if (input.state !== undefined) billing.state = input.state?.trim() || null;
+    if (input.gstin !== undefined) billing.gstin = input.gstin?.trim().toUpperCase() || null;
+    if (input.gstAddress !== undefined) billing.address = input.gstAddress?.trim() || null;
+    let affiliateId: string | null = null;
+    if (input.affiliateCode) {
+      if (o.affiliateId) throw AppException.conflict('This order already credits an affiliate.');
+      if (!['PAID', 'PARTIALLY_REFUNDED'].includes(o.status)) throw AppException.conflict('Affiliates can be added to paid orders only.');
+      affiliateId = await this.affiliates.attribute(input.affiliateCode, o.userId);
+      if (!affiliateId) throw AppException.validation([{ field: 'affiliateCode', message: 'No active affiliate with this code (buyers can’t refer themselves)' }]);
+    }
+    await this.db.$transaction(async (tx) => {
+      const u = await tx.order.update({ where: { id: orderId }, data: { billing: billing as never, ...(affiliateId ? { affiliateId } : {}) } });
+      const inv = await tx.invoice.findFirst({ where: { orderId } });
+      if (inv) await tx.invoice.update({ where: { id: inv.id }, data: { buyer: { ...(inv.buyer as Record<string, unknown>), state: billing.state, gstin: billing.gstin, address: billing.address ?? null } as never } });
+      if (affiliateId && u.paidAt) {
+        const conv = await this.affiliates.recordConversion(tx, { ...u, paidAt: u.paidAt });
+        if (conv) await tx.ledgerEntry.create({ data: { orderId, type: 'AFFILIATE_COMMISSION', amount: `-${fromMinor(toMinor(conv.commission, u.currency), u.currency)}`, currency: u.currency, description: `Affiliate commission ${Number(conv.percent)}% (added later)` } as never });
+      }
+    });
+    await this.audit.record({ action: 'order.edit', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'Order', targetId: orderId, after: input as never });
+    return this.get(orderId);
+  }
+
   async get(id: string) {
     const o = await this.db.order.findFirst({ where: { id }, include: { items: true, payments: { orderBy: { createdAt: 'desc' } }, refunds: { orderBy: { createdAt: 'desc' } } } });
     if (!o) throw AppException.notFound('Order not found');

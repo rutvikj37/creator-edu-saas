@@ -21,6 +21,10 @@ export class RazorpaySim {
     return this;
   }
 
+  /** Settlements and reconciliation rows the sim returns (tests fill these). */
+  settlements: any[] = [];
+  recon: any[] = [];
+
   private id(prefix: string) {
     return `${prefix}_${(++this.n).toString().padStart(14, '0')}`;
   }
@@ -33,6 +37,11 @@ export class RazorpaySim {
     if (!user || this.keys.get(user) !== pass) return { status: 401, json: { error: { code: 'BAD_REQUEST_ERROR', description: 'Authentication failed' } } };
     const body = req.body as any;
     let m: RegExpMatchArray | null;
+    if (req.method === 'GET' && path === '/settlements') {
+      const from = Number(u.searchParams.get('from')), to = Number(u.searchParams.get('to'));
+      return { status: 200, json: { entity: 'collection', count: this.settlements.length, items: this.settlements.filter((x) => x.created_at >= from && x.created_at <= to) } };
+    }
+    if (req.method === 'GET' && path === '/settlements/recon/combined') return { status: 200, json: { entity: 'collection', count: this.recon.length, items: this.recon } };
     if (req.method === 'GET' && path === '/payments') return { status: 200, json: { entity: 'collection', count: 0, items: [] } };
     if (req.method === 'POST' && path === '/orders') {
       const o = { id: this.id('order'), entity: 'order', amount: body.amount, currency: body.currency, receipt: body.receipt, notes: body.notes, status: 'created', key: user };

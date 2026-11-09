@@ -1,3 +1,4 @@
+import { SettlementsService } from './settlements.service.js';
 import { Module } from '@nestjs/common';
 import { BillingProcessor, CommerceProcessor, CommerceScheduler, WebhooksProcessor } from './commerce.processor.js';
 import { BillingService } from '../billing/billing.service.js';
@@ -21,7 +22,7 @@ import { PROVIDER_CLASSES } from './providers/registry.js';
 import { WebhooksService } from './webhooks.service.js';
 import { FilesService } from '../files/files.service.js';
 
-const SERVICES = [PaymentHttp, ...PROVIDER_CLASSES, GatewayService, CouponsService, DigitalProductsService, CoachingService, GoogleMeetService, FunnelService, OrdersService, WebhooksService, BillingService, RecoveryService];
+const SERVICES = [SettlementsService, PaymentHttp, ...PROVIDER_CLASSES, GatewayService, CouponsService, DigitalProductsService, CoachingService, GoogleMeetService, FunnelService, OrdersService, WebhooksService, BillingService, RecoveryService];
 
 /** Razorpay commerce (academy sales) and SaaS plan billing: HTTP API. */
 @Module({
