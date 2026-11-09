@@ -1,4 +1,5 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
+import { AcademySecurityService } from '../../../core/security/academy-security.service.js';
 import { ERROR_CODES } from '@ce/shared';
 import { PrismaService } from '../../../core/prisma/prisma.service.js';
 import { AppEvents } from '../../../core/events/app-events.service.js';
@@ -34,6 +35,7 @@ export class AuthService {
     private readonly audit: AuditService,
     private readonly mail: MailService,
     private readonly events: AppEvents,
+    private readonly security: AcademySecurityService,
   ) {}
 
   /** Creator sign-up: platform user + tenant (ONBOARDING) + owner membership + subdomain, atomically. */
@@ -136,6 +138,7 @@ export class AuthService {
       mfaSetupRequired = !user.twoFactorEnabledAt && (await this.authz.requiresMfa(user.id));
     } else {
       tenantId = user.realmKey;
+      await this.enforceDeviceLimit(user.id, tenantId);
     }
     await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     await this.recordLogin(user.id, realmKey, user.email, true, null, method, meta);
@@ -143,6 +146,18 @@ export class AuthService {
       await this.audit.record({ action: 'auth.admin_login', actorUserId: user.id, actorRealm: 'PLATFORM', targetType: 'User', targetId: user.id, ip: meta.ip, userAgent: meta.userAgent, after: { method } });
     }
     return this.sessions.issue(user, { tenantId, mfaSetupRequired }, meta);
+  }
+
+  /**
+   * Academy device limit (Settings → Security): a learner signing in on one device too many is signed
+   * out of their oldest devices, so at most `deviceLimit` sessions stay active.
+   */
+  private async enforceDeviceLimit(userId: string, tenantId: string) {
+    const { deviceLimit } = await this.security.get(tenantId);
+    if (!deviceLimit) return;
+    const active = await this.prisma.userSession.findMany({ where: { userId, revokedAt: null, rotatedAt: null, expiresAt: { gt: new Date() } }, orderBy: { lastUsedAt: 'asc' }, select: { familyId: true } });
+    const families = [...new Set(active.map((a) => a.familyId))];
+    for (const familyId of families.slice(0, Math.max(0, families.length - deviceLimit + 1))) await this.sessions.revokeFamily(familyId, 'device_limit');
   }
 
   async refresh(refreshToken: string, host: HostRealm, meta: ClientMeta) {
@@ -180,6 +195,8 @@ export class AuthService {
       platformRoles,
       permissions: [...permissions].sort(),
       mfaSetupRequired: auth.mfaSetupRequired,
+      // The active academy requires 2FA for its team and this account hasn't turned it on.
+      workspaceRequiresTwoFactor: Boolean(auth.realm === 'PLATFORM' && auth.tenantId && !user.twoFactorEnabledAt && (await this.security.get(auth.tenantId)).teamTwoFactor),
       memberships: memberships.map((m) => ({ ...m.tenant, role: m.role })),
     };
   }
