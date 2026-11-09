@@ -86,9 +86,18 @@ describe('Conversion tracking (e2e)', () => {
     expect(rep.series.at(-1)).toMatchObject({ revenue: 999, paidUsers: 1 });
     expect((await authed(app, cs).get('/api/v1/creator/analytics/reports?days=365').expect(200)).body.data.series.length).toBeGreaterThan(360);
     expect((await authed(app, s).get('/api/v1/creator/analytics/reports')).status).not.toBe(200);
+    expect(rep.totals).toMatchObject({ avgDailyClasses: 0, avgDailyTests: 0, liveClasses: 0 });
+    expect(rep.classesByCourse).toEqual([]);
+    // Downloads: an exported report is kept and can be downloaded again.
+    const csv = await authed(app, cs).get('/api/v1/creator/analytics/exports/orders.csv').expect(200);
+    const list = (await authed(app, cs).get('/api/v1/creator/analytics/exports').expect(200)).body.data;
+    expect(list.items[0]).toMatchObject({ kind: 'SALES', fileName: expect.stringMatching(/^orders-/), user: expect.any(String) });
+    const again = await authed(app, cs).get(`/api/v1/creator/analytics/exports/${list.items[0].id}/download`).expect(200);
+    expect(again.text).toBe(csv.text);
     // Permissions and isolation.
     const other = await registerCreator(app);
     expect((await authed(app, other.session).get('/api/v1/creator/analytics/conversions').expect(200)).body.data.funnel.visitors).toBe(0);
+    expect((await authed(app, other.session).get('/api/v1/creator/analytics/exports')).body.data.meta.total).toBe(0);
     await authed(app, s).get('/api/v1/creator/analytics/conversions').expect((r) => expect([401, 403, 404]).toContain(r.status));
   });
 });

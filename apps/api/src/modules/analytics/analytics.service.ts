@@ -114,7 +114,7 @@ export class AnalyticsService {
       range: { from: cur.fromDay, to: cur.toDay, days: n, currency: cur.currency, timezone: cur.tz }, asOf: new Date(),
       totals: a.totals,
       change: Object.fromEntries((Object.keys(a.totals) as (keyof typeof a.totals)[]).map((k) => [k, ch(k)])),
-      series: a.series, topCourses: a.topCourses,
+      series: a.series, topCourses: a.topCourses, classesByCourse: a.classesByCourse, testsByCourse: a.testsByCourse,
     };
   }
 
@@ -135,7 +135,11 @@ export class AnalyticsService {
       this.db.assignmentSubmission.count({ where: { submittedAt: at } }),
       this.db.lessonComment.count({ where: { createdAt: at, hiddenAt: null } }),
     ]);
-    const blank = () => ({ revenue: 0, transactions: 0, successful: 0, signups: 0, enrollments: 0, paidUsers: new Set<string>(), active: new Set<string>(), webSeconds: 0, mobileSeconds: 0 });
+    const [classes, tests] = await Promise.all([
+      this.db.liveSession.findMany({ where: { startsAt: at, status: { not: 'CANCELLED' } }, select: { startsAt: true, liveClass: { select: { courseId: true } } } }),
+      this.db.quizAttempt.findMany({ where: { submittedAt: at }, select: { submittedAt: true, quizId: true } }),
+    ]);
+    const blank = () => ({ classes: 0, tests: 0, revenue: 0, transactions: 0, successful: 0, signups: 0, enrollments: 0, paidUsers: new Set<string>(), active: new Set<string>(), webSeconds: 0, mobileSeconds: 0 });
     const days = new Map(r.days.map((d) => [d, blank()]));
     const day = (t: Date | null) => (t ? days.get(localDate(t, r.tz)) : undefined);
     let amount = 0;
@@ -150,6 +154,8 @@ export class AnalyticsService {
     for (const o of paid) day(o.paidAt)?.paidUsers.add(o.userId);
     const owners = progress.length ? await this.db.enrollment.findMany({ where: { id: { in: [...new Set(progress.map((p) => p.enrollmentId))] } }, select: { id: true, userId: true } }) : [];
     for (const p of progress) { const u = owners.find((o) => o.id === p.enrollmentId)?.userId; if (u) day(p.updatedAt)?.active.add(u); }
+    for (const c of classes) { const s = day(c.startsAt); if (s) s.classes += 1; }
+    for (const t of tests) { const s = day(t.submittedAt); if (s) s.tests += 1; }
     const byLesson = new Map<string, { seconds: number; users: Set<string> }>();
     for (const v of playback) {
       const sec = sessionSeconds(v.createdAt, v.lastSeenAt);
@@ -167,8 +173,9 @@ export class AnalyticsService {
       activeUsers: union((x) => x.active), paidUsers: union((x) => x.paidUsers),
       timeSpentSeconds: sum((x) => x.webSeconds + x.mobileSeconds), webSeconds: sum((x) => x.webSeconds), mobileSeconds: sum((x) => x.mobileSeconds),
       completions, certificates, quizAttempts: quizzes, assignmentSubmissions: submissions, comments,
+      liveClasses: classes.length, avgDailyClasses: Math.round((classes.length / r.days.length) * 10) / 10, avgDailyTests: Math.round((tests.length / r.days.length) * 10) / 10,
     };
-    if (totalsOnly) return { totals, series: [], topCourses: [] };
+    if (totalsOnly) return { totals, series: [], topCourses: [], classesByCourse: [], testsByCourse: [] };
     const lessons = await this.db.courseLesson.findMany({ where: { id: { in: [...byLesson.keys()] } }, select: { id: true, courseId: true } });
     const byCourse = new Map<string, { seconds: number; users: Set<string> }>();
     for (const [lessonId, v] of byLesson) {
@@ -177,16 +184,45 @@ export class AnalyticsService {
       const e = byCourse.get(cid) ?? { seconds: 0, users: new Set<string>() };
       e.seconds += v.seconds; v.users.forEach((u) => e.users.add(u)); byCourse.set(cid, e);
     }
-    const titles = await this.db.course.findMany({ where: { id: { in: [...byCourse.keys()] } }, select: { id: true, title: true } });
+    const quizCourses = tests.length ? await this.db.quiz.findMany({ where: { id: { in: [...new Set(tests.map((t) => t.quizId))] } }, select: { id: true, courseId: true } }) : [];
+    const count = (ids: (string | null | undefined)[]) => { const m = new Map<string, number>(); for (const id of ids) m.set(id ?? '', (m.get(id ?? '') ?? 0) + 1); return m; };
+    const classSplit = count(classes.map((c) => c.liveClass.courseId));
+    const testSplit = count(tests.map((t) => quizCourses.find((q) => q.id === t.quizId)?.courseId));
+    const titles = await this.db.course.findMany({ where: { id: { in: [...new Set([...byCourse.keys(), ...classSplit.keys(), ...testSplit.keys()].filter(Boolean))] } }, select: { id: true, title: true } });
+    const split = (m: Map<string, number>) => [...m.entries()].map(([id, n]) => ({ courseId: id || null, title: id ? titles.find((t) => t.id === id)?.title ?? 'Deleted course' : 'Not linked to a course', count: n })).sort((x, y) => y.count - x.count);
     return {
       totals,
       series: [...days.entries()].map(([date, x]) => ({
         date, revenue: Number(fromMinor(x.revenue, r.currency)), transactions: x.transactions, successful: x.successful, signups: x.signups, enrollments: x.enrollments,
-        activeUsers: x.active.size, paidUsers: x.paidUsers.size, webSeconds: x.webSeconds, mobileSeconds: x.mobileSeconds,
+        activeUsers: x.active.size, paidUsers: x.paidUsers.size, webSeconds: x.webSeconds, mobileSeconds: x.mobileSeconds, classes: x.classes, tests: x.tests,
       })),
+      classesByCourse: split(classSplit), testsByCourse: split(testSplit),
       topCourses: [...byCourse.entries()].map(([id, v]) => ({ courseId: id, title: titles.find((t) => t.id === id)?.title ?? 'Deleted course', seconds: v.seconds, learners: v.users.size }))
         .sort((x, y) => y.seconds - x.seconds).slice(0, 10),
     };
+  }
+
+  // ── report downloads history ──────────────────────────────
+  async recordExport(kind: 'SALES' | 'GST' | 'STUDENTS' | 'ENROLLMENTS', fileName: string, csv: string, userId: string) {
+    const size = Buffer.byteLength(csv, 'utf8');
+    if (size > 15 * 1024 * 1024) return; // too large to keep a copy; the download itself still works
+    await this.db.reportExport.create({ data: { kind, fileName: fileName.slice(0, 200), sizeBytes: size, content: csv, createdById: userId } as never });
+  }
+
+  async exportsList(page: number) {
+    const take = 10;
+    const [rows, total] = await Promise.all([
+      this.db.reportExport.findMany({ orderBy: { createdAt: 'desc' }, skip: (Math.max(1, page) - 1) * take, take, select: { id: true, kind: true, fileName: true, sizeBytes: true, createdById: true, createdAt: true } }),
+      this.db.reportExport.count(),
+    ]);
+    const users = await this.prisma.user.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.createdById))] } }, select: { id: true, fullName: true } });
+    return { items: rows.map((r) => ({ ...r, user: users.find((u) => u.id === r.createdById)?.fullName ?? '' })), meta: { page: Math.max(1, page), pageSize: take, total } };
+  }
+
+  async exportGet(id: string) {
+    const e = await this.db.reportExport.findFirst({ where: { id } });
+    if (!e) throw AppException.notFound('Report not found');
+    return e;
   }
 
   /** Per-course learning and sales figures (lifetime). */

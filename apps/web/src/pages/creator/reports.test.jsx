@@ -6,11 +6,11 @@ import { vi } from 'vitest';
 import { duration, ReportsPage } from './ReportsPage.jsx';
 import { analyticsApi } from '../../services/api/analytics.js';
 
-vi.mock('../../services/api/analytics.js', () => ({ analyticsApi: { reports: vi.fn() } }));
+vi.mock('../../services/api/analytics.js', () => ({ analyticsApi: { reports: vi.fn(), exportsList: vi.fn(async () => ({ items: [{ id: 'e1', kind: 'SALES', fileName: 'orders.csv', sizeBytes: 3174, user: 'Asha', createdAt: '2026-11-07T13:22:00Z' }], meta: { page: 1, pageSize: 10, total: 1 } })), exportDownload: vi.fn() } }));
 vi.mock('recharts', async (orig) => ({ ...(await orig()), ResponsiveContainer: ({ children }) => <div style={{ width: 400, height: 200 }}>{children}</div> }));
 
-const totals = { revenue: '999.00', transactions: 5, successfulTransactions: 3, transactionAmount: '999.00', signups: 2, enrollments: 3, activeUsers: 1, paidUsers: 1, timeSpentSeconds: 750, webSeconds: 600, mobileSeconds: 150, completions: 1, certificates: 1, quizAttempts: 4, assignmentSubmissions: 0, comments: 2 };
-const data = (days) => ({ range: { days, currency: 'INR' }, asOf: new Date().toISOString(), totals, change: { signups: 100, enrollments: 100 }, series: [{ date: '2026-11-09', revenue: 999, transactions: 5, successful: 3, signups: 2, enrollments: 3, activeUsers: 1, paidUsers: 1, webSeconds: 600, mobileSeconds: 150 }], topCourses: [{ courseId: 'c1', title: 'GST Basics', seconds: 750, learners: 1 }] });
+const totals = { revenue: '999.00', transactions: 5, successfulTransactions: 3, transactionAmount: '999.00', signups: 2, enrollments: 3, activeUsers: 1, paidUsers: 1, timeSpentSeconds: 750, webSeconds: 600, mobileSeconds: 150, completions: 1, certificates: 1, quizAttempts: 4, assignmentSubmissions: 0, comments: 2, liveClasses: 2, avgDailyClasses: 0.3, avgDailyTests: 0.6 };
+const data = (days) => ({ range: { days, currency: 'INR' }, asOf: new Date().toISOString(), totals, change: { signups: 100, enrollments: 100 }, series: [{ date: '2026-11-09', revenue: 999, transactions: 5, successful: 3, signups: 2, enrollments: 3, activeUsers: 1, paidUsers: 1, webSeconds: 600, mobileSeconds: 150 }], topCourses: [{ courseId: 'c1', title: 'GST Basics', seconds: 750, learners: 1 }], classesByCourse: [{ courseId: 'c1', title: 'GST Basics', count: 2 }], testsByCourse: [] });
 
 function wrap() {
   const router = createMemoryRouter([{ path: '/creator/reports', element: <ReportsPage /> }], { initialEntries: ['/creator/reports'] });
@@ -42,4 +42,8 @@ it('reports: overview totals with change, period switch, sales, usage and activi
   expect(screen.getByText('10 min 0 sec · 80%')).toBeInTheDocument();
   await userEvent.click(screen.getByRole('tab', { name: 'School Activity' }));
   expect(await screen.findByText('Quiz attempts')).toBeInTheDocument();
+  expect(screen.getByText('Average daily classes')).toBeInTheDocument();
+  expect(screen.getByText('Class split across courses')).toBeInTheDocument();
+  expect((await screen.findAllByText('Sales report')).length).toBeGreaterThan(0);
+  expect(screen.getAllByText('3.1 kB').length).toBeGreaterThan(0);
 });

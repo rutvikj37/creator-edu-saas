@@ -3223,3 +3223,19 @@ model CoachingBooking {
   @@index([tenantId, userId])
   @@index([accessId, sessionId])
 }
+
+/// A CSV report someone downloaded (Reports → Downloads keeps a copy to download again).
+model ReportExport {
+  id          String   @id @default(cuid()) @db.Char(25)
+  tenantId    String   @db.Char(25)
+  /// SALES, GST, STUDENTS or ENROLLMENTS
+  kind        String   @db.VarChar(16)
+  fileName    String   @db.VarChar(200)
+  sizeBytes   Int
+  content     String   @db.MediumText
+  createdById String   @db.Char(25)
+  createdAt   DateTime @default(now()) @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, createdAt])
+}

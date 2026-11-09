@@ -1,10 +1,12 @@
+import { useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { saveBlob } from '../../utils/download.js';
 import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { Clock } from 'lucide-react';
+import { Clock, Download } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
 import { Change, TrendCard, timeAgo } from '../../components/charts/TrendCard.jsx';
-import { Card, EmptyState, ErrorState, SegmentedControl, Skeleton, Tabs } from '../../components/ui/index.js';
+import { Button, Card, DataTable, EmptyState, ErrorState, SegmentedControl, Skeleton, Tabs, toast } from '../../components/ui/index.js';
 import { analyticsApi } from '../../services/api/analytics.js';
 import { formatMoney, formatNumber } from '../../utils/format.js';
 
@@ -31,6 +33,37 @@ function SeriesCard({ title, value, change, data, keys, format = formatNumber, a
           </AreaChart>
         </ResponsiveContainer>
       </div>
+    </Card>
+  );
+}
+
+function SplitCard({ title, total, rows, data, seriesKey, asOf }) {
+  return (
+    <div className="space-y-3">
+      <SeriesCard title={title} value={formatNumber(total ?? 0)} data={data ?? []} keys={[{ key: seriesKey, label: title, color: 'var(--primary-600)' }]} asOf={asOf} height={180} />
+      {rows?.length > 0 && <Card className="p-4"><ul className="space-y-2 text-sm">{rows.map((r) => <li key={r.courseId ?? 'none'} className="flex justify-between gap-3"><span className="truncate">{r.title}</span><span className="tabular-nums text-muted">{r.count}</span></li>)}</ul></Card>}
+    </div>
+  );
+}
+
+function DownloadsCard() {
+  const [page, setPage] = useState(1);
+  const q = useQuery({ queryKey: ['analytics', 'exports', page], queryFn: () => analyticsApi.exportsList(page), placeholderData: (p) => p });
+  const dl = useMutation({ mutationFn: (e) => analyticsApi.exportDownload(e.id).then((b) => saveBlob(b, e.fileName)), onError: (e) => toast.error(e.message) });
+  const size = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : b >= 1024 ? `${(b / 1024).toFixed(1)} kB` : `${b} B`);
+  const label = { SALES: 'Sales report', GST: 'GST report', STUDENTS: 'Students report', ENROLLMENTS: 'Enrollments report' };
+  return (
+    <Card>
+      <div className="p-5 pb-3"><h2 className="text-lg font-semibold">Downloads</h2><p className="text-sm text-muted">{q.data ? `${q.data.meta.total} download${q.data.meta.total === 1 ? '' : 's'}` : ' '}</p></div>
+      <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data?.items ?? []} meta={q.data?.meta} onPageChange={setPage}
+        empty={<EmptyState title="No downloads yet" description="Reports you export (orders, GST, students) appear here to download again." />}
+        columns={[
+          { key: 'createdAt', header: 'Created', cell: (r) => <div className="leading-tight"><p>{new Date(r.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p><p className="text-xs text-muted">{new Date(r.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</p></div> },
+          { key: 'item', header: 'Item', cell: (r) => <div className="leading-tight"><p>{label[r.kind] ?? r.kind}</p><p className="text-xs text-muted">{size(r.sizeBytes)}</p></div> },
+          { key: 'user', header: 'User', cell: (r) => r.user },
+          { key: 'kind', header: 'Type', cell: (r) => r.kind },
+          { key: 'dl', header: '', align: 'right', cell: (r) => <Button size="sm" variant="secondary" aria-label={`Download ${r.fileName}`} loading={dl.isPending && dl.variables?.id === r.id} onClick={() => dl.mutate(r)}><Download className="size-4" /></Button> },
+        ]} />
     </Card>
   );
 }
@@ -106,7 +139,15 @@ export function ReportsPage() {
               </Card>
             </div>
           </>}
-          {tab === 'activity' && (
+          {tab === 'activity' && <>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {card('Average daily classes', 'avgDailyClasses', formatNumber, 'classes')}
+              {card('Average daily tests', 'avgDailyTests', formatNumber, 'tests')}
+            </div>
+            <div className="grid gap-6 lg:grid-cols-2">
+              <div><h2 className="mb-3 text-lg font-semibold">Live tests</h2><SplitCard title="Test split across courses" total={d.totals.quizAttempts} rows={d.testsByCourse} data={d.series} seriesKey="tests" asOf={d.asOf} /></div>
+              <div><h2 className="mb-3 text-lg font-semibold">Live classes</h2><SplitCard title="Class split across courses" total={d.totals.liveClasses} rows={d.classesByCourse} data={d.series} seriesKey="classes" asOf={d.asOf} /></div>
+            </div>
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {card('New enrollments', 'enrollments', formatNumber, 'enrollments')}
               {card('Course completions', 'completions', formatNumber)}
@@ -115,7 +156,8 @@ export function ReportsPage() {
               {card('Assignment submissions', 'assignmentSubmissions', formatNumber)}
               {card('Comments', 'comments', formatNumber)}
             </div>
-          )}
+            <DownloadsCard />
+          </>}
           <p className="text-xs text-muted">Compared with the previous {days === '365' ? 'year' : `${days} days`}. Learning time is measured from video viewing.</p>
         </div>
       )}

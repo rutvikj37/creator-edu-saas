@@ -1,12 +1,12 @@
-import { Body, Controller, Get, Headers, HttpCode, Post, Query, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Param, Post, Query, Req, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { IsIn, IsOptional, IsString, Matches, MaxLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { Public } from '../../common/decorators/public.decorator.js';
-import type { AppRequest } from '../../core/tenancy/request-context.js';
+import type { AppRequest, AuthContext } from '../../core/tenancy/request-context.js';
 import type { Response } from 'express';
 import { FEATURES, PERMISSIONS } from '@ce/shared';
-import { RequireFeature, RequirePermissions, TenantScoped } from '../../common/decorators/auth.decorators.js';
+import { CurrentAuth, RequireFeature, RequirePermissions, TenantScoped } from '../../common/decorators/auth.decorators.js';
 import { AnalyticsService } from './analytics.service.js';
 import { ConversionService } from './conversion.service.js';
 
@@ -49,21 +49,32 @@ export class AnalyticsController {
   gst(@Query() q: RangeDto) { return this.svc.gst(q); }
 
   @Get('exports/gst.csv') @RequirePermissions(PERMISSIONS.ORDERS_READ)
-  async gstCsv(@Query() q: RangeDto, @Res() res: Response) {
+  async gstCsv(@Query() q: RangeDto, @Res() res: Response, @CurrentAuth() auth: AuthContext) {
     const csv = await this.svc.gstCsv(q);
-    sendCsv(res, `gst-${q.from ?? 'last-30-days'}${q.to ? `-to-${q.to}` : ''}.csv`, csv);
+    const name = `gst-${q.from ?? 'last-30-days'}${q.to ? `-to-${q.to}` : ''}.csv`;
+    await this.svc.recordExport('GST', name, csv, auth.userId);
+    sendCsv(res, name, csv);
   }
 
   @Get('exports/orders.csv') @RequirePermissions(PERMISSIONS.ORDERS_READ)
-  async ordersCsv(@Query() q: RangeDto, @Res() res: Response) {
-    sendCsv(res, `orders-${q.from ?? 'last-30-days'}${q.to ? `-to-${q.to}` : ''}.csv`, await this.svc.ordersCsv(q));
+  async ordersCsv(@Query() q: RangeDto, @Res() res: Response, @CurrentAuth() auth: AuthContext) {
+    const name = `orders-${q.from ?? 'last-30-days'}${q.to ? `-to-${q.to}` : ''}.csv`;
+    const csv = await this.svc.ordersCsv(q);
+    await this.svc.recordExport('SALES', name, csv, auth.userId);
+    sendCsv(res, name, csv);
   }
 
   @Get('exports/students.csv') @RequirePermissions(PERMISSIONS.STUDENTS_READ) @RequireFeature(FEATURES.ANALYTICS_ADVANCED.key)
-  async studentsCsv(@Res() res: Response) { sendCsv(res, 'students.csv', await this.svc.studentsCsv()); }
+  async studentsCsv(@Res() res: Response, @CurrentAuth() auth: AuthContext) { const csv = await this.svc.studentsCsv(); await this.svc.recordExport('STUDENTS', 'students.csv', csv, auth.userId); sendCsv(res, 'students.csv', csv); }
 
   @Get('exports/enrollments.csv') @RequirePermissions(PERMISSIONS.STUDENTS_READ) @RequireFeature(FEATURES.ANALYTICS_ADVANCED.key)
-  async enrollmentsCsv(@Query() q: EnrollmentExportDto, @Res() res: Response) { sendCsv(res, 'enrollments.csv', await this.svc.enrollmentsCsv(q.courseId)); }
+  async enrollmentsCsv(@Query() q: EnrollmentExportDto, @Res() res: Response, @CurrentAuth() auth: AuthContext) { const csv = await this.svc.enrollmentsCsv(q.courseId); await this.svc.recordExport('ENROLLMENTS', 'enrollments.csv', csv, auth.userId); sendCsv(res, 'enrollments.csv', csv); }
+
+  @Get('exports') @RequirePermissions(PERMISSIONS.ANALYTICS_READ)
+  exports(@Query('page') page?: string) { return this.svc.exportsList(Number(page) || 1); }
+
+  @Get('exports/:id/download') @RequirePermissions(PERMISSIONS.ANALYTICS_READ)
+  async exportDownload(@Param('id') id: string, @Res() res: Response) { const e = await this.svc.exportGet(id); sendCsv(res, e.fileName, e.content); }
 }
 
 class TrackItemDto {
