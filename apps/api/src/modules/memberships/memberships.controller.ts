@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { Type } from 'class-transformer';
-import { ValidateNested } from 'class-validator';
+import { IsBoolean, ValidateNested } from 'class-validator';
 import { apiOrigin } from '../files/files.controller.js';
 import { ApiBearerAuth, ApiProperty, ApiTags } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
@@ -28,6 +28,9 @@ class PlanDto {
   @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(1) @Max(10_000_000) compareAtAmount?: number | null;
   @IsOptional() @Transform(trim) @IsString() @MaxLength(100) planName?: string | null;
   @IsOptional() @IsString() @Length(25, 25) coverFileId?: string | null;
+  @IsOptional() @Transform(trim) @IsString() @MaxLength(40) buttonText?: string | null;
+  @IsOptional() @IsBoolean() lifetime?: boolean;
+  @IsOptional() @IsBoolean() taxExclusive?: boolean | null;
   @IsOptional() @IsArray() @ArrayMaxSize(30) @ValidateNested({ each: true }) @Type(() => FaqDto) faqs?: FaqDto[];
 }
 /** Name only → a draft for the step-by-step builder; with price, interval and courses → on sale at once. */

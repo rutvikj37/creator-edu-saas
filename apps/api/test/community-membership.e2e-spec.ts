@@ -172,4 +172,27 @@ describe('Memberships and communities (e2e)', () => {
     await authed(app, other.session).get(`/api/v1/creator/memberships/${draft.id}`).expect(404);
     expect((await authed(app, other.session).get('/api/v1/creator/memberships/stats')).body.data.totalMembers).toBe(0);
   });
+  it('advanced pricing: unlimited (lifetime) access bought once, GST shown separately, custom button text, receive estimate inputs', async () => {
+    await prisma.tenantBusinessProfile.upsert({ where: { tenantId: c.tenant.id }, update: { gstRegistered: true, taxRate: 18, pricesIncludeTax: true }, create: { tenantId: c.tenant.id, gstRegistered: true, taxRate: 18, pricesIncludeTax: true } as never });
+    const p = (await authed(app, cs).post('/api/v1/creator/memberships').send({ name: 'Lifetime club' }).expect(201)).body.data;
+    await authed(app, cs).patch(`/api/v1/creator/memberships/${p.id}`).send({ buttonText: 'x'.repeat(41) }).expect(422);
+    const live = (await authed(app, cs).patch(`/api/v1/creator/memberships/${p.id}`).send({ courseIds: [courses[1].id], priceAmount: 1000, lifetime: true, taxExclusive: true, buttonText: 'Join for life', status: 'ACTIVE' }).expect(200)).body.data;
+    expect(live).toMatchObject({ lifetime: true, taxExclusive: true, buttonText: 'Join for life' });
+    const stats = (await authed(app, cs).get('/api/v1/creator/memberships/stats')).body.data;
+    expect(stats.pricing).toMatchObject({ gstRegistered: true, taxRate: 18, pricesIncludeTax: true, commissionPercent: expect.any(Number) });
+    expect((await api(app).get('/api/v1/public/memberships').set('Host', tenantHost(c.tenant.slug))).body.data.find((x: any) => x.id === p.id)).toMatchObject({ buttonText: 'Join for life', lifetime: true });
+
+    // GST is added on top for this plan even though the academy's prices include GST.
+    const m = await student('Lifetime Buyer');
+    const q = (await authed(app, m.s).post('/api/v1/learn/checkout/quote').send({ membershipPlanId: p.id }).expect(200)).body.data;
+    expect(q).toMatchObject({ taxInclusive: false, subtotal: '1000.00', tax: '180.00', total: '1180.00' });
+    await buyPlan(m.s, p.id);
+    const mine = (await authed(app, m.s).get('/api/v1/learn/memberships')).body.data.find((x: any) => x.plan.id === p.id);
+    expect(mine.active).toBe(true);
+    expect(new Date(mine.currentPeriodEnd).getUTCFullYear()).toBe(2999);
+    expect((await prisma.enrollment.findFirstOrThrow({ where: { userId: m.id, courseId: courses[1].id } })).expiresAt).toBeNull();
+    // Bought once: a second purchase is refused.
+    await authed(app, m.s).post('/api/v1/learn/checkout').send({ membershipPlanId: p.id, billing: { name: 'Member' } }).expect(409);
+    await prisma.tenantBusinessProfile.update({ where: { tenantId: c.tenant.id }, data: { gstRegistered: false } });
+  });
 });

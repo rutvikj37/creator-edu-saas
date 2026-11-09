@@ -1,16 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, BookOpen, Calendar, Check, Crown, Pencil, Plus, Search, Trash2, Wallet } from 'lucide-react';
+import { ArrowLeft, BookOpen, Calendar, CalendarRange, Check, ChevronDown, Crown, Info, Pencil, Percent, Plus, Search, Trash2, Wallet } from 'lucide-react';
 import { FileUpload } from '../../components/forms/FileUpload.jsx';
-import { Button, Card, Checkbox, ConfirmDialog, EmptyState, Input, Modal, Select, Skeleton, Textarea, toast } from '../../components/ui/index.js';
+import { Button, Card, Checkbox, ConfirmDialog, EmptyState, Input, Modal, SegmentedControl, Select, Skeleton, Switch, Textarea, toast } from '../../components/ui/index.js';
 import { membershipsApi } from '../../services/api/community.js';
 import { coursesApi } from '../../services/api/creator.js';
 import { cn } from '../../utils/cn.js';
 import { formatMoney } from '../../utils/format.js';
 
 const STEPS = ['Enter Details', 'Add Products', 'Pricing'];
-const per = (i) => (i === 'YEAR' ? 'year' : 'month');
 
 /** Full-page, three-step membership builder (create and edit). */
 export function MembershipBuilderPage() {
@@ -18,6 +17,9 @@ export function MembershipBuilderPage() {
   const navigate = useNavigate();
   const existing = useQuery({ queryKey: ['memberships', 'plan', id], queryFn: () => membershipsApi.get(id), enabled: Boolean(id) });
   const courses = useQuery({ queryKey: ['creator', 'courses', 'all'], queryFn: () => coursesApi.list({ pageSize: 100 }) });
+  const stats = useQuery({ queryKey: ['memberships', 'stats'], queryFn: membershipsApi.stats });
+  const [advanced, setAdvanced] = useState(false);
+  const [other, setOther] = useState(true);
   const [step, setStep] = useState(0);
   const [planId, setPlanId] = useState(id ?? null);
   const [busy, setBusy] = useState(false);
@@ -25,12 +27,13 @@ export function MembershipBuilderPage() {
   const [faqEdit, setFaqEdit] = useState(null); // { index, question, answer }
   const [picker, setPicker] = useState(false);
   const [leave, setLeave] = useState(false);
-  const [f, setF] = useState({ name: '', description: '', cover: null, faqs: [], courseIds: [], planName: '', interval: 'MONTH', price: '', sale: '', status: 'DRAFT' });
+  const [f, setF] = useState({ name: '', description: '', cover: null, faqs: [], courseIds: [], planName: '', interval: 'MONTH', price: '', sale: '', status: 'DRAFT', buttonText: '', lifetime: false, taxExclusive: null });
   useEffect(() => {
     const p = existing.data;
     if (!p) return;
     setF({ name: p.name, description: p.description ?? '', cover: p.coverFileId ? { id: p.coverFileId, url: p.coverUrl } : null, faqs: p.faqs ?? [], courseIds: p.courseIds, planName: p.planName ?? '', interval: p.interval,
-      price: p.compareAtAmount ? Number(p.compareAtAmount) : Number(p.priceAmount) || '', sale: p.compareAtAmount ? Number(p.priceAmount) : '', status: p.status });
+      price: p.compareAtAmount ? Number(p.compareAtAmount) : Number(p.priceAmount) || '', sale: p.compareAtAmount ? Number(p.priceAmount) : '', status: p.status,
+      buttonText: p.buttonText ?? '', lifetime: p.lifetime, taxExclusive: p.taxExclusive });
   }, [existing.data]);
   const set = (patch) => setF((x) => ({ ...x, ...patch }));
   const all = courses.data?.items ?? [];
@@ -38,6 +41,12 @@ export function MembershipBuilderPage() {
   const price = Number(f.price) || 0;
   const sale = f.sale === '' ? null : Number(f.sale);
   const charge = sale !== null && sale < price ? sale : price;
+  const pricing = stats.data?.pricing ?? { gstRegistered: false, taxRate: 0, pricesIncludeTax: true, commissionPercent: 0 };
+  const exclusive = f.taxExclusive ?? !pricing.pricesIncludeTax;
+  const rate = pricing.gstRegistered ? pricing.taxRate : 0;
+  const effective = rate && exclusive ? charge * (1 + rate / 100) : charge;
+  const net = rate && !exclusive ? charge / (1 + rate / 100) : charge;
+  const receive = net * (1 - (pricing.commissionPercent ?? 0) / 100);
 
   const validate = () => {
     const e = {};
@@ -53,7 +62,10 @@ export function MembershipBuilderPage() {
   const body = (publish) => {
     if (step === 0) return { name: f.name.trim(), description: f.description.trim() || null, coverFileId: f.cover?.id ?? null, faqs: f.faqs };
     if (step === 1) return { courseIds: f.courseIds };
-    return { planName: f.planName.trim() || null, interval: f.interval, priceAmount: charge, compareAtAmount: sale !== null && sale < price ? price : null, ...(publish ? { status: 'ACTIVE' } : {}) };
+    return {
+      planName: f.planName.trim() || null, interval: f.interval, priceAmount: charge, compareAtAmount: sale !== null && sale < price ? price : null,
+      buttonText: f.buttonText.trim() || null, lifetime: f.lifetime, taxExclusive: f.taxExclusive, ...(publish ? { status: 'ACTIVE' } : {}),
+    };
   };
   const save = async (publish = false) => {
     if (!validate()) return false;
@@ -165,7 +177,7 @@ export function MembershipBuilderPage() {
 
       {step === 2 && (
         <>
-          <div className="mb-6 text-center"><h1 className="text-3xl font-semibold tracking-tight">Setup Pricing</h1><p className="mt-1 text-sm text-muted">Members pay for a month or a year of access and renew by paying again.</p></div>
+          <div className="mb-6 text-center"><h1 className="text-3xl font-semibold tracking-tight">Setup Pricing</h1><p className="mt-1 text-sm text-muted">Add a pricing to begin with. You can change it later.</p></div>
           <div className="grid gap-6 lg:grid-cols-[1fr_24rem]">
             <div className="space-y-6">
               <Card className="space-y-3 p-5">
@@ -176,17 +188,49 @@ export function MembershipBuilderPage() {
                 <div><p className="font-semibold">Choose a type of pricing plan</p><p className="text-sm text-muted">Choose how you want your audience to pay</p></div>
                 <div className="flex items-center gap-3 rounded-lg border border-line p-3">
                   <span className="grid size-10 place-items-center rounded-lg bg-surface-2"><Wallet className="size-5" aria-hidden /></span>
-                  <Select aria-label="Pricing type" className="flex-1" value={f.interval} onChange={(e) => set({ interval: e.target.value })} options={[{ value: 'MONTH', label: 'Monthly — access for one month per payment' }, { value: 'YEAR', label: 'Yearly — access for one year per payment' }]} />
+                  <div><p className="font-medium">One-time payment</p><p className="text-sm text-muted">Charge a single fee with a time-bound or lifetime access</p></div>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <Input label="Price" type="number" min={0} step="0.01" placeholder="0" value={f.price} error={errors.price} onChange={(e) => set({ price: e.target.value })} />
-                  <Input label="Sale price" type="number" min={0} step="0.01" placeholder="Optional" value={f.sale} error={errors.sale} hint="Lower than the price; shown with the price struck through." onChange={(e) => set({ sale: e.target.value })} />
+                  <MoneyInput label="Price" value={f.price} error={errors.price} onChange={(v) => set({ price: v })} />
+                  <MoneyInput label="Sale price" value={f.sale} error={errors.sale} hint="Optional. Lower than the price; shown with the price struck through." onChange={(v) => set({ sale: v })} />
                 </div>
                 <div className="grid gap-4 rounded-lg bg-surface-2/60 p-4 sm:grid-cols-2">
-                  <div><p className="text-sm font-medium">Members pay</p><p className="text-xl font-semibold">{formatMoney(charge, 'INR')}<span className="text-sm font-normal text-muted"> / {per(f.interval)}</span></p></div>
-                  <div><p className="text-sm font-medium">Discount</p><p className="text-xl font-semibold">{sale !== null && sale < price ? `${Math.round(((price - sale) / price) * 100)}% off` : '—'}</p></div>
+                  <div><p className="text-sm font-medium">Effective price</p><p className="text-xl font-semibold" title="What the member pays, including GST">{formatMoney(effective, 'INR')}</p><p className="text-xs text-muted">{rate ? `${exclusive ? 'Price + ' : 'Includes '}${rate}% GST` : 'No GST charged'}</p></div>
+                  <div><p className="text-sm font-medium">You will receive</p><p className="text-xl font-semibold">{formatMoney(receive, 'INR')}</p><p className="text-xs text-muted">After {rate ? 'GST' : ''}{rate && pricing.commissionPercent ? ' and ' : ''}{pricing.commissionPercent ? `${pricing.commissionPercent}% platform commission` : rate ? '' : 'no deductions'}, before Razorpay fees</p></div>
                 </div>
-                <p className="text-xs text-muted">We email members 7 days before their access ends so they can renew. There is no automatic card charge.</p>
+                <button type="button" aria-expanded={advanced} onClick={() => setAdvanced((x) => !x)} className="inline-flex items-center gap-1 text-sm font-medium text-primary-700 dark:text-primary-300">Advanced settings<ChevronDown className={cn('size-4 transition-transform', advanced && 'rotate-180')} aria-hidden /></button>
+                {advanced && (
+                  <div className="space-y-4">
+                    <Input label="Customize button text" maxLength={40} placeholder="Get Access Now" value={f.buttonText} onChange={(e) => set({ buttonText: e.target.value })} />
+                    <div>
+                      <p className="mb-1.5 text-sm font-medium text-fg">Expiry settings</p>
+                      <div className="flex flex-col gap-3 rounded-lg border border-line p-3 sm:flex-row sm:items-center">
+                        <span className="grid size-10 place-items-center rounded-lg bg-surface-2"><CalendarRange className="size-5" aria-hidden /></span>
+                        <div className="flex-1"><p className="font-medium">Plan duration</p><p className="text-sm text-muted">Valid for a time period or keep unlimited</p></div>
+                        <SegmentedControl size="sm" label="Plan duration" value={f.lifetime ? 'unlimited' : 'limited'} onChange={(v) => set({ lifetime: v === 'unlimited' })} options={[{ value: 'limited', label: 'Limited' }, { value: 'unlimited', label: 'Unlimited' }]} />
+                      </div>
+                      {!f.lifetime && <Select className="mt-3" label="Access period per payment" value={f.interval} onChange={(e) => set({ interval: e.target.value })} options={[{ value: 'MONTH', label: '1 month — members renew by paying again' }, { value: 'YEAR', label: '1 year — members renew by paying again' }]} />}
+                      <p className="mt-2 text-xs text-muted">{f.lifetime ? 'One payment gives access for as long as the membership exists. No renewals.' : 'We email members 7 days before their access ends so they can renew. There is no automatic card charge.'}</p>
+                    </div>
+                  </div>
+                )}
+              </Card>
+              <Card className="space-y-4 p-5">
+                <button type="button" aria-expanded={other} onClick={() => setOther((x) => !x)} className="flex w-full items-start justify-between text-left">
+                  <span><span className="block font-semibold">Other settings</span><span className="text-sm text-muted">You can modify these later as well</span></span>
+                  <ChevronDown className={cn('size-4 text-muted transition-transform', other && 'rotate-180')} aria-hidden />
+                </button>
+                {other && (
+                  <div>
+                    <p className="mb-1.5 text-sm font-medium text-fg">Tax display settings</p>
+                    <div className="flex items-center gap-3 rounded-lg border border-line p-3">
+                      <span className="grid size-10 place-items-center rounded-lg bg-surface-2"><Percent className="size-5" aria-hidden /></span>
+                      <div className="flex-1"><label htmlFor="tax-display" className="font-medium">Show taxes separately</label><p className="text-sm text-muted">When on, members see the price without GST and GST is added at checkout</p></div>
+                      <Switch id="tax-display" checked={exclusive} disabled={!pricing.gstRegistered} onChange={(v) => set({ taxExclusive: v })} />
+                    </div>
+                    {!pricing.gstRegistered && <p className="mt-2 flex items-center gap-1 text-xs text-muted"><Info className="size-3.5" aria-hidden />You aren’t charging GST yet. Turn it on under Settings → Business to use this.</p>}
+                  </div>
+                )}
               </Card>
             </div>
             <div className="h-fit rounded-2xl bg-gradient-to-br from-rose-200 via-rose-300 to-amber-200 p-8">
@@ -196,9 +240,10 @@ export function MembershipBuilderPage() {
                 <div className="space-y-2 p-5">
                   <p className="font-semibold">{f.planName || 'Plan name'}</p>
                   <p className="text-2xl font-semibold">{formatMoney(charge, 'INR')}{sale !== null && sale < price && <span className="ml-2 text-sm font-normal text-slate-500 line-through">{formatMoney(price, 'INR')}</span>}</p>
-                  <p className="text-sm text-slate-500">Per {per(f.interval)}</p>
-                  <p className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1 text-sm"><Calendar className="size-4" aria-hidden />{f.interval === 'YEAR' ? '1 year access' : '1 month access'}</p>
-                  <div className="mt-2 rounded-full bg-indigo-600 py-2.5 text-center text-sm font-semibold text-white">Get Access Now</div>
+                  <p className="text-sm text-slate-500">One time purchase</p>
+                  {rate > 0 && exclusive && <p className="text-sm text-slate-700">+ taxes</p>}
+                  <p className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1 text-sm"><Calendar className="size-4" aria-hidden />{f.lifetime ? 'Lifetime access' : f.interval === 'YEAR' ? '1 year access' : '1 month access'}</p>
+                  <div className="mt-2 rounded-full bg-indigo-600 py-2.5 text-center text-sm font-semibold text-white">{f.buttonText.trim() || 'Get Access Now'}</div>
                 </div>
               </div>
             </div>
@@ -209,6 +254,19 @@ export function MembershipBuilderPage() {
       <FaqModal value={faqEdit} onClose={() => setFaqEdit(null)} onSave={(q) => { set({ faqs: q.index === -1 ? [...f.faqs, { question: q.question, answer: q.answer }] : f.faqs.map((x, j) => (j === q.index ? { question: q.question, answer: q.answer } : x)) }); setFaqEdit(null); }} />
       <CoursePicker open={picker} courses={all} loading={courses.isLoading} selected={f.courseIds} onClose={() => setPicker(false)} onAdd={(ids) => { set({ courseIds: [...new Set([...f.courseIds, ...ids])] }); setErrors({}); setPicker(false); }} />
       <ConfirmDialog open={leave} onClose={() => setLeave(false)} title="Leave the membership builder?" description={planId ? 'Your saved steps are kept as a draft.' : 'What you’ve entered on this page will be lost.'} confirmLabel="Leave" onConfirm={() => navigate('/creator/memberships')} />
+    </div>
+  );
+}
+
+function MoneyInput({ label, value, onChange, error, hint }) {
+  return (
+    <div>
+      <p className="mb-1.5 text-sm font-medium text-fg">{label}</p>
+      <div className="flex overflow-hidden rounded-md border border-line focus-within:ring-2 focus-within:ring-primary-500">
+        <span className="grid w-10 place-items-center border-r border-line bg-surface-2 text-sm text-muted" aria-hidden>₹</span>
+        <input type="number" min={0} step="0.01" placeholder="0" aria-label={label} aria-invalid={Boolean(error)} value={value} onChange={(e) => onChange(e.target.value)} className="h-10 min-w-0 flex-1 bg-surface px-3 text-sm focus:outline-none" />
+      </div>
+      {error ? <p role="alert" className="text-xs text-red-600">{error}</p> : hint && <p className="text-xs text-muted">{hint}</p>}
     </div>
   );
 }

@@ -68,6 +68,7 @@ it('memberships page shows totals, the payments banner and plan cards with filte
 });
 
 it('builder: details with FAQs, courses from the picker, then pricing and publish', async () => {
+  membershipsApi.stats.mockResolvedValue({ totalMembers: 0, totalRevenue: '0', currency: 'INR', pricing: { gstRegistered: true, taxRate: 18, pricesIncludeTax: false, commissionPercent: 5 } });
   membershipsApi.create.mockResolvedValue({ id: 'p9' });
   membershipsApi.update.mockResolvedValue({ id: 'p9' });
   const router = wrap([{ path: '/creator/memberships/new', element: <MembershipBuilderPage /> }, { path: '/creator/memberships', element: <p>list</p> }], '/creator/memberships/new');
@@ -96,12 +97,24 @@ it('builder: details with FAQs, courses from the picker, then pricing and publis
   // Step 3: yearly, 1499 struck through, 999 charged → publish.
   expect(await screen.findByRole('heading', { name: 'Setup Pricing' })).toBeInTheDocument();
   await userEvent.type(screen.getByLabelText('Plan name'), 'Yearly pass');
-  await userEvent.selectOptions(screen.getByLabelText('Pricing type'), 'YEAR');
   await userEvent.type(screen.getByLabelText('Price'), '1499');
   await userEvent.type(screen.getByLabelText('Sale price'), '999');
-  expect(screen.getByText('33% off')).toBeInTheDocument();
+  // GST on top (18%) and a 5% platform commission: effective price and what the academy receives.
+  expect(screen.getByText('Price + 18% GST')).toBeInTheDocument();
+  expect(screen.getByText('₹1,178.82')).toBeInTheDocument();
+  expect(screen.getByText('₹949.05')).toBeInTheDocument();
+  expect(screen.getByText('+ taxes')).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Advanced settings' }));
+  await userEvent.type(screen.getByLabelText('Customize button text'), 'Join now');
+  await userEvent.selectOptions(screen.getByLabelText('Access period per payment'), 'YEAR');
+  expect(screen.getAllByText('Join now').length).toBeGreaterThan(0);
+  await userEvent.click(screen.getByRole('radio', { name: 'Unlimited' }));
+  expect(screen.getByText('Lifetime access')).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('radio', { name: 'Limited' }));
+  await userEvent.click(screen.getByRole('switch', { name: 'Show taxes separately' }));
+  expect(screen.queryByText('+ taxes')).toBeNull();
   await userEvent.click(screen.getByRole('button', { name: 'Publish' }));
-  await waitFor(() => expect(membershipsApi.update).toHaveBeenLastCalledWith('p9', { planName: 'Yearly pass', interval: 'YEAR', priceAmount: 999, compareAtAmount: 1499, status: 'ACTIVE' }));
+  await waitFor(() => expect(membershipsApi.update).toHaveBeenLastCalledWith('p9', { planName: 'Yearly pass', interval: 'YEAR', priceAmount: 999, compareAtAmount: 1499, buttonText: 'Join now', lifetime: false, taxExclusive: false, status: 'ACTIVE' }));
   await waitFor(() => expect(router.state.location.pathname).toBe('/creator/memberships'));
 });
 

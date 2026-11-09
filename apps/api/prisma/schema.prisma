@@ -2989,6 +2989,12 @@ model MembershipPlan {
   coverFileId     String?         @db.Char(25)
   /// [{ question, answer }]
   faqs            Json?
+  /// Label on the buy button (default: Get Access Now).
+  buttonText      String?         @db.VarChar(40)
+  /// Unlimited plan duration: one payment, access never ends (no renewals).
+  lifetime        Boolean         @default(false)
+  /// true = GST is added on top of the price, false = included, null = the academy's setting.
+  taxExclusive    Boolean?
   /// DRAFT (being built), ACTIVE (on sale) or ARCHIVED.
   status          String          @default("ACTIVE") @db.VarChar(16)
   createdById     String          @db.Char(25)

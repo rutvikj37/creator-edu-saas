@@ -11,9 +11,13 @@ import { TenantContext } from '../../core/tenancy/tenant-context.service.js';
 import { addInterval } from '../subscriptions/subscriptions.service.js';
 import { academyOrigin } from '../tenants/academy-origin.js';
 import { FilesService } from '../files/files.service.js';
+import { EntitlementsService } from '../subscriptions/entitlements.service.js';
+import { FEATURES } from '@ce/shared';
 
 type Tx = Parameters<Parameters<TenantPrismaClient['$transaction']>[0]>[0];
 const DAY = 86_400_000;
+/** Access end used for unlimited (lifetime) plans. */
+export const LIFETIME_END = new Date('2999-12-31T00:00:00Z');
 
 export interface PlanInput {
   name?: string;
@@ -27,6 +31,9 @@ export interface PlanInput {
   planName?: string | null;
   coverFileId?: string | null;
   faqs?: { question: string; answer: string }[];
+  buttonText?: string | null;
+  lifetime?: boolean;
+  taxExclusive?: boolean | null;
 }
 
 /**
@@ -45,12 +52,13 @@ export class MembershipsService {
     private readonly config: AppConfig,
     /** Absent in the worker, which never builds cover URLs. */
     @Optional() private readonly files?: FilesService,
+    @Optional() private readonly entitlements?: EntitlementsService,
   ) {}
 
   private view(p: any, extra: Record<string, unknown> = {}) {
     return {
       id: p.id, name: p.name, description: p.description, priceAmount: p.priceAmount.toString(), compareAtAmount: p.compareAtAmount?.toString() ?? null, currency: p.currency, interval: p.interval,
-      courseIds: p.courseIds as string[], status: p.status, planName: p.planName ?? null, coverFileId: p.coverFileId ?? null, faqs: (p.faqs as unknown[] | null) ?? [], createdAt: p.createdAt, ...extra,
+      courseIds: p.courseIds as string[], status: p.status, planName: p.planName ?? null, buttonText: p.buttonText ?? null, lifetime: Boolean(p.lifetime), taxExclusive: p.taxExclusive ?? null, coverFileId: p.coverFileId ?? null, faqs: (p.faqs as unknown[] | null) ?? [], createdAt: p.createdAt, ...extra,
     };
   }
 
@@ -69,6 +77,7 @@ export class MembershipsService {
   private async validate(input: PlanInput, draft = false) {
     const errors: { field: string; message: string }[] = [];
     if (input.compareAtAmount && input.priceAmount !== undefined && input.compareAtAmount <= input.priceAmount) errors.push({ field: 'compareAtAmount', message: 'The original price must be higher than the sale price' });
+    if (input.buttonText && input.buttonText.trim().length > 40) errors.push({ field: 'buttonText', message: 'Up to 40 characters' });
     if (input.planName && input.planName.trim().length > 100) errors.push({ field: 'planName', message: 'Up to 100 characters' });
     if (input.faqs && (input.faqs.length > 30 || input.faqs.some((f) => !f.question?.trim() || !f.answer?.trim()))) errors.push({ field: 'faqs', message: 'Up to 30 questions, each with an answer' });
     if (input.coverFileId && this.files) await this.files.assertUsable(input.coverFileId, ['IMAGE', 'COURSE_THUMBNAIL', 'COURSE_BANNER']).catch(() => errors.push({ field: 'coverFileId', message: 'Upload an image' }));
@@ -108,7 +117,19 @@ export class MembershipsService {
       this.db.orderItem.aggregate({ where: { membershipPlanId: { not: null }, order: { status: { in: ['PAID', 'PARTIALLY_REFUNDED'] } } }, _sum: { totalAmount: true } }),
       this.prisma.tenant.findUniqueOrThrow({ where: { id: this.ctx.requireTenantId() }, select: { defaultCurrency: true } }),
     ]);
-    return { totalMembers: members, totalRevenue: revenue._sum.totalAmount?.toString() ?? '0', currency: t.defaultCurrency };
+    const tenantId = this.ctx.requireTenantId();
+    const [biz, ent] = await Promise.all([
+      this.prisma.tenantBusinessProfile.findUnique({ where: { tenantId }, select: { gstRegistered: true, taxRate: true, pricesIncludeTax: true } }),
+      this.entitlements ? this.entitlements.get(tenantId) : null,
+    ]);
+    return {
+      totalMembers: members, totalRevenue: revenue._sum.totalAmount?.toString() ?? '0', currency: t.defaultCurrency,
+      // What the pricing step needs to show the effective price and what the academy receives.
+      pricing: {
+        gstRegistered: Boolean(biz?.gstRegistered), taxRate: biz?.gstRegistered ? Number(biz.taxRate) : 0, pricesIncludeTax: biz?.pricesIncludeTax ?? true,
+        commissionPercent: ent?.features[FEATURES.COMMISSION_PERCENT.key]?.limit ?? 0,
+      },
+    };
   }
 
   /**
@@ -124,6 +145,7 @@ export class MembershipsService {
         name: input.name.trim(), description: input.description?.trim() || null, priceAmount: input.priceAmount ?? 0, compareAtAmount: input.compareAtAmount ?? null, currency: input.currency ?? t.defaultCurrency,
         interval: input.interval ?? 'MONTH', courseIds: [...new Set(input.courseIds ?? [])], planName: input.planName?.trim() || null, coverFileId: input.coverFileId ?? null,
         faqs: (input.faqs ?? []).map((f) => ({ question: f.question.trim(), answer: f.answer.trim() })), status: draft ? 'DRAFT' : 'ACTIVE', createdById: actorUserId,
+        buttonText: input.buttonText?.trim() || null, lifetime: input.lifetime ?? false, taxExclusive: input.taxExclusive ?? null,
       } as never,
     });
     await this.audit.record({ action: 'membership.plan_create', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'MembershipPlan', targetId: p.id });
@@ -150,6 +172,9 @@ export class MembershipsService {
         ...(input.planName !== undefined ? { planName: input.planName?.trim() || null } : {}),
         ...(input.coverFileId !== undefined ? { coverFileId: input.coverFileId } : {}),
         ...(input.faqs !== undefined ? { faqs: input.faqs.map((f) => ({ question: f.question.trim(), answer: f.answer.trim() })) } : {}),
+        ...(input.buttonText !== undefined ? { buttonText: input.buttonText?.trim() || null } : {}),
+        ...(input.lifetime !== undefined ? { lifetime: input.lifetime } : {}),
+        ...(input.taxExclusive !== undefined ? { taxExclusive: input.taxExclusive } : {}),
       },
     });
     await this.audit.record({ action: 'membership.plan_update', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'MembershipPlan', targetId: id, after: input as never });
@@ -188,15 +213,16 @@ export class MembershipsService {
     const plan = await tx.membershipPlan.findFirstOrThrow({ where: { id: planId } });
     const existing = await tx.membership.findFirst({ where: { userId, planId } });
     const from = existing && existing.status === 'ACTIVE' && existing.currentPeriodEnd > now ? existing.currentPeriodEnd : now;
-    const end = addInterval(from, plan.interval);
+    const end = plan.lifetime ? LIFETIME_END : addInterval(from, plan.interval);
     if (existing) await tx.membership.update({ where: { id: existing.id }, data: { status: 'ACTIVE', currentPeriodEnd: end, lastOrderId: orderId, reminderSentFor: null, ...(from === now ? { startedAt: now } : {}) } });
     else await tx.membership.create({ data: { userId, planId, startedAt: now, currentPeriodEnd: end, lastOrderId: orderId } as never });
     for (const courseId of plan.courseIds as string[]) {
       const e = await tx.enrollment.findFirst({ where: { userId, courseId } });
       // Never shorten access the student already has (e.g. a lifetime purchase).
       if (e && e.status === 'ACTIVE' && (e.expiresAt === null || e.expiresAt >= end) && e.source !== 'MEMBERSHIP') continue;
-      if (e) await tx.enrollment.update({ where: { id: e.id }, data: { status: 'ACTIVE', expiresAt: end, source: e.source === 'MEMBERSHIP' || !(e.status === 'ACTIVE') ? 'MEMBERSHIP' : e.source } });
-      else await tx.enrollment.create({ data: { userId, courseId, source: 'MEMBERSHIP', expiresAt: end } as never });
+      const expiresAt = plan.lifetime ? null : end;
+      if (e) await tx.enrollment.update({ where: { id: e.id }, data: { status: 'ACTIVE', expiresAt, source: e.source === 'MEMBERSHIP' || !(e.status === 'ACTIVE') ? 'MEMBERSHIP' : e.source } });
+      else await tx.enrollment.create({ data: { userId, courseId, source: 'MEMBERSHIP', expiresAt } as never });
     }
     return end;
   }

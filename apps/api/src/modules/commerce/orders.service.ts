@@ -79,6 +79,10 @@ interface Line {
   offerId?: string;
   /** Promo codes don't discount bump and upsell prices. */
   couponable?: boolean;
+  /** The item's own GST display (true = included); undefined = the academy's setting. */
+  taxInclusive?: boolean;
+  /** A lifetime membership: bought once. */
+  lifetime?: boolean;
 }
 
 /** Order states a buyer can come back from (reminders, recovery). */
@@ -207,7 +211,10 @@ export class OrdersService {
   private async product(ref: { courseId?: string; membershipPlanId?: string }): Promise<Line> {
     if (ref.membershipPlanId) {
       const p = await this.memberships.sellable(ref.membershipPlanId);
-      return { kind: 'membership', id: p.id, title: `${p.name} membership (${p.interval === 'YEAR' ? 'yearly' : 'monthly'})`, slug: null, unitMinor: toMinor(p.priceAmount, p.currency), currency: p.currency, grant: [] };
+      return {
+        kind: 'membership', id: p.id, title: `${p.name} membership (${p.lifetime ? 'lifetime' : p.interval === 'YEAR' ? 'yearly' : 'monthly'})`, slug: null, unitMinor: toMinor(p.priceAmount, p.currency), currency: p.currency, grant: [],
+        ...(p.taxExclusive === null || p.taxExclusive === undefined ? {} : { taxInclusive: !p.taxExclusive }), lifetime: p.lifetime,
+      };
     }
     if (!ref.courseId) throw AppException.validation([{ field: 'courseId', message: 'Choose what to buy' }]);
     const c = await this.sellableCourse(ref.courseId);
@@ -350,6 +357,9 @@ export class OrdersService {
     for (const p of lines.filter((l) => l.kind === 'product')) {
       if (await this.db.digitalProductAccess.findFirst({ where: { productId: p.id, userId, revokedAt: null } })) throw AppException.conflict(lines.length > 1 ? `You already have “${p.title}”. Remove it from your cart.` : 'You already have this product. Find it under My downloads.');
     }
+    for (const m of lines.filter((l) => l.kind === 'membership' && l.lifetime)) {
+      if (await this.db.membership.findFirst({ where: { userId, planId: m.id, status: 'ACTIVE', currentPeriodEnd: { gt: new Date() } } })) throw AppException.conflict('You already have lifetime access to this membership.');
+    }
     for (const c of lines.filter((l) => l.kind === 'coaching')) {
       if (await this.db.coachingAccess.findFirst({ where: { programId: c.id, userId, revokedAt: null } })) throw AppException.conflict('You already have this coaching program. Book your sessions under My coaching.');
     }
@@ -372,7 +382,10 @@ export class OrdersService {
     const coupon = couponCode ? await this.coupons.evaluateLines(couponCode, couponable, userId, cur) : null;
     let k = 0;
     const eligible = lines.map((l) => (l.couponable === false ? false : coupon ? coupon.eligible[k++] : true));
-    const tax = await this.taxRule(tenantId);
+    const rule = await this.taxRule(tenantId);
+    // Items can set their own GST display; it applies when every item in the order agrees.
+    const own = [...new Set(lines.map((l) => l.taxInclusive))];
+    const tax = rule && own.length === 1 && own[0] !== undefined ? { ...rule, inclusive: own[0] } : rule;
     const q = computeLinesQuote(lines.map((l) => l.unitMinor), eligible, coupon?.rule ?? null, tax);
     return { coupon, tax, q, cur };
   }

@@ -137,12 +137,12 @@ export function PublicMembershipsPage() {
                     <CardBody className="flex flex-1 flex-col gap-4">
                       <div>
                         <p className="text-lg font-semibold">{p.name}</p>
-                        <p className="mt-1"><span className="text-2xl font-bold">{formatMoney(p.priceAmount, p.currency)}</span><span className="text-muted"> / {per(p.interval)}</span></p>
+                        <p className="mt-1"><span className="text-2xl font-bold">{formatMoney(p.priceAmount, p.currency)}</span>{p.compareAtAmount && <span className="ml-2 text-muted line-through">{formatMoney(p.compareAtAmount, p.currency)}</span>}<span className="text-muted">{p.lifetime ? ' · lifetime access' : ` / ${per(p.interval)}`}</span>{p.taxExclusive && <span className="text-sm text-muted"> + taxes</span>}</p>
                         {p.description && <p className="mt-2 text-sm text-fg-2">{p.description}</p>}
                       </div>
                       <ul className="flex-1 space-y-1 text-sm">{p.courses.map((c) => <li key={c.id}>✓ <Link className="hover:underline" to={`/courses/${c.slug}`}>{c.title}</Link></li>)}</ul>
                       {a && <Badge tone="success">Active until {formatDate(a.currentPeriodEnd)}</Badge>}
-                      <Link to={`/checkout/membership/${p.id}`}><Button className="w-full" style={{ background: site.data?.theme?.primaryColor }}>{a ? 'Renew' : 'Join'}</Button></Link>
+                      <Link to={a && p.lifetime ? '/learn' : `/checkout/membership/${p.id}`}><Button className="w-full" style={{ background: site.data?.theme?.primaryColor }}>{a ? (p.lifetime ? 'Open my courses' : 'Renew') : p.buttonText || 'Join'}</Button></Link>
                     </CardBody>
                   </Card>
                 );
