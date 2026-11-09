@@ -17,6 +17,7 @@ class ListQuery {
   @ApiPropertyOptional({ enum: ['OPEN', 'CLOSED'] }) @IsOptional() @IsString() @MaxLength(40) status?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(40) unread?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(40) page?: string;
+  @ApiPropertyOptional({ description: 'Search customer name or email (academy name for platform support)' }) @IsOptional() @IsString() @MaxLength(100) q?: string;
 }
 class PollQuery {
   @ApiPropertyOptional({ description: 'Id of the last message the client has' }) @IsOptional() @IsString() @MaxLength(40) after?: string;
@@ -61,7 +62,7 @@ export class CreatorChatController {
   private conv(id: string) { return this.chat.agentThread(id, this.scope()); }
 
   @Get() @RequirePermissions(PERMISSIONS.SUPPORT_MANAGE) @ApiOperation({ summary: 'Student conversations, latest first' })
-  list(@Query() q: ListQuery) { return this.chat.list(this.scope(), { status: q.status, unread: q.unread === '1' || q.unread === 'true', page: Number(q.page) || 1 }); }
+  list(@Query() q: ListQuery) { return this.chat.list(this.scope(), { status: q.status, unread: q.unread === '1' || q.unread === 'true', page: Number(q.page) || 1, q: q.q }); }
 
   @Get(':id') @RequirePermissions(PERMISSIONS.SUPPORT_MANAGE)
   async get(@Param('id') id: string, @Query() q: PollQuery) { return this.chat.messages(await this.conv(id), str(q.before)); }
@@ -114,7 +115,7 @@ export class PlatformSupportChatController {
   private conv(id: string) { return this.chat.agentThread(id, this.scope); }
 
   @Get() @RequirePermissions(PERMISSIONS.PLATFORM_SUPPORT_MANAGE) @ApiOperation({ summary: 'Academy conversations with support, latest first' })
-  list(@Query() q: ListQuery) { return this.chat.list(this.scope, { status: q.status, unread: q.unread === '1' || q.unread === 'true', page: Number(q.page) || 1 }); }
+  list(@Query() q: ListQuery) { return this.chat.list(this.scope, { status: q.status, unread: q.unread === '1' || q.unread === 'true', page: Number(q.page) || 1, q: q.q }); }
 
   @Get(':id') @RequirePermissions(PERMISSIONS.PLATFORM_SUPPORT_MANAGE)
   async get(@Param('id') id: string, @Query() q: PollQuery) { return this.chat.messages(await this.conv(id), str(q.before)); }
