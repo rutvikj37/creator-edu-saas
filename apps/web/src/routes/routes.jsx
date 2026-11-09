@@ -71,6 +71,7 @@ const OrderDetailPage = lazyNamed(() => import('../pages/creator/OrderDetailPage
 const ProductsPage = lazyNamed(() => import('../pages/creator/ProductsPage.jsx'), 'ProductsPage');
 const ProductPage = lazyNamed(() => import('../pages/public/ProductPage.jsx'), 'ProductPage');
 const DownloadsPage = lazyNamed(() => import('../pages/student/DownloadsPage.jsx'), 'DownloadsPage');
+const AcademySecurityPage = lazyNamed(() => import('../pages/creator/settings/SecurityPage.jsx'), 'SecurityPage');
 const TaxInvoicingPage = lazyNamed(() => import('../pages/creator/settings/TaxInvoicingPage.jsx'), 'TaxInvoicingPage');
 const CoachingPage = lazyNamed(() => import('../pages/creator/CoachingPage.jsx'), 'CoachingPage');
 const CoachingCreatePage = lazyNamed(() => import('../pages/creator/CoachingCreatePage.jsx'), 'CoachingCreatePage');
@@ -241,6 +242,7 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/creator/products', element: page(ProductsPage) },
             { path: '/creator/coaching', element: page(CoachingPage) },
             { path: '/creator/settings/tax-invoicing', element: page(TaxInvoicingPage) },
+            { path: '/creator/settings/security', element: page(AcademySecurityPage) },
             { path: '/creator/coaching/new', element: page(CoachingCreatePage) },
             { path: '/creator/coaching/:id/edit', element: page(CoachingCreatePage) },
             { path: '/creator/orders', element: page(OrdersPage) },

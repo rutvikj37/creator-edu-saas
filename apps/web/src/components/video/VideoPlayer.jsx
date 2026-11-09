@@ -1,3 +1,4 @@
+import { Watermark } from './Watermark.jsx';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert } from '../auth/Alert.jsx';
 import { Skeleton } from '../ui/index.js';
@@ -112,8 +113,9 @@ export function VideoPlayer({ lessonId, onCompleted }) {
 
   if (error) return <Alert tone="error" title="Video unavailable">{error}</Alert>;
   if (!play) return <Skeleton className="aspect-video w-full" />;
-  if (play.kind === 'iframe') return <ProviderEmbed url={play.url} resumeAt={play.resumeAt} onTime={onTime} onState={onState} />;
+  if (play.kind === 'iframe') return <div className="relative"><ProviderEmbed url={play.url} resumeAt={play.resumeAt} onTime={onTime} onState={onState} /><Watermark /></div>;
   return (
+    <div className="relative">
     <video
       ref={ref}
       src={play.url}
@@ -134,5 +136,7 @@ export function VideoPlayer({ lessonId, onCompleted }) {
       className="aspect-video w-full rounded-lg bg-black"
       data-testid="lesson-video"
     />
+    <Watermark />
+    </div>
   );
 }

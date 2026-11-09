@@ -3,6 +3,7 @@ import { vi } from 'vitest';
 import { videosApi } from '../../services/api/videos.js';
 import { VideoPlayer } from './VideoPlayer.jsx';
 
+vi.mock('./Watermark.jsx', () => ({ Watermark: () => null }));
 vi.mock('../../services/api/videos.js', () => ({
   videosApi: { start: vi.fn(), heartbeat: vi.fn(), end: vi.fn() },
 }));

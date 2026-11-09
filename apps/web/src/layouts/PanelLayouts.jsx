@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import { useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronsUpDown } from 'lucide-react';
@@ -93,6 +94,14 @@ export function SupportLayout(props) {
   if (isPlatformWideAdmin(auth.me)) return <SuperAdminLayout {...props} />;
   return <DashboardShell nav={filterNav(NAV.support, auth.can)} brand={brand} defaultCollapsed {...account} {...props} />;
 }
+/** Shown when the academy requires 2FA for its team and this account hasn't turned it on. */
+function TeamTwoFactorBanner() {
+  return (
+    <div role="alert" className="border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+      This academy requires two-factor authentication. <Link to="/creator/account/security" className="font-semibold underline">Turn it on in Account security</Link> to use the workspace.
+    </div>
+  );
+}
 export function CreatorLayout({ preview = false, ...props }) {
   const auth = useAuth();
   const account = useShellAccount('/creator/account/security');
@@ -100,7 +109,7 @@ export function CreatorLayout({ preview = false, ...props }) {
   return (
     <DashboardShell
       nav={preview ? NAV.creator : filterNav(NAV.creator, auth.can)}
-      banner={preview ? undefined : <AnnouncementsBanner />}
+      banner={preview ? undefined : auth.me?.workspaceRequiresTwoFactor ? <TeamTwoFactorBanner /> : <AnnouncementsBanner />}
       brand={{ key: 'creator', mark: name.slice(0, 2).toUpperCase(), name, subtitle: auth.activeTenant?.role?.name ?? 'Creator workspace' }}
       footer={preview ? undefined : <WorkspaceSwitcher />}
       defaultCollapsed
