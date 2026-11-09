@@ -73,15 +73,25 @@ export function SuperAdminLayout(props) {
   const subtitle = roles.includes('SUPER_ADMIN') ? 'Super Admin' : 'Platform Admin';
   return <DashboardShell nav={filterNav(NAV.superAdmin, auth.can)} brand={usePlatformBrand(subtitle, 'super-admin')} {...account} {...props} />;
 }
+/** Super/Platform Admins keep their full sidebar on the Finance and Support pages; only dedicated role holders get the focused panel. */
+function isPlatformWideAdmin(me) {
+  const roles = me?.platformRoles ?? [];
+  return roles.includes('SUPER_ADMIN') || roles.includes('PLATFORM_ADMIN');
+}
+
 export function FinanceLayout(props) {
   const auth = useAuth();
   const account = useShellAccount('/super-admin/account/security');
-  return <DashboardShell nav={filterNav(NAV.finance, auth.can)} brand={usePlatformBrand('Finance', 'finance')} {...account} {...props} />;
+  const brand = usePlatformBrand('Finance', 'finance');
+  if (isPlatformWideAdmin(auth.me)) return <SuperAdminLayout {...props} />;
+  return <DashboardShell nav={filterNav(NAV.finance, auth.can)} brand={brand} {...account} {...props} />;
 }
 export function SupportLayout(props) {
   const auth = useAuth();
   const account = useShellAccount('/super-admin/account/security');
-  return <DashboardShell nav={filterNav(NAV.support, auth.can)} brand={usePlatformBrand('Support', 'support')} {...account} {...props} />;
+  const brand = usePlatformBrand('Support', 'support');
+  if (isPlatformWideAdmin(auth.me)) return <SuperAdminLayout {...props} />;
+  return <DashboardShell nav={filterNav(NAV.support, auth.can)} brand={brand} {...account} {...props} />;
 }
 export function CreatorLayout({ preview = false, ...props }) {
   const auth = useAuth();

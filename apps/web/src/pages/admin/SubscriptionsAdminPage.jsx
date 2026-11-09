@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, CreditCard, Download, RefreshCw } from 'lucide-react';
@@ -75,10 +75,11 @@ function InvoiceActions({ invoice, onDone }) {
   );
 }
 
-export function SubscriptionsAdminPage() {
+export function SubscriptionsAdminPage({ initialTab = 'subscriptions' }) {
   const auth = useAuth();
   const qc = useQueryClient();
-  const [tab, setTab] = useState('subscriptions');
+  const [tab, setTab] = useState(initialTab);
+  useEffect(() => setTab(initialTab), [initialTab]);
   const [params, update] = useListParams();
   const subs = useQuery({ queryKey: ['platform', 'billing', 'subs', params], queryFn: () => platformBillingApi.subscriptions(params), enabled: tab === 'subscriptions', placeholderData: (p) => p });
   const invoices = useQuery({ queryKey: ['platform', 'billing', 'invoices', params], queryFn: () => platformBillingApi.invoices(params), enabled: tab === 'invoices', placeholderData: (p) => p });

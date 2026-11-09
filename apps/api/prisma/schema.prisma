@@ -29,6 +29,20 @@ model PlatformSetting {
   @@index([group])
 }
 
+/// Super Admin wording for a built-in transactional email. Without a row the built-in wording is used.
+/// `body` is plain text with {{variable}} placeholders; blank lines separate paragraphs.
+model EmailTemplateOverride {
+  id          String   @id @default(cuid()) @db.Char(25)
+  key         String   @unique @db.VarChar(64)
+  subject     String   @db.VarChar(200)
+  heading     String   @db.VarChar(200)
+  body        String   @db.Text
+  ctaLabel    String?  @db.VarChar(60)
+  updatedById String   @db.Char(25)
+  createdAt   DateTime @default(now()) @db.DateTime(3)
+  updatedAt   DateTime @updatedAt @db.DateTime(3)
+}
+
 /// Append-only audit trail for security and business events.
 /// No foreign keys on purpose: audit rows must survive deletion/anonymisation of actors and targets.
 model AuditLog {
@@ -570,10 +584,16 @@ enum TicketPriority {
   URGENT
 }
 
-/// Creator → platform support tickets (Phase 3). Student → academy tickets reuse this model with scope ACADEMY later.
+enum TicketScope {
+  PLATFORM
+  ACADEMY
+}
+
+/// PLATFORM: creator → platform support. ACADEMY: student → their academy's team (tenantId is the academy).
 model SupportTicket {
   id              String           @id @default(cuid()) @db.Char(25)
   number          Int              @unique @default(autoincrement())
+  scope           TicketScope      @default(PLATFORM)
   tenantId        String?          @db.Char(25)
   requesterId     String           @db.Char(25)
   assigneeId      String?          @db.Char(25)
@@ -591,6 +611,8 @@ model SupportTicket {
   @@index([status, priority, lastActivityAt])
   @@index([tenantId, createdAt])
   @@index([assigneeId, status])
+  @@index([scope, tenantId, status, lastActivityAt])
+  @@index([scope, tenantId, requesterId])
 }
 
 model SupportMessage {
@@ -1606,43 +1628,53 @@ enum OrderStatus {
 }
 
 model Order {
-  id               String              @id @default(cuid()) @db.Char(25)
-  tenantId         String              @db.Char(25)
-  number           String              @db.VarChar(32)
-  userId           String              @db.Char(25)
-  status           OrderStatus         @default(PENDING)
-  currency         String              @db.Char(3)
-  subtotalAmount   Decimal             @db.Decimal(19, 4)
-  discountAmount   Decimal             @default(0) @db.Decimal(19, 4)
-  taxAmount        Decimal             @default(0) @db.Decimal(19, 4)
-  totalAmount      Decimal             @db.Decimal(19, 4)
-  refundedAmount   Decimal             @default(0) @db.Decimal(19, 4)
-  taxRate          Decimal?            @db.Decimal(5, 2)
-  taxInclusive     Boolean             @default(true)
-  couponId         String?             @db.Char(25)
-  couponCode       String?             @db.VarChar(40)
-  provider         PaymentProviderKey?
-  gatewayAccountId String?             @db.Char(25)
-  billing          Json
-  idempotencyKey   String?             @db.VarChar(64)
-  affiliateId      String?             @db.Char(25)
+  id                 String              @id @default(cuid()) @db.Char(25)
+  tenantId           String              @db.Char(25)
+  number             String              @db.VarChar(32)
+  userId             String              @db.Char(25)
+  status             OrderStatus         @default(PENDING)
+  currency           String              @db.Char(3)
+  subtotalAmount     Decimal             @db.Decimal(19, 4)
+  discountAmount     Decimal             @default(0) @db.Decimal(19, 4)
+  taxAmount          Decimal             @default(0) @db.Decimal(19, 4)
+  totalAmount        Decimal             @db.Decimal(19, 4)
+  refundedAmount     Decimal             @default(0) @db.Decimal(19, 4)
+  taxRate            Decimal?            @db.Decimal(5, 2)
+  taxInclusive       Boolean             @default(true)
+  couponId           String?             @db.Char(25)
+  couponCode         String?             @db.VarChar(40)
+  provider           PaymentProviderKey?
+  gatewayAccountId   String?             @db.Char(25)
+  billing            Json
+  idempotencyKey     String?             @db.VarChar(64)
+  affiliateId        String?             @db.Char(25)
   /// First-touch marketing attribution captured at checkout: { visitorId, source, medium, campaign, referrerHost, landingPath }.
-  attribution      Json?
-  paidAt           DateTime?           @db.DateTime(3)
-  failureReason    String?             @db.VarChar(500)
-  expiresAt        DateTime            @db.DateTime(3)
-  createdAt        DateTime            @default(now()) @db.DateTime(3)
-  updatedAt        DateTime            @updatedAt @db.DateTime(3)
-  items            OrderItem[]
-  payments         Payment[]
-  refunds          Refund[]
+  attribution        Json?
+  /// Bought through a shareable payment link.
+  paymentLinkId      String?             @db.Char(25)
+  /// Abandoned-checkout reminders sent so far (99 = no reminder needed: bought later or superseded).
+  recoveryStage      Int                 @default(0)
+  recoveryLastAt     DateTime?           @db.DateTime(3)
+  /// A later paid order by the same buyer for the same items, after a reminder.
+  recoveredAt        DateTime?           @db.DateTime(3)
+  recoveredByOrderId String?             @db.Char(25)
+  paidAt             DateTime?           @db.DateTime(3)
+  failureReason      String?             @db.VarChar(500)
+  expiresAt          DateTime            @db.DateTime(3)
+  createdAt          DateTime            @default(now()) @db.DateTime(3)
+  updatedAt          DateTime            @updatedAt @db.DateTime(3)
+  items              OrderItem[]
+  payments           Payment[]
+  refunds            Refund[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, number])
   @@unique([tenantId, userId, idempotencyKey])
   @@index([tenantId, status, createdAt])
   @@index([tenantId, userId, createdAt])
+  @@index([tenantId, paymentLinkId])
   @@index([status, updatedAt])
+  @@index([status, createdAt])
 }
 
 model OrderItem {
@@ -1662,12 +1694,103 @@ model OrderItem {
   unitAmount       Decimal  @db.Decimal(19, 4)
   discountAmount   Decimal  @default(0) @db.Decimal(19, 4)
   totalAmount      Decimal  @db.Decimal(19, 4)
+  /// Sold at a special price through an order bump or post-purchase upsell (SalesOffer).
+  offerId          String?  @db.Char(25)
+  /// BUMP | UPSELL | LINK — how this line was added.
+  source           String?  @db.VarChar(16)
   createdAt        DateTime @default(now()) @db.DateTime(3)
   order            Order    @relation(fields: [tenantId, orderId], references: [tenantId, id], onDelete: Cascade)
 
   @@unique([tenantId, id])
   @@index([tenantId, courseId])
   @@index([tenantId, bundleId])
+  @@index([tenantId, offerId])
+}
+
+enum SalesOfferType {
+  /// Ticked on the checkout page and paid in the same order.
+  BUMP
+  /// Offered on the order page right after payment, at a special price for a limited time.
+  UPSELL
+}
+
+enum SalesOfferStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+/// An order bump or post-purchase upsell: one course, bundle or digital product at a special price.
+model SalesOffer {
+  id            String               @id @default(cuid()) @db.Char(25)
+  tenantId      String               @db.Char(25)
+  type          SalesOfferType
+  status        SalesOfferStatus     @default(ACTIVE)
+  /// Internal name shown to the academy team.
+  name          String               @db.VarChar(120)
+  /// Shown to the buyer.
+  headline      String               @db.VarChar(160)
+  description   String?              @db.VarChar(1000)
+  /// course | bundle | product
+  itemKind      String               @db.VarChar(16)
+  itemId        String               @db.Char(25)
+  priceAmount   Decimal              @db.Decimal(19, 4)
+  currency      String               @db.Char(3)
+  /// Purchases that show the offer, as "course:<id>", "bundle:<id>", "product:<id>", "webinar:<id>", "membership:<id>"; null = any purchase.
+  triggers      Json?
+  /// Upsells: minutes after payment during which the special price can be taken.
+  windowMinutes Int                  @default(30)
+  sortOrder     Int                  @default(0)
+  createdById   String               @db.Char(25)
+  createdAt     DateTime             @default(now()) @db.DateTime(3)
+  updatedAt     DateTime             @updatedAt @db.DateTime(3)
+  responses     SalesOfferResponse[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, type, status])
+}
+
+/// A buyer's answer to an upsell after a given order (DECLINED, or ACCEPTED once paid).
+model SalesOfferResponse {
+  id            String     @id @default(cuid()) @db.Char(25)
+  tenantId      String     @db.Char(25)
+  offerId       String     @db.Char(25)
+  sourceOrderId String     @db.Char(25)
+  userId        String     @db.Char(25)
+  decision      String     @db.VarChar(16)
+  createdAt     DateTime   @default(now()) @db.DateTime(3)
+  offer         SalesOffer @relation(fields: [tenantId, offerId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, offerId, sourceOrderId])
+}
+
+/// A shareable link that opens checkout for one item, optionally at a custom price.
+model PaymentLink {
+  id           String    @id @default(cuid()) @db.Char(25)
+  tenantId     String    @db.Char(25)
+  code         String    @db.VarChar(16)
+  title        String    @db.VarChar(120)
+  /// course | bundle | product | webinar | membership
+  itemKind     String    @db.VarChar(16)
+  itemId       String    @db.Char(25)
+  /// Custom price; null = the item's own price.
+  priceAmount  Decimal?  @db.Decimal(19, 4)
+  currency     String    @db.Char(3)
+  /// Applied automatically when the link is opened.
+  couponCode   String?   @db.VarChar(40)
+  allowCoupons Boolean   @default(false)
+  maxUses      Int?
+  expiresAt    DateTime? @db.DateTime(3)
+  isActive     Boolean   @default(true)
+  /// Shown to the buyer on the link page.
+  note         String?   @db.VarChar(500)
+  createdById  String    @db.Char(25)
+  createdAt    DateTime  @default(now()) @db.DateTime(3)
+  updatedAt    DateTime  @updatedAt @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, code])
 }
 
 enum ReviewStatus {

@@ -11,6 +11,7 @@ import { RichTextView } from '../../components/forms/RichTextView.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { formatMoney } from '../../utils/format.js';
 import { AcademyHeader } from './AcademyLandingPage.jsx';
+import { adAddToCart, useAdViewContent } from '../../utils/adTracking.js';
 import { RatingSummary } from '../../components/reviews/Stars.jsx';
 import { CourseReviews } from '../../components/reviews/CourseReviews.jsx';
 
@@ -24,7 +25,7 @@ export function CourseLandingPage() {
   const qc = useQueryClient();
   const addToCart = useMutation({
     mutationFn: () => cartApi.add({ courseId: q.data.id }),
-    onSuccess: (cart) => { qc.setQueryData(['cart'], cart); toast.success('Added to your cart', { action: { label: 'View cart', onClick: () => navigate('/cart') } }); },
+    onSuccess: (cart) => { qc.setQueryData(['cart'], cart); adAddToCart('course', q.data); toast.success('Added to your cart', { action: { label: 'View cart', onClick: () => navigate('/cart') } }); },
     onError: (e) => toast.error(e.message),
   });
   const [preview, setPreview] = useState(null);
@@ -32,6 +33,7 @@ export function CourseLandingPage() {
   useEffect(() => { if (q.data?.seoTitle) document.title = q.data.seoTitle; }, [q.data?.seoTitle]);
   const enroll = useMutation({ mutationFn: () => learnApi.enroll(q.data.id), onSuccess: () => { toast.success('You are enrolled!'); navigate(`/learn/courses/${q.data.id}`); }, onError: (e) => toast.error(e.message) });
 
+  useAdViewContent('course', q.data);
   if (q.isError) return <div className="grid min-h-dvh place-items-center"><ErrorState title="Course not found" error={q.error} /></div>;
   const c = q.data;
   const color = site.data?.theme?.primaryColor;

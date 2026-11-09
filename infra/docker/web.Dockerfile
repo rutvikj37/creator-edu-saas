@@ -15,5 +15,8 @@ ENV VITE_API_URL=$VITE_API_URL VITE_PLATFORM_ROOT_DOMAIN=$VITE_PLATFORM_ROOT_DOM
 RUN cd apps/web && pnpm build
 
 FROM nginx:1.27-alpine
+# Extra CSP origins (storage endpoint, LiveKit/plugNmeet hosts) are injected at start; must be defined, even empty.
+ENV CSP_CONNECT_SRC="" CSP_FRAME_SRC="" NGINX_ENVSUBST_FILTER="^CSP_"
 COPY infra/nginx/web.conf /etc/nginx/conf.d/default.conf
+COPY infra/nginx/security-headers.inc.template /etc/nginx/templates/security-headers.inc.template
 COPY --from=build /repo/apps/web/dist /usr/share/nginx/html

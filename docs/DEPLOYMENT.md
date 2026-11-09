@@ -22,6 +22,16 @@ Status: **Phase 0 plan** — fleshed out in Phase 1 (local) and Phase 11 (produc
 | Secrets | AWS Secrets Manager / SSM Parameter Store |
 | Monitoring | CloudWatch logs/metrics/alarms, Sentry, uptime checks |
 
+### Content-Security-Policy
+The web container sends a strict CSP and other security headers from `infra/nginx/security-headers.inc.template` (no inline scripts, no `eval`, no plugins, no framing by other sites). Built-in allowances cover Razorpay, Google Fonts, Bunny Stream, YouTube/Vimeo embeds, S3 (`*.amazonaws.com`), Meta Pixel, GA4 and GTM. Add deployment-specific origins through the container environment:
+
+| Variable | Add | Example |
+|---|---|---|
+| `CSP_CONNECT_SRC` | S3-compatible storage endpoint (non-AWS), LiveKit `wss://` and `https://` hosts, plugNmeet API host | `wss://live.example.com https://live.example.com` |
+| `CSP_FRAME_SRC` | plugNmeet room host, non-AWS storage host (PDF previews) | `https://meet.example.com` |
+
+If you serve the SPA from CloudFront instead of nginx, copy the same header values into a CloudFront response-headers policy. Check a build locally with `pnpm --filter @ce/web exec vite build && pnpm --filter @ce/web exec vite preview` — the preview server sends the same headers.
+
 ## Release process
 CI (GitHub Actions): lint → unit → integration (MySQL+Redis services) → build → e2e (Playwright) → image push → `prisma migrate deploy` (expand/contract migrations only) → rolling deploy → smoke test → automatic rollback on failed health checks.
 

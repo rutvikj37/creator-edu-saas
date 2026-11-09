@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Redis } from 'ioredis';
 import { MFA_REQUIRED_ROLES } from '@ce/shared';
+import { AppConfig } from '../../config/app-config.service.js';
 import { PrismaService } from '../../core/prisma/prisma.service.js';
 import { REDIS_CLIENT } from '../../core/redis/redis.constants.js';
 import type { AuthContext } from '../../core/tenancy/request-context.js';
@@ -16,6 +17,7 @@ export class AuthzService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
+    private readonly config: AppConfig,
   ) {}
 
   private key(userId: string, tenantId: string | null) {
@@ -33,6 +35,7 @@ export class AuthzService {
   }
 
   async requiresMfa(userId: string): Promise<boolean> {
+    if (!this.config.isProduction && this.config.get('ADMIN_MFA_REQUIRED') === false) return false;
     const keys = await this.platformRoleKeys(userId);
     return keys.some((k) => MFA_REQUIRED_ROLES.includes(k));
   }

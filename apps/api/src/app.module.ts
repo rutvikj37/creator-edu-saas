@@ -21,6 +21,7 @@ import { CoursesModule } from './modules/courses/courses.module.js';
 import { StaffModule } from './modules/staff/staff.module.js';
 import { LearningModule } from './modules/learning/learning.module.js';
 import { CommerceModule } from './modules/commerce/commerce.module.js';
+import { SalesModule } from './modules/sales/sales.module.js';
 import { WebsiteModule } from './modules/website/website.module.js';
 import { LiveModule } from './modules/live/live.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
@@ -33,6 +34,7 @@ import { AiModule } from './modules/ai/ai.module.js';
 import { VideosModule } from './modules/videos/videos.module.js';
 import { BackupsModule } from './modules/backups/backups.module.js';
 import { ChatModule } from './modules/chat/chat.module.js';
+import { HelpdeskModule } from './modules/helpdesk/helpdesk.module.js';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard.js';
 import { TenantGuard } from './modules/auth/guards/tenant.guard.js';
 import { PermissionsGuard } from './modules/auth/guards/permissions.guard.js';
@@ -59,6 +61,7 @@ import { PermissionsGuard } from './modules/auth/guards/permissions.guard.js';
     StaffModule,
     LearningModule,
     CommerceModule,
+    SalesModule,
     WebsiteModule,
     LiveModule,
     NotificationsModule,
@@ -71,6 +74,7 @@ import { PermissionsGuard } from './modules/auth/guards/permissions.guard.js';
     VideosModule,
     BackupsModule,
     ChatModule,
+    HelpdeskModule,
     HealthModule,
     SystemModule,
   ],

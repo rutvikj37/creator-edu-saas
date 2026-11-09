@@ -1,11 +1,13 @@
-import { useState } from 'react';
-import { Link, useParams } from 'react-router';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { CheckCircle2, Clock, Download, Receipt, XCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { CheckCircle2, Clock, Download, Gift, Receipt, XCircle } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
 import { Alert } from '../../components/auth/Alert.jsx';
 import { Button, Card, CardBody, DataTable, EmptyState, ErrorState, Skeleton, Spinner, StatusBadge, toast } from '../../components/ui/index.js';
 import { checkoutApi } from '../../services/api/commerce.js';
+import { academyApi } from '../../services/api/auth.js';
+import { adEvent, initAdTracking } from '../../utils/adTracking.js';
 import { saveBlob } from '../../utils/download.js';
 import { formatDate, formatMoney } from '../../utils/format.js';
 
@@ -13,6 +15,51 @@ const WAITING = ['PENDING', 'PAYMENT_INITIATED'];
 const POLL_MS = 3000;
 const POLL_FOR_MS = 3 * 60_000;
 const PRIMARY_LINK = 'inline-flex h-9 items-center rounded-md bg-primary-600 px-4 text-sm font-medium text-on-primary shadow-xs hover:bg-primary-700';
+const PURCHASE_EVENT_WINDOW_MS = 24 * 3600_000;
+
+function useCountdown(until) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!until) return undefined;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [until]);
+  return until ? Math.max(0, new Date(until).getTime() - now) : null;
+}
+
+/** One-time offer right after a successful payment (configured under Sales → Upsells & bumps). */
+function UpsellCard({ orderId }) {
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ['learn', 'order', orderId, 'upsell'], queryFn: () => checkoutApi.upsell(orderId), retry: false });
+  const offer = q.data?.offer;
+  const left = useCountdown(offer?.expiresAt);
+  const decline = useMutation({
+    mutationFn: () => checkoutApi.declineUpsell(orderId, offer.offerId),
+    onSuccess: () => qc.setQueryData(['learn', 'order', orderId, 'upsell'], { offer: null }),
+    onError: () => qc.setQueryData(['learn', 'order', orderId, 'upsell'], { offer: null }),
+  });
+  if (!offer || left === 0) return null;
+  const mins = Math.floor(left / 60_000);
+  const secs = Math.floor((left % 60_000) / 1000);
+  return (
+    <Card className="mt-4 border-2 border-dashed border-primary-400">
+      <CardBody className="space-y-3 p-6">
+        <p className="flex items-center gap-2 text-xs font-semibold tracking-wide text-primary-700 uppercase dark:text-primary-300"><Gift className="size-4" />One-time offer · ends in {mins}:{String(secs).padStart(2, '0')}</p>
+        <h2 className="text-lg font-semibold">{offer.headline}</h2>
+        {offer.description && <p className="text-sm text-fg-2">{offer.description}</p>}
+        <p className="text-sm">
+          {offer.title} — <span className="font-semibold">{formatMoney(offer.price, offer.currency)}</span>
+          {Number(offer.regularPrice) > Number(offer.price) && <span className="ml-1.5 text-muted line-through">{formatMoney(offer.regularPrice, offer.currency)}</span>}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => navigate(`/checkout/offer/${offer.offerId}?from=${orderId}`)}>Yes, add it</Button>
+          <Button variant="ghost" loading={decline.isPending} onClick={() => decline.mutate()}>No thanks</Button>
+        </div>
+      </CardBody>
+    </Card>
+  );
+}
 
 function useInvoice(order) {
   return useMutation({
@@ -33,6 +80,16 @@ export function OrderStatusPage() {
   });
   const o = q.data;
   const invoice = useInvoice(o ?? { id });
+  const site = useQuery({ queryKey: ['brand', 'academy'], queryFn: academyApi.site, staleTime: 5 * 60_000 });
+  useEffect(() => { initAdTracking(site.data?.tracking); }, [site.data?.tracking]);
+  const isPaid = ['PAID', 'PARTIALLY_REFUNDED'].includes(o?.status);
+  useEffect(() => {
+    if (!isPaid || !o.paidAt || Date.now() - new Date(o.paidAt).getTime() > PURCHASE_EVENT_WINDOW_MS) return;
+    adEvent('Purchase', {
+      orderId: o.id, value: Number(o.totalAmount), currency: o.currency,
+      items: o.items.map((i) => ({ id: i.courseId ?? i.bundleId ?? i.digitalProductId ?? i.liveClassId ?? i.membershipPlanId, title: i.title, unit: i.unitAmount, kind: i.bundleId ? 'bundle' : i.digitalProductId ? 'product' : i.liveClassId ? 'webinar' : i.membershipPlanId ? 'membership' : 'course' })),
+    });
+  }, [isPaid, o?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const courseId = o?.items?.[0]?.courseId;
   if (q.isError) return <Card><ErrorState error={q.error} onRetry={() => q.refetch()} /></Card>;
   if (!o) return <Skeleton className="h-64" />;
@@ -64,6 +121,7 @@ export function OrderStatusPage() {
           {waiting && Date.now() - started > POLL_FOR_MS && <Alert tone="info">Still waiting for Razorpay. If money was deducted, access is granted automatically once Razorpay confirms — usually within a few minutes.</Alert>}
         </CardBody>
       </Card>
+      {paid && <UpsellCard orderId={o.id} />}
       <p className="mt-4 text-center text-sm"><Link className="text-primary-600 hover:underline" to="/learn/orders">View all orders</Link></p>
     </div>
   );

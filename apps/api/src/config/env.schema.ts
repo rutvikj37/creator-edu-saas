@@ -28,6 +28,8 @@ export const envSchema = z.object({
     .refine((v) => Buffer.from(v, 'base64').length === 32, 'ENCRYPTION_KEY must be 32 bytes, base64-encoded'),
   CSRF_SECRET: z.string().min(8),
   SWAGGER_ENABLED: bool.optional(),
+  /** Platform admins must set up two-factor sign-in. Can only be turned off outside production. */
+  ADMIN_MFA_REQUIRED: bool.optional(),
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(300),
   AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(10),
   JWT_ACCESS_TTL: z.coerce.number().int().min(60).max(3600).default(900),
@@ -131,8 +133,11 @@ export function validateEnv(raw: Record<string, unknown>): Env {
     const issues = parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
     throw new Error(`Invalid environment configuration:\n${issues}`);
   }
-  if (parsed.data.NODE_ENV === 'production' && parsed.data.JWT_ACCESS_SECRET.startsWith('dev-only')) {
-    throw new Error('Refusing to start in production with a development JWT secret');
+  if (parsed.data.NODE_ENV === 'production') {
+    const placeholder = /^dev-only|change-?me|changeme|example|secret$|^password/i;
+    const weak = (['JWT_ACCESS_SECRET', 'CSRF_SECRET', 'ENCRYPTION_KEY'] as const).filter((k) => placeholder.test(parsed.data[k]));
+    if (weak.length) throw new Error(`Refusing to start in production with placeholder or development values for: ${weak.join(', ')}`);
+    if (parsed.data.JWT_ACCESS_SECRET.length < 48) throw new Error('JWT_ACCESS_SECRET must be at least 48 random characters in production');
   }
   if (parsed.data.NODE_ENV === 'production' && parsed.data.STORAGE_DRIVER === 'local') {
     throw new Error('STORAGE_DRIVER=local is for development only; configure S3 in production');

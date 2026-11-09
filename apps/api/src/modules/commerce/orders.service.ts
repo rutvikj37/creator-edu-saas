@@ -20,6 +20,7 @@ import { MembershipsService } from '../memberships/memberships.service.js';
 import { enrollmentExpiry, isEnrollmentUsable } from '../learning/access.js';
 import { CouponsService } from './coupons.service.js';
 import { DigitalProductsService } from './digital-products.service.js';
+import { FunnelService, itemKey } from './funnel.service.js';
 import { GatewayService } from './gateway.service.js';
 import { renderInvoicePdf } from './invoice-pdf.js';
 import { commissionMinor, computeLinesQuote, proportional, type Quote } from './pricing.js';
@@ -52,6 +53,13 @@ export interface ProductRef {
   membershipPlanId?: string;
   /** Buy everything in the student's cart (courses and bundles). */
   fromCart?: boolean;
+  /** Buy through a shareable payment link (replaces the fields above). */
+  paymentLinkCode?: string;
+  /** Take a post-purchase upsell offered after `sourceOrderId` (replaces the fields above). */
+  upsellOfferId?: string;
+  sourceOrderId?: string;
+  /** Order bumps ticked on the checkout page. */
+  bumpOfferIds?: string[];
 }
 
 /** One thing being bought. `grant` = courses it unlocks. */
@@ -63,7 +71,17 @@ interface Line {
   unitMinor: number;
   currency: string;
   grant: string[];
+  /** How the line was added when it isn't a plain purchase. */
+  source?: 'BUMP' | 'UPSELL' | 'LINK';
+  offerId?: string;
+  /** Promo codes don't discount bump and upsell prices. */
+  couponable?: boolean;
 }
+
+/** Order states a buyer can come back from (reminders, recovery). */
+const UNPAID = ['PENDING', 'PAYMENT_INITIATED', 'FAILED', 'EXPIRED'] as const;
+/** recoveryStage meaning "no reminders for this order" (a newer order or a purchase took over). */
+export const RECOVERY_DONE = 99;
 
 export interface CheckoutInput extends ProductRef {
   couponCode?: string | null;
@@ -137,6 +155,7 @@ export class OrdersService {
     private readonly affiliates: AffiliatesService,
     private readonly memberships: MembershipsService,
     private readonly digital: DigitalProductsService,
+    private readonly funnel: FunnelService,
   ) {}
 
   // ── views ─────────────────────────────────────────────────
@@ -147,7 +166,8 @@ export class OrdersService {
       subtotalAmount: m(o.subtotalAmount), discountAmount: m(o.discountAmount), taxAmount: m(o.taxAmount), totalAmount: m(o.totalAmount), refundedAmount: m(o.refundedAmount),
       taxRate: m(o.taxRate), taxInclusive: o.taxInclusive, couponCode: o.couponCode, provider: o.provider, billing: o.billing,
       paidAt: o.paidAt, failureReason: o.failureReason, expiresAt: o.expiresAt, createdAt: o.createdAt, userId: o.userId,
-      items: o.items?.map((i: any) => ({ id: i.id, courseId: i.courseId, bundleId: i.bundleId ?? null, membershipPlanId: i.membershipPlanId ?? null, liveClassId: i.liveClassId ?? null, digitalProductId: i.digitalProductId ?? null, title: i.title, unitAmount: m(i.unitAmount), discountAmount: m(i.discountAmount), totalAmount: m(i.totalAmount) })),
+      items: o.items?.map((i: any) => ({ id: i.id, courseId: i.courseId, bundleId: i.bundleId ?? null, membershipPlanId: i.membershipPlanId ?? null, liveClassId: i.liveClassId ?? null, digitalProductId: i.digitalProductId ?? null, title: i.title, unitAmount: m(i.unitAmount), discountAmount: m(i.discountAmount), totalAmount: m(i.totalAmount), source: i.source ?? null, offerId: i.offerId ?? null })),
+      paymentLinkId: o.paymentLinkId ?? null,
       payments: o.payments?.map((p: any) => ({
         id: p.id, provider: p.provider, providerOrderId: p.providerOrderId, providerPaymentId: p.providerPaymentId, status: p.status,
         amount: m(p.amount), currency: p.currency, method: p.method, feeAmount: m(p.feeAmount), failureReason: p.failureReason, capturedAt: p.capturedAt, createdAt: p.createdAt,
@@ -223,6 +243,67 @@ export class OrdersService {
     return { kind: 'bundle', id: b.id, title: `${b.title} (bundle)`, slug: b.slug, unitMinor: toMinor(b.priceAmount, b.currency), currency: b.currency, grant: ids };
   }
 
+  /** Any sellable item by kind, as a checkout line at its own price. */
+  async sellableItem(kind: string, id: string): Promise<Line> {
+    if (kind === 'course') return this.product({ courseId: id });
+    if (kind === 'membership') return this.product({ membershipPlanId: id });
+    if (kind === 'bundle') return this.sellableBundle(id);
+    if (kind === 'product') return this.sellableProduct(id);
+    if (kind === 'webinar') return this.sellableWebinar(id);
+    throw AppException.validation([{ field: 'itemKind', message: 'Unknown item type' }]);
+  }
+
+  /**
+   * Everything a checkout sells: the main lines (cart, item, payment link or upsell), the bumps on offer
+   * for them and the bumps the buyer ticked. Owned items and unavailable offers are refused or skipped.
+   */
+  private async resolve(userId: string, ref: ProductRef) {
+    let lines: Line[];
+    let link: Awaited<ReturnType<FunnelService['link']>> | null = null;
+    let upsell: { offerId: string; sourceOrderId: string } | null = null;
+    if (ref.paymentLinkCode) {
+      link = await this.funnel.link(ref.paymentLinkCode);
+      const base = await this.sellableItem(link.itemKind, link.itemId);
+      const custom = link.priceAmount !== null && base.currency === link.currency;
+      lines = [{ ...base, source: 'LINK', unitMinor: custom ? toMinor(link.priceAmount!, base.currency) : base.unitMinor }];
+    } else if (ref.upsellOfferId) {
+      if (!ref.sourceOrderId) throw AppException.validation([{ field: 'sourceOrderId', message: 'Missing the order this offer follows' }]);
+      const offer = await this.funnel.upsell(userId, ref.sourceOrderId, ref.upsellOfferId);
+      const base = await this.sellableItem(offer.itemKind, offer.itemId);
+      if (base.currency !== offer.currency) throw AppException.conflict('This offer is no longer available');
+      lines = [{ ...base, source: 'UPSELL', offerId: offer.id, couponable: false, unitMinor: toMinor(offer.priceAmount, offer.currency) }];
+      upsell = { offerId: offer.id, sourceOrderId: ref.sourceOrderId };
+    } else {
+      lines = await this.lines(userId, ref);
+    }
+    if (!link && !upsell) await this.assertBuyable(userId, lines);
+
+    const bumps: { offer: { id: string; headline: string; description: string | null }; line: Line; regularMinor: number }[] = [];
+    if (!link && !upsell) {
+      const cur = lines[0].currency;
+      for (const o of await this.funnel.bumpOffers(lines.map((l) => itemKey(l.kind, l.id)), cur)) {
+        if (bumps.length >= 3) break;
+        try {
+          const base = await this.sellableItem(o.itemKind, o.itemId);
+          if (base.currency !== cur) continue;
+          const line: Line = { ...base, source: 'BUMP', offerId: o.id, couponable: false, unitMinor: toMinor(o.priceAmount, cur) };
+          await this.assertBuyable(userId, [...lines, line]);
+          bumps.push({ offer: o, line, regularMinor: base.unitMinor });
+        } catch {
+          // Not sellable right now or already owned: simply not offered.
+        }
+      }
+    }
+    const chosen = [...new Set(ref.bumpOfferIds ?? [])];
+    for (const id of chosen) {
+      const b = bumps.find((x) => x.offer.id === id);
+      if (!b) throw AppException.validation([{ field: 'bumpOfferIds', message: 'An add-on you picked is no longer available. Refresh and try again.' }]);
+      lines.push(b.line);
+    }
+    if (link || upsell || chosen.length) await this.assertBuyable(userId, lines);
+    return { lines, link, upsell, bumps, chosen };
+  }
+
   private async lines(userId: string, ref: ProductRef): Promise<Line[]> {
     let lines: Line[];
     if (ref.fromCart) {
@@ -240,7 +321,6 @@ export class OrdersService {
       lines = [await this.product(ref)];
     }
     if (new Set(lines.map((l) => l.currency)).size > 1) throw AppException.conflict('Items in your cart are priced in different currencies. Buy them separately.');
-    await this.assertBuyable(userId, lines);
     return lines;
   }
 
@@ -269,24 +349,35 @@ export class OrdersService {
   private async price(userId: string, lines: Line[], couponCode?: string | null) {
     const tenantId = this.ctx.requireTenantId();
     const cur = lines[0].currency;
-    const coupon = couponCode ? await this.coupons.evaluateLines(couponCode, lines, userId, cur) : null;
+    const couponable = lines.filter((l) => l.couponable !== false);
+    if (couponCode && !couponable.length) throw AppException.validation([{ field: 'couponCode', message: 'Promo codes can’t be used with this offer' }]);
+    const coupon = couponCode ? await this.coupons.evaluateLines(couponCode, couponable, userId, cur) : null;
+    let k = 0;
+    const eligible = lines.map((l) => (l.couponable === false ? false : coupon ? coupon.eligible[k++] : true));
     const tax = await this.taxRule(tenantId);
-    const q = computeLinesQuote(lines.map((l) => l.unitMinor), coupon?.eligible ?? lines.map(() => true), coupon?.rule ?? null, tax);
+    const q = computeLinesQuote(lines.map((l) => l.unitMinor), eligible, coupon?.rule ?? null, tax);
     return { coupon, tax, q, cur };
   }
 
   async quote(userId: string, ref: ProductRef, couponCode?: string | null) {
-    const lines = await this.lines(userId, ref);
+    const { lines, link, upsell, bumps, chosen } = await this.resolve(userId, ref);
     const tenantId = this.ctx.requireTenantId();
-    const { coupon, tax, q, cur } = await this.price(userId, lines, couponCode);
+    const { coupon, tax, q, cur } = await this.price(userId, lines, this.funnel.linkCoupon(link, couponCode));
     const first = lines[0];
+    const main = lines.filter((l) => l.source !== 'BUMP');
     const active = (await this.entitlements.get(tenantId)).active;
     const selling = active ? await this.gateways.sellingAccount() : null;
     return {
-      kind: lines.length > 1 ? ('cart' as const) : first.kind, course: { id: first.id, title: first.title, slug: first.slug }, currency: cur, couponCode: coupon?.code ?? null,
-      items: lines.map((l, i) => ({ kind: l.kind, id: l.id, title: l.title, slug: l.slug, unit: fromMinor(l.unitMinor, cur), discount: fromMinor(q.lines[i].discount, cur), total: fromMinor(q.lines[i].total, cur), courseCount: l.grant.length })),
+      kind: main.length > 1 ? ('cart' as const) : first.kind, course: { id: first.id, title: first.title, slug: first.slug }, currency: cur, couponCode: coupon?.code ?? null,
+      items: lines.map((l, i) => ({ kind: l.kind, id: l.id, title: l.title, slug: l.slug, unit: fromMinor(l.unitMinor, cur), discount: fromMinor(q.lines[i].discount, cur), total: fromMinor(q.lines[i].total, cur), courseCount: l.grant.length, source: l.source ?? null, offerId: l.offerId ?? null })),
       subtotal: fromMinor(q.subtotal, cur), discount: fromMinor(q.discount, cur), tax: fromMinor(q.tax, cur), total: fromMinor(q.total, cur),
       taxRate: tax?.rate ?? null, taxInclusive: tax?.inclusive ?? true, paymentsEnabled: Boolean(selling) || (q.total === 0 && active),
+      bumps: bumps.map((b) => ({
+        offerId: b.offer.id, headline: b.offer.headline, description: b.offer.description, kind: b.line.kind, itemId: b.line.id, title: b.line.title, slug: b.line.slug,
+        price: fromMinor(b.line.unitMinor, cur), regularPrice: fromMinor(b.regularMinor, cur), selected: chosen.includes(b.offer.id),
+      })),
+      paymentLink: link ? { code: link.code, title: link.title, note: link.note, couponLocked: !link.allowCoupons } : null,
+      upsell,
     };
   }
 
@@ -296,7 +387,7 @@ export class OrdersService {
 
   async checkout(userId: string, input: CheckoutInput, idempotencyKey?: string) {
     const tenantId = this.ctx.requireTenantId();
-    const lines = await this.lines(userId, input);
+    const { lines, link, upsell } = await this.resolve(userId, input);
     const sig = OrdersService.signature(lines.map((l) => ({ courseId: l.kind === 'course' ? l.id : null, bundleId: l.kind === 'bundle' ? l.id : null, membershipPlanId: l.kind === 'membership' ? l.id : null, liveClassId: l.kind === 'webinar' ? l.id : null, digitalProductId: l.kind === 'product' ? l.id : null })));
     if (idempotencyKey) {
       const prior = await this.db.order.findFirst({ where: { userId, idempotencyKey }, include: { items: true } });
@@ -306,7 +397,7 @@ export class OrdersService {
       }
     }
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
-    const { coupon, tax, q, cur } = await this.price(userId, lines, input.couponCode);
+    const { coupon, tax, q, cur } = await this.price(userId, lines, this.funnel.linkCoupon(link, input.couponCode));
     if (!(await this.entitlements.get(tenantId)).active) throw AppException.conflict('This academy is not accepting new purchases right now.');
     if (q.total > 0 && !(await this.gateways.sellingAccount())) throw AppException.integrationNotConfigured('Online payments for this academy');
     if (q.total > 0 && q.total < 100 && cur === 'INR') throw AppException.validation([{ field: 'couponCode', message: 'The amount to pay must be at least ₹1' }]);
@@ -322,6 +413,11 @@ export class OrdersService {
       const match = lines.map(ref);
       const open = await tx.order.findMany({ where: { userId, status: { in: ['PENDING', 'PAYMENT_INITIATED'] }, items: { some: { OR: match } } }, select: { id: true } });
       if (open.length) await tx.order.updateMany({ where: { id: { in: open.map((o) => o.id) } }, data: { status: 'CANCELLED', failureReason: 'Superseded by a newer checkout' } });
+      // Reminders already sent for these items carry over, so coming back doesn't restart the sequence.
+      const reminded = await tx.order.aggregate({
+        where: { userId, createdAt: { gte: new Date(Date.now() - 7 * 86_400_000) }, recoveryStage: { gt: 0, lt: RECOVERY_DONE }, items: { some: { OR: match } } },
+        _max: { recoveryStage: true },
+      });
       const n = await nextSequence(tx, tenantId, 'order');
       const o = await tx.order.create({
         data: {
@@ -329,6 +425,7 @@ export class OrdersService {
           subtotalAmount: fromMinor(q.subtotal, cur), discountAmount: fromMinor(q.discount, cur), taxAmount: fromMinor(q.tax, cur), totalAmount: fromMinor(q.total, cur),
           taxRate: tax?.rate ?? null, taxInclusive: tax?.inclusive ?? true, couponId: coupon?.id ?? null, couponCode: coupon?.code ?? null,
           billing, idempotencyKey: idempotencyKey ?? null, expiresAt: new Date(Date.now() + ORDER_TTL_MS), affiliateId, attribution: cleanAttribution(input.attribution),
+          paymentLinkId: link?.id ?? null, recoveryStage: reminded._max.recoveryStage ?? 0,
         } as never,
       });
       for (const [i, l] of lines.entries()) {
@@ -336,15 +433,41 @@ export class OrdersService {
           data: {
             orderId: o.id, ...ref(l), grantCourseIds: l.grant.length ? l.grant : undefined,
             title: l.title.slice(0, 200), unitAmount: fromMinor(q.lines[i].unit, cur), discountAmount: fromMinor(q.lines[i].discount, cur), totalAmount: fromMinor(q.lines[i].total, cur),
+            offerId: l.offerId ?? null, source: l.source ?? null,
           } as never,
         });
       }
       return o;
     });
+    if (upsell) await this.funnel.recordUpsellCheckout(userId, upsell.offerId, upsell.sourceOrderId);
     await this.audit.record({ action: 'order.create', tenantId, actorUserId: userId, actorRealm: 'TENANT', targetType: 'Order', targetId: order.id, after: { number: order.number, total: order.totalAmount.toString(), coupon: coupon?.code ?? null, items: lines.length } });
 
     if (q.total === 0) await this.fulfil(order.id, null, q);
     return this.getForUser(userId, order.id);
+  }
+
+  /** The one-time offer to show after this paid order, or null. */
+  async upsellFor(userId: string, orderId: string) {
+    const { order, offers } = await this.funnel.upsellsAfter(userId, orderId);
+    if (!order) return null;
+    for (const o of offers) {
+      try {
+        const base = await this.sellableItem(o.itemKind, o.itemId);
+        if (base.currency !== o.currency) continue;
+        await this.assertBuyable(userId, [base]);
+        return {
+          offerId: o.id, sourceOrderId: order.id, headline: o.headline, description: o.description, kind: base.kind, itemId: base.id, title: base.title, slug: base.slug,
+          currency: o.currency, price: o.priceAmount.toString(), regularPrice: fromMinor(base.unitMinor, o.currency), expiresAt: new Date(order.paidAt!.getTime() + o.windowMinutes * 60_000),
+        };
+      } catch {
+        // Unavailable or already owned: try the next offer.
+      }
+    }
+    return null;
+  }
+
+  declineUpsell(userId: string, orderId: string, offerId: string) {
+    return this.funnel.decline(userId, orderId, offerId);
   }
 
   async getForUser(userId: string, id: string) {
@@ -552,6 +675,7 @@ export class OrdersService {
 
     if (!done) return false;
     const { order } = done;
+    await this.afterPaid(order).catch((e) => this.logger.warn({ err: (e as Error).message, orderId: order.id }, 'funnel bookkeeping failed'));
     const billing = order.billing as Record<string, string | null>;
     await this.audit.record({ action: 'order.paid', tenantId, actorRealm: 'SYSTEM', targetType: 'Order', targetId: order.id, after: { number: order.number, total: order.totalAmount.toString(), paymentId: paid?.result.providerPaymentId ?? null } });
     await this.events.emit('order.paid', { tenantId, userId: order.userId, orderId: order.id, courseIds: grantedCourses(order.items), total: order.totalAmount.toString(), currency: order.currency });
@@ -564,6 +688,18 @@ export class OrdersService {
     }
     for (const t of done.tickets) await this.sendTicket(tenantId, order.userId, t.liveClassId, t.code, tenant.name, origin).catch((e) => this.logger.warn({ err: (e as Error).message }, 'webinar ticket email failed'));
     return true;
+  }
+
+  /** Upsells in the order count as accepted; reminded orders for the same items count as recovered. */
+  private async afterPaid(order: { id: string; userId: string; recoveryStage: number; items: { courseId: string | null; bundleId: string | null; liveClassId: string | null; digitalProductId: string | null; membershipPlanId: string | null; offerId: string | null; source: string | null }[] }) {
+    await this.funnel.markAccepted(order.userId, order.items);
+    const match = order.items.map((i) => (i.bundleId ? { bundleId: i.bundleId } : i.liveClassId ? { liveClassId: i.liveClassId } : i.digitalProductId ? { digitalProductId: i.digitalProductId } : i.membershipPlanId ? { membershipPlanId: i.membershipPlanId } : { courseId: i.courseId }));
+    const now = new Date();
+    const earlier = await this.db.order.updateMany({
+      where: { userId: order.userId, id: { not: order.id }, recoveryStage: { gt: 0, lt: RECOVERY_DONE }, recoveredAt: null, status: { in: [...UNPAID, 'CANCELLED'] }, createdAt: { gte: new Date(now.getTime() - 14 * 86_400_000) }, items: { some: { OR: match } } },
+      data: { recoveredAt: now, recoveredByOrderId: order.id },
+    });
+    if (!earlier.count && order.recoveryStage > 0 && order.recoveryStage < RECOVERY_DONE) await this.db.order.update({ where: { id: order.id }, data: { recoveredAt: now, recoveredByOrderId: order.id } });
   }
 
   /** Emails the personal join link of a paid webinar ticket. */

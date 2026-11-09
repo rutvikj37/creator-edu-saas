@@ -13,13 +13,19 @@ import { CreatorSupportController, PlatformSupportController } from './support.c
 import { SupportService } from './support.service.js';
 import { BillingController } from './billing.controller.js';
 import { FinanceController } from './finance.controller.js';
+import { EmailTemplatesController } from './email-templates.controller.js';
+import { IntegrationsController } from './integrations.controller.js';
+import { PlatformDomainsController } from './domains.controller.js';
+import { PlatformAnalyticsController } from './analytics.controller.js';
+import { DnsVerifier } from '../tenants/dns-verifier.js';
 
 @Module({
   imports: [AuthModule],
   controllers: [
     PlatformTenantsController, PlansController, SettingsController, AdminsController, AuditController, DashboardController,
     ContentController, CreatorSupportController, PlatformSupportController, BillingController, FinanceController,
+    EmailTemplatesController, IntegrationsController, PlatformDomainsController, PlatformAnalyticsController,
   ],
-  providers: [PlatformTenantsService, DashboardService, SupportService],
+  providers: [PlatformTenantsService, DashboardService, SupportService, DnsVerifier],
 })
 export class PlatformModule {}

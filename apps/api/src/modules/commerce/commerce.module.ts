@@ -11,18 +11,20 @@ import { CartService } from './cart.service.js';
 import { CreatorBundlesController, LearnCartController, PublicBundlesController } from './bundles.controller.js';
 import { GatewayService } from './gateway.service.js';
 import { OrdersService } from './orders.service.js';
+import { FunnelService } from './funnel.service.js';
+import { RecoveryService } from './recovery.service.js';
 import { PaymentHttp } from './providers/http.js';
 import { PROVIDER_CLASSES } from './providers/registry.js';
 import { WebhooksService } from './webhooks.service.js';
 import { FilesService } from '../files/files.service.js';
 
-const SERVICES = [PaymentHttp, ...PROVIDER_CLASSES, GatewayService, CouponsService, DigitalProductsService, OrdersService, WebhooksService, BillingService];
+const SERVICES = [PaymentHttp, ...PROVIDER_CLASSES, GatewayService, CouponsService, DigitalProductsService, FunnelService, OrdersService, WebhooksService, BillingService, RecoveryService];
 
 /** Razorpay commerce (academy sales) and SaaS plan billing: HTTP API. */
 @Module({
   controllers: [CreatorProductsController, PublicProductsController, LearnProductsController, CreatorBundlesController, PublicBundlesController, LearnCartController, CreatorPaymentsController, CreatorCouponsController, CreatorOrdersController, LearnCommerceController, RazorpayWebhookController, CreatorPlanBillingController, PlatformBillingController],
   providers: [...SERVICES, BundlesService, CartService],
-  exports: [OrdersService, GatewayService],
+  exports: [OrdersService, GatewayService, FunnelService, RecoveryService],
 })
 export class CommerceModule {}
 

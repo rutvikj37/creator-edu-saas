@@ -64,6 +64,10 @@ class QuoteDto {
   @ApiPropertyOptional({ description: 'Buy a paid webinar ticket' }) @IsOptional() @IsString() @Length(25, 25) webinarId?: string;
   @ApiPropertyOptional({ description: 'Buy a digital product' }) @IsOptional() @IsString() @Length(25, 25) digitalProductId?: string;
   @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(40) couponCode?: string | null;
+  @ApiPropertyOptional({ description: 'Buy through a shareable payment link' }) @IsOptional() @Transform(trim) @IsString() @Length(4, 16) paymentLinkCode?: string;
+  @ApiPropertyOptional({ description: 'Take a post-purchase upsell (with sourceOrderId)' }) @IsOptional() @IsString() @Length(25, 25) upsellOfferId?: string;
+  @ApiPropertyOptional({ description: 'The paid order the upsell follows' }) @IsOptional() @IsString() @Length(25, 25) sourceOrderId?: string;
+  @ApiPropertyOptional({ description: 'Order bumps ticked at checkout', type: [String] }) @IsOptional() @IsArray() @ArrayMaxSize(3) @IsString({ each: true }) @Length(25, 25, { each: true }) bumpOfferIds?: string[];
 }
 class CheckoutDto extends QuoteDto {
   @ApiPropertyOptional({ description: 'Affiliate referral code (?ref=)' }) @IsOptional() @Transform(trim) @IsString() @MaxLength(32) affiliateCode?: string | null;
@@ -230,6 +234,14 @@ export class LearnCommerceController {
 
   @Post('orders/:id/abandon') @HttpCode(200)
   abandon(@Param('id') id: string, @Body() dto: AbandonDto, @CurrentAuth() auth: AuthContext) { return this.orders.markAbandoned(auth.userId, id, dto.reason); }
+
+  @Get('orders/:id/upsell')
+  @ApiOperation({ summary: 'The one-time offer shown after this paid order (null when there is none)' })
+  async upsell(@Param('id') id: string, @CurrentAuth() auth: AuthContext) { return { offer: await this.orders.upsellFor(auth.userId, id) }; }
+
+  @Post('orders/:id/upsell/:offerId/decline') @HttpCode(200)
+  @ApiOperation({ summary: 'No thanks — stop showing this offer for the order' })
+  declineUpsell(@Param('id') id: string, @Param('offerId') offerId: string, @CurrentAuth() auth: AuthContext) { return this.orders.declineUpsell(auth.userId, id, offerId); }
 
   @Get('orders/:id/invoice')
   async invoice(@Param('id') id: string, @CurrentAuth() auth: AuthContext, @Res() res: Response) { sendPdf(res, await this.orders.invoicePdf(id, auth.userId)); }

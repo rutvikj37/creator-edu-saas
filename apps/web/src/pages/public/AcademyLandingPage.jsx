@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Link, useLocation } from 'react-router';
 import { captureReferral } from '../../services/api/affiliates.js';
 import { captureAttribution, track } from '../../utils/tracker.js';
+import { adEvent, initAdTracking } from '../../utils/adTracking.js';
 import { useQuery } from '@tanstack/react-query';
 import { BookOpen, Layers, ShoppingCart, Users } from 'lucide-react';
 import { bundlesApi, cartApi, productsApi } from '../../services/api/commerce.js';
@@ -33,7 +34,9 @@ export function AcademyHeader({ site, nav }) {
   useEffect(() => {
     captureAttribution(location.search, location.pathname);
     track('page_view', location.pathname);
+    adEvent('PageView');
   }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { initAdTracking(site?.tracking); }, [site?.tracking]);
   return (
     <header className="border-b border-line bg-surface">
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4">

@@ -124,6 +124,18 @@ export class CreateTicketDto {
   @ApiProperty() @Transform(trim) @IsString() @Length(10, 10000) body: string;
 }
 
+export const STUDENT_TICKET_CATEGORIES = ['course', 'payment', 'access', 'certificate', 'technical', 'other'] as const;
+
+export class StudentTicketDto {
+  @ApiProperty() @Transform(trim) @IsString() @Length(5, 200) subject: string;
+  @ApiProperty({ enum: STUDENT_TICKET_CATEGORIES }) @IsIn(STUDENT_TICKET_CATEGORIES) category: string;
+  @ApiProperty() @Transform(trim) @IsString() @Length(10, 5000) body: string;
+}
+
+export class StudentReplyDto {
+  @ApiProperty() @Transform(trim) @IsString() @Length(1, 5000) body: string;
+}
+
 export class TicketReplyDto {
   @ApiProperty() @Transform(trim) @IsString() @Length(1, 10000) body: string;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() internal?: boolean;

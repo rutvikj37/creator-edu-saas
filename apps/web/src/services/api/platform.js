@@ -42,6 +42,18 @@ export const platformApi = {
   updateTicket: (id, body) => http.patch(`/platform/support/tickets/${id}`, body).then(d),
   supportAgents: () => http.get('/platform/support/agents').then(d),
   supportReport: () => http.get('/platform/support/report').then(d),
+  integrations: () => http.get('/platform/integrations').then(d),
+  domains: (params) => http.get('/platform/domains', { params: qs(params) }).then(page),
+  domainSummary: () => http.get('/platform/domains/summary').then(d),
+  verifyDomain: (id) => http.post(`/platform/domains/${id}/verify`).then(d),
+  detachDomain: (id) => http.delete(`/platform/domains/${id}`).then(d),
+  analytics: (params) => http.get('/platform/analytics', { params: qs(params) }).then(d),
+  emailTemplates: () => http.get('/platform/email-templates').then(d),
+  emailTemplate: (key) => http.get(`/platform/email-templates/${key}`).then(d),
+  saveEmailTemplate: (key, body) => http.put(`/platform/email-templates/${key}`, body).then(d),
+  resetEmailTemplate: (key) => http.delete(`/platform/email-templates/${key}`).then(d),
+  previewEmailTemplate: (key, body) => http.post(`/platform/email-templates/${key}/preview`, body).then(d),
+  testEmailTemplate: (key, body) => http.post(`/platform/email-templates/${key}/test`, body).then(d),
 };
 
 export const creatorApi = {
