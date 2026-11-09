@@ -29,7 +29,7 @@ export class AcademyController {
   @Get('academy/business')
   @RequirePermissions(PERMISSIONS.ACADEMY_MANAGE)
   business() {
-    return this.academy.getBusiness();
+    return this.academy.businessView();
   }
 
   @Put('academy/business')

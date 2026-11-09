@@ -5,6 +5,7 @@ import { cn } from '../../utils/cn.js';
 const ITEMS = [
   { to: '/creator/academy', label: 'My academy', perm: 'academy.manage' },
   { to: '/creator/payments', label: 'Payments', perm: 'integrations.manage' },
+  { to: '/creator/settings/tax-invoicing', label: 'Tax & invoicing', perm: 'academy.manage' },
   { to: '/creator/domains', label: 'Domains', perm: 'domains.manage' },
   { to: '/creator/integrations', label: 'Live integrations', perm: 'live.manage' },
   { to: '/creator/billing', label: 'Billing & usage', perm: 'billing.manage' },

@@ -191,7 +191,7 @@ export function CheckoutPage() {
                     <Input label="Phone" type="tel" autoComplete="tel" placeholder="+91…" {...form.register('phone')} error={form.formState.errors.phone?.message} hint="Optional — pre-fills Razorpay." />
                     <Input label="State" autoComplete="address-level1" {...form.register('state')} error={form.formState.errors.state?.message} />
                   </div>
-                  {showGst ? (
+                  {site.data?.gstInputCredit === false ? null : showGst ? (
                     <Input label="GSTIN" placeholder="22AAAAA0000A1Z5" {...form.register('gstin')} error={form.formState.errors.gstin?.message} hint="Shown on your invoice for input tax credit." />
                   ) : (
                     <Button variant="link" size="sm" onClick={() => setShowGst(true)}>Buying for a business? Add GSTIN</Button>

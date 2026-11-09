@@ -56,6 +56,8 @@ export interface ProductRef {
   membershipPlanId?: string;
   /** Buy everything in the student's cart (courses and bundles). */
   fromCart?: boolean;
+  /** Buyer's country (ISO 2) for zero-rated exports; defaults to the account's country. */
+  country?: string;
   /** Buy through a shareable payment link (replaces the fields above). */
   paymentLinkCode?: string;
   /** Take a post-purchase upsell offered after `sourceOrderId` (replaces the fields above). */
@@ -122,11 +124,8 @@ export function fmtMoney(minor: number, currency: string) {
   return `${currency} ${Number(fromMinor(minor, currency)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-/** Indian financial year label used in invoice series, e.g. 2026-27 for dates from 1 April 2026. */
-export function financialYear(d: Date) {
-  const y = d.getUTCMonth() >= 3 ? d.getUTCFullYear() : d.getUTCFullYear() - 1;
-  return `${y}-${String((y + 1) % 100).padStart(2, '0')}`;
-}
+import { financialYear, invoiceNumber } from './invoice-number.js';
+export { financialYear };
 
 export async function nextSequence(tx: { $executeRaw: any; $queryRaw: any }, tenantId: string, name: string): Promise<number> {
   await tx.$executeRaw`INSERT INTO TenantSequence (tenantId, name, value) VALUES (${tenantId}, ${name}, 1) ON DUPLICATE KEY UPDATE value = value + 1`;
@@ -374,7 +373,7 @@ export class OrdersService {
     }
   }
 
-  private async price(userId: string, lines: Line[], couponCode?: string | null) {
+  private async price(userId: string, lines: Line[], couponCode?: string | null, buyerCountry?: string | null) {
     const tenantId = this.ctx.requireTenantId();
     const cur = lines[0].currency;
     const couponable = lines.filter((l) => l.couponable !== false);
@@ -385,7 +384,9 @@ export class OrdersService {
     const rule = await this.taxRule(tenantId);
     // Items can set their own GST display; it applies when every item in the order agrees.
     const own = [...new Set(lines.map((l) => l.taxInclusive))];
-    const tax = rule && own.length === 1 && own[0] !== undefined ? { ...rule, inclusive: own[0] } : rule;
+    let tax = rule && own.length === 1 && own[0] !== undefined ? { ...rule, inclusive: own[0] } : rule;
+    // Exports under a valid LUT are zero-rated: no GST for buyers outside India.
+    if (tax && buyerCountry && buyerCountry !== 'IN' && (await this.prisma.tenantBusinessProfile.findUnique({ where: { tenantId }, select: { exportsUnderLut: true } }))?.exportsUnderLut) tax = { ...tax, rate: 0 };
     const q = computeLinesQuote(lines.map((l) => l.unitMinor), eligible, coupon?.rule ?? null, tax);
     return { coupon, tax, q, cur };
   }
@@ -393,7 +394,8 @@ export class OrdersService {
   async quote(userId: string, ref: ProductRef, couponCode?: string | null) {
     const { lines, link, upsell, bumps, chosen } = await this.resolve(userId, ref);
     const tenantId = this.ctx.requireTenantId();
-    const { coupon, tax, q, cur } = await this.price(userId, lines, this.funnel.linkCoupon(link, couponCode));
+    const buyer = await this.prisma.user.findUnique({ where: { id: userId }, select: { country: true } });
+    const { coupon, tax, q, cur } = await this.price(userId, lines, this.funnel.linkCoupon(link, couponCode), ref.country ?? buyer?.country);
     const first = lines[0];
     const main = lines.filter((l) => l.source !== 'BUMP');
     const active = (await this.entitlements.get(tenantId)).active;
@@ -428,7 +430,7 @@ export class OrdersService {
       }
     }
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
-    const { coupon, tax, q, cur } = await this.price(userId, lines, this.funnel.linkCoupon(link, input.couponCode));
+    const { coupon, tax, q, cur } = await this.price(userId, lines, this.funnel.linkCoupon(link, input.couponCode), input.billing.country ?? user.country);
     if (!(await this.entitlements.get(tenantId)).active) throw AppException.conflict('This academy is not accepting new purchases right now.');
     if (q.total > 0 && !(await this.gateways.sellingAccount())) throw AppException.integrationNotConfigured('Online payments for this academy');
     if (q.total > 0 && q.total < 100 && cur === 'INR') throw AppException.validation([{ field: 'couponCode', message: 'The amount to pay must be at least ₹1' }]);
@@ -686,20 +688,23 @@ export class OrdersService {
         if (conversion) entries.push({ type: 'AFFILIATE_COMMISSION', amount: -toMinor(conversion.commission, cur), description: `Affiliate commission ${Number(conversion.percent)}%` });
         for (const e of entries) await tx.ledgerEntry.create({ data: { orderId: order.id, type: e.type, amount: e.amount < 0 ? `-${fromMinor(-e.amount, cur)}` : fromMinor(e.amount, cur), currency: cur, description: e.description } as never });
       }
+      if (business && !business.invoicesEnabled) return { order, invoice: null, tickets };
       const fy = financialYear(now);
       const seq = await nextSequence(tx, tenantId, `invoice:${fy}`);
       const prefix = business?.invoicePrefix || 'INV';
       const billing = order.billing as Record<string, string | null>;
+      const zeroRated = Boolean(business?.exportsUnderLut && billing.country && billing.country !== 'IN' && Number(order.taxAmount) === 0 && order.taxRate !== null);
       const invoice = await tx.invoice.create({
         data: {
-          orderId: order.id, number: `${prefix}/${fy}/${String(seq).padStart(5, '0')}`, issuedAt: now,
+          orderId: order.id, number: invoiceNumber(prefix, fy, business?.invoiceStartNumber ?? 1, seq), issuedAt: now,
           seller: {
             name: business?.legalName || tenant.name, address: [business?.addressLine1, business?.addressLine2, business?.city, business?.state, business?.postalCode, business?.country].filter(Boolean).join(', '),
             gstin: business?.gstRegistered ? business?.gstin ?? null : null, pan: business?.pan ?? null, state: business?.state ?? null,
+            details: business?.taxDetails ?? null, note: business?.invoiceNote ?? null,
           },
           buyer: billing,
           lines: order.items.map((i) => ({ description: i.title, quantity: 1, unitAmount: i.unitAmount.toString(), discountAmount: i.discountAmount.toString(), totalAmount: i.totalAmount.toString() })),
-          totals: { currency: cur, subtotal: order.subtotalAmount.toString(), discount: order.discountAmount.toString(), tax: order.taxAmount.toString(), taxRate: order.taxRate?.toString() ?? null, taxInclusive: order.taxInclusive, total: order.totalAmount.toString(), paidVia: paid ? `Razorpay ${paid.result.method ?? ''}`.trim() : 'Free (100% discount)', paymentId: paid?.result.providerPaymentId ?? null },
+          totals: { currency: cur, subtotal: order.subtotalAmount.toString(), discount: order.discountAmount.toString(), tax: order.taxAmount.toString(), taxRate: order.taxRate?.toString() ?? null, taxInclusive: order.taxInclusive, total: order.totalAmount.toString(), zeroRated, paidVia: paid ? `Razorpay ${paid.result.method ?? ''}`.trim() : 'Free (100% discount)', paymentId: paid?.result.providerPaymentId ?? null },
         } as never,
       });
       return { order, invoice, tickets };
@@ -755,7 +760,10 @@ export class OrdersService {
     const o = await this.db.order.findFirst({ where: { id: orderId, ...(userId ? { userId } : {}) } });
     if (!o) throw AppException.notFound('Order not found');
     const inv = await this.db.invoice.findFirst({ where: { orderId: o.id } });
-    if (!inv) throw AppException.notFound('An invoice is issued once the order is paid');
+    if (!inv) {
+      const b = await this.prisma.tenantBusinessProfile.findUnique({ where: { tenantId: o.tenantId }, select: { invoicesEnabled: true } });
+      throw AppException.notFound(b && !b.invoicesEnabled && ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(o.status) ? 'This academy does not issue invoices for purchases.' : 'An invoice is issued once the order is paid');
+    }
     const pdf = await renderInvoicePdf({
       number: inv.number, issuedAt: inv.issuedAt, orderNumber: o.number, seller: inv.seller as never, buyer: inv.buyer as never,
       lines: inv.lines as never, totals: inv.totals as never, refunded: o.refundedAmount.toString(),

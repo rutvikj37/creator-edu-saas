@@ -32,6 +32,7 @@ export class AcademyPublicController {
     const tracking = await this.prisma.tenantSetting.findUnique({ where: { tenantId_key: { tenantId: host.tenantId, key: TRACKING_KEY } } });
     return {
       paymentsEnabled: gateway > 0,
+      gstInputCredit: (await this.prisma.tenantBusinessProfile.findUnique({ where: { tenantId: host.tenantId }, select: { gstInputCredit: true } }))?.gstInputCredit ?? true,
       tracking: parseTracking(tracking?.value),
       name: t.name, slug: t.slug, isLive: t.status === 'ACTIVE', acceptingRegistrations: t.status === 'ACTIVE', locale: t.locale, currency: t.defaultCurrency,
       tagline: a?.tagline ?? null, description: a?.description ?? null, supportEmail: a?.supportEmail ?? null, socialLinks: a?.socialLinks ?? {},

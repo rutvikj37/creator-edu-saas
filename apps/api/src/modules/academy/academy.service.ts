@@ -8,6 +8,7 @@ import { TENANT_PRISMA } from '../../core/tenancy/tenancy.module.js';
 import type { TenantPrismaClient } from '../../core/tenancy/tenant-prisma.js';
 import { TenantContext } from '../../core/tenancy/tenant-context.service.js';
 import { FilesService } from '../files/files.service.js';
+import { financialYear, invoiceNumber } from '../commerce/invoice-number.js';
 import { FONT_CHOICES, type UpdateAcademyDto, type UpdateBusinessDto } from './dto/academy.dto.js';
 
 export const ONBOARDING_STEPS = ['name', 'category', 'logo', 'colors', 'description', 'business', 'gst', 'plan', 'payment', 'publish'] as const;
@@ -64,10 +65,20 @@ export class AcademyService {
     return b ?? this.db.tenantBusinessProfile.create({ data: {} as never });
   }
 
+  /** The business profile plus the number the next invoice will get. */
+  async businessView() {
+    const b = await this.getBusiness();
+    const fy = financialYear(new Date());
+    const seq = await this.prisma.tenantSequence.findUnique({ where: { tenantId_name: { tenantId: this.ctx.requireTenantId(), name: `invoice:${fy}` } } }).catch(() => null);
+    return { ...b, nextInvoiceNumber: invoiceNumber(b.invoicePrefix || 'INV', fy, b.invoiceStartNumber, Number((seq as { value?: number } | null)?.value ?? 0) + 1) };
+  }
+
   async updateBusiness(dto: UpdateBusinessDto, actorUserId: string) {
     if (dto.gstRegistered && dto.gstin === '') throw AppException.validation([{ field: 'gstin', message: 'Enter your GSTIN or turn off GST registration' }]);
     const b = await this.getBusiness();
-    const updated = await this.db.tenantBusinessProfile.update({ where: { id: b.id }, data: { ...dto, gstin: dto.gstin || null, pan: dto.pan || null } });
+    const clean = { ...dto, ...(dto.gstin !== undefined ? { gstin: dto.gstin || null } : {}), ...(dto.pan !== undefined ? { pan: dto.pan || null } : {}),
+      ...(dto.taxDetails !== undefined ? { taxDetails: dto.taxDetails?.trim() || null } : {}), ...(dto.invoiceNote !== undefined ? { invoiceNote: dto.invoiceNote?.trim() || null } : {}) };
+    const updated = await this.db.tenantBusinessProfile.update({ where: { id: b.id }, data: clean });
     await this.audit.record({ action: 'academy.business_update', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'TenantBusinessProfile', targetId: b.id, after: dto });
     return updated;
   }
