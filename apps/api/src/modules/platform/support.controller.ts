@@ -11,6 +11,7 @@ import { SupportService } from './support.service.js';
 @ApiBearerAuth()
 @TenantScoped('workspace')
 @AllowWhenSuspended()
+@RequirePermissions(PERMISSIONS.SETTINGS_MANAGE)
 @Controller({ path: 'creator/support/tickets', version: '1' })
 export class CreatorSupportController {
   constructor(

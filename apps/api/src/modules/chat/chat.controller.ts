@@ -82,6 +82,7 @@ export class CreatorChatController {
 @ApiTags('Creator · Platform support chat')
 @ApiBearerAuth()
 @TenantScoped('workspace')
+@RequirePermissions(PERMISSIONS.SETTINGS_MANAGE)
 @Controller({ path: 'creator/support-chat', version: '1' })
 export class CreatorSupportChatController {
   constructor(private readonly chat: ChatService, private readonly ctx: TenantContext) {}

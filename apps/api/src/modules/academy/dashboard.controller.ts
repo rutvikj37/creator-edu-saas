@@ -41,13 +41,15 @@ export class CreatorDashboardController {
   async get(@CurrentAuth() auth: AuthContext) {
     const tenantId = this.ctx.requireTenantId();
     const since = new Date(Date.now() - 30 * DAY);
-    const canSeeSales = (await this.authz.permissions(auth)).has('orders.read');
+    const perms = await this.authz.permissions(auth);
+    const canSeeSales = perms.has('orders.read');
+    const canSeeActivity = perms.has('settings.manage');
     const [byStatus, students, newStudents, staff, activity, ent, storage, last30, setup] = await Promise.all([
       this.db.course.groupBy({ by: ['status'], where: { deletedAt: null }, _count: { _all: true } }),
       this.prisma.user.count({ where: { tenantId, deletedAt: null } }),
       this.prisma.user.count({ where: { tenantId, createdAt: { gte: since } } }),
       this.db.tenantMember.count({ where: { status: 'ACTIVE' } }),
-      this.prisma.auditLog.findMany({ where: { tenantId }, orderBy: { createdAt: 'desc' }, take: 8, select: { id: true, action: true, createdAt: true, actorUserId: true } }),
+      canSeeActivity ? this.prisma.auditLog.findMany({ where: { tenantId }, orderBy: { createdAt: 'desc' }, take: 8, select: { id: true, action: true, createdAt: true, actorUserId: true } }) : Promise.resolve([]),
       this.entitlements.get(tenantId),
       this.db.fileAsset.aggregate({ where: { status: 'READY' }, _sum: { sizeBytes: true } }),
       this.last30(tenantId, canSeeSales),

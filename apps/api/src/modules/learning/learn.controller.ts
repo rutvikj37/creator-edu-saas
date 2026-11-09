@@ -162,8 +162,7 @@ export class LearnController {
   @Post('files/:id/complete')
   @HttpCode(200)
   async completeUpload(@Param('id') id: string, @CurrentAuth() auth: AuthContext, @Req() req: AppRequest) {
-    await this.files.assertOwnedBy(id, auth.userId);
-    return this.files.complete(id, apiOrigin(req));
+    return this.files.complete(id, auth.userId, apiOrigin(req));
   }
 
   // certificates

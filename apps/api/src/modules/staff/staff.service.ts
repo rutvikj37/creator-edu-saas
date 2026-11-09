@@ -120,6 +120,7 @@ export class StaffService {
   async remove(memberId: string, actorUserId: string) {
     const m = await this.member(memberId);
     if (m.userId === actorUserId) throw AppException.forbidden('You cannot remove yourself.');
+    await this.assertCanAssign(m.roleId, actorUserId); // cannot remove someone who holds more than you
     await this.db.tenantMember.update({ where: { id: memberId }, data: { status: 'REMOVED' } });
     await this.authz.invalidate(m.userId);
     await this.audit.record({ action: 'staff.remove', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'TenantMember', targetId: memberId });

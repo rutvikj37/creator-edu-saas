@@ -64,24 +64,24 @@ export class FilesService {
     return { fileId: file.id, upload };
   }
 
-  async signParts(id: string, partNumbers: number[]) {
-    const file = await this.db.fileAsset.findUnique({ where: { id } });
+  async signParts(id: string, ownerUserId: string, partNumbers: number[]) {
+    const file = await this.db.fileAsset.findFirst({ where: { id, ownerUserId } });
     const uploadId = file && (await this.redis.get(`multipart:${id}`));
     if (!file || !uploadId || file.status !== 'UPLOADING') throw AppException.notFound('Upload not found');
     return Promise.all(partNumbers.map(async (partNumber) => ({ partNumber, url: await this.storage.signPart(file, uploadId, partNumber) })));
   }
 
-  async completeMultipart(id: string, parts: Array<{ partNumber: number; etag: string }>) {
-    const file = await this.db.fileAsset.findUnique({ where: { id } });
+  async completeMultipart(id: string, ownerUserId: string, parts: Array<{ partNumber: number; etag: string }>) {
+    const file = await this.db.fileAsset.findFirst({ where: { id, ownerUserId } });
     const uploadId = file && (await this.redis.get(`multipart:${id}`));
     if (!file || !uploadId) throw AppException.notFound('Upload not found');
     await this.storage.completeMultipart(file, uploadId, parts);
     await this.redis.del(`multipart:${id}`);
   }
 
-  /** Confirms the object exists, has the declared size and that its bytes match the declared type. */
-  async complete(id: string, apiOrigin: string): Promise<FileView> {
-    const file = await this.db.fileAsset.findUnique({ where: { id } });
+  /** Confirms the object exists, has the declared size and that its bytes match the declared type. Only the uploader may complete. */
+  async complete(id: string, ownerUserId: string, apiOrigin: string): Promise<FileView> {
+    const file = await this.db.fileAsset.findFirst({ where: { id, ownerUserId } });
     if (!file) throw AppException.notFound('File not found');
     if (file.status === 'READY') return this.view(file, apiOrigin);
     const info = await this.storage.inspect(file);

@@ -48,16 +48,16 @@ export class FilesController {
   @Post(':id/parts')
   @HttpCode(200)
   @ApiOperation({ summary: 'Signed URLs for multipart upload parts (S3, large videos)' })
-  parts(@Param('id') id: string, @Body() dto: PartNumbersDto) {
-    return this.files.signParts(id, dto.partNumbers);
+  parts(@Param('id') id: string, @Body() dto: PartNumbersDto, @CurrentAuth() auth: AuthContext) {
+    return this.files.signParts(id, auth.userId, dto.partNumbers);
   }
 
   @Post(':id/complete')
   @HttpCode(200)
   @ApiOperation({ summary: 'Verify the uploaded object (size + content signature) and mark it ready' })
-  async complete(@Param('id') id: string, @Body() body: Partial<CompletePartsDto>, @Req() req: AppRequest) {
-    if (body?.parts?.length) await this.files.completeMultipart(id, body.parts);
-    return this.files.complete(id, apiOrigin(req));
+  async complete(@Param('id') id: string, @Body() body: Partial<CompletePartsDto>, @CurrentAuth() auth: AuthContext, @Req() req: AppRequest) {
+    if (body?.parts?.length) await this.files.completeMultipart(id, auth.userId, body.parts);
+    return this.files.complete(id, auth.userId, apiOrigin(req));
   }
 }
 

@@ -114,7 +114,7 @@ export class LearningService {
     if (!lesson || lesson.course.deletedAt) throw AppException.notFound('Lesson not found');
     const enrollment = await this.enrollment(userId, lesson.courseId);
     if (!isEnrollmentUsable(enrollment)) {
-      if (lesson.isFreePreview && lesson.course.status === 'PUBLISHED') return { lesson, enrollment: null };
+      if (lesson.isFreePreview && lesson.course.status === 'PUBLISHED' && lesson.course.visibility !== 'PRIVATE') return { lesson, enrollment: null };
       throw AppException.forbidden(enrollment?.status === 'EXPIRED' ? 'Your access to this course has expired.' : 'Enrol in this course to open this lesson.');
     }
     const lock = this.lockInfo(lesson.course, enrollment!.startedAt, lesson.section, lesson);
