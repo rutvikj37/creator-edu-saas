@@ -2,7 +2,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { PrismaService } from '../src/core/prisma/prisma.service.js';
 import { HostResolverService } from '../src/core/tenancy/host-resolver.service.js';
 import { MembershipsService } from '../src/modules/memberships/memberships.service.js';
-import { api, authed, createTestApp, lastEmail, parseSession, registerCreator, resetDatabase, type Session, tenantHost, uniqueEmail } from './helpers.js';
+import { api, authed, createTestApp, lastEmail, parseSession, PNG, registerCreator, resetDatabase, type Session, tenantHost, uniqueEmail, uploadFile } from './helpers.js';
 import { RazorpaySim } from './razorpay-sim.js';
 
 const doc = (t: string) => ({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: t }] }] });
@@ -139,5 +139,37 @@ describe('Memberships and communities (e2e)', () => {
     const other = await registerCreator(app);
     await authed(app, other.session).get(`/api/v1/creator/communities/${open.id}/posts`).expect(404);
     expect((await authed(app, other.session).get('/api/v1/creator/communities')).body.data.communities).toEqual([]);
+  });
+  it('membership builder: draft from a name, details, courses, then pricing with a sale price; publish rules; stats; drafts stay hidden', async () => {
+    const cover = (await uploadFile(app, cs, 'IMAGE', 'cover.png', 'image/png', PNG)).body.data;
+    const draft = (await authed(app, cs).post('/api/v1/creator/memberships').send({ name: 'My Membership', description: 'Welcome to my membership community', coverFileId: cover.id, faqs: [{ question: 'What is included?', answer: 'Every course listed.' }] }).expect(201)).body.data;
+    expect(draft).toMatchObject({ status: 'DRAFT', priceAmount: '0', courseIds: [], coverUrl: expect.any(String), faqs: [{ question: 'What is included?', answer: 'Every course listed.' }] });
+    await authed(app, cs).post('/api/v1/creator/memberships').send({ name: 'Bad', faqs: [{ question: 'Q', answer: '' }] }).expect(422);
+    // Not sellable yet: hidden publicly, refused at checkout, can't be published without courses and a price.
+    expect((await api(app).get('/api/v1/public/memberships').set('Host', tenantHost(c.tenant.slug))).body.data.map((p: any) => p.id)).not.toContain(draft.id);
+    const m = await student('Draft Peeker');
+    await authed(app, m.s).post('/api/v1/learn/checkout').send({ membershipPlanId: draft.id, billing: { name: 'Peeker' } }).expect(404);
+    const refused = await authed(app, cs).patch(`/api/v1/creator/memberships/${draft.id}`).send({ status: 'ACTIVE' }).expect(422);
+    expect(refused.body.error.details.map((d: any) => d.field).sort()).toEqual(['courseIds', 'priceAmount']);
+    // Step 2: courses. Step 3: plan name, price 1499 struck through, charged 999 a year; publish.
+    await authed(app, cs).patch(`/api/v1/creator/memberships/${draft.id}`).send({ courseIds: courses.map((x) => x.id) }).expect(200);
+    await authed(app, cs).patch(`/api/v1/creator/memberships/${draft.id}`).send({ priceAmount: 999, compareAtAmount: 999 }).expect(422);
+    const live = (await authed(app, cs).patch(`/api/v1/creator/memberships/${draft.id}`).send({ planName: 'Yearly pass', priceAmount: 999, compareAtAmount: 1499, interval: 'YEAR', status: 'ACTIVE' }).expect(200)).body.data;
+    expect(live).toMatchObject({ status: 'ACTIVE', planName: 'Yearly pass', interval: 'YEAR' });
+    expect([Number(live.priceAmount), Number(live.compareAtAmount)]).toEqual([999, 1499]);
+    expect((await authed(app, cs).get(`/api/v1/creator/memberships/${draft.id}`).expect(200)).body.data).toMatchObject({ name: 'My Membership', coverUrl: expect.any(String) });
+    const pub = (await api(app).get('/api/v1/public/memberships').set('Host', tenantHost(c.tenant.slug))).body.data.find((p: any) => p.id === draft.id);
+    expect(pub).toMatchObject({ planName: 'Yearly pass', courses: expect.arrayContaining([expect.objectContaining({ title: 'Members course A' })]) });
+    // A buyer pays the sale price; the header totals and the card numbers count it.
+    const before = (await authed(app, cs).get('/api/v1/creator/memberships/stats').expect(200)).body.data;
+    await buyPlan(m.s, draft.id);
+    const after = (await authed(app, cs).get('/api/v1/creator/memberships/stats')).body.data;
+    expect(after.totalMembers).toBe(before.totalMembers + 1);
+    expect(Number(after.totalRevenue) - Number(before.totalRevenue)).toBe(999);
+    expect((await authed(app, cs).get('/api/v1/creator/memberships')).body.data.find((p: any) => p.id === draft.id)).toMatchObject({ activeMembers: 1, revenue: '999' });
+    // Another academy can't read it.
+    const other = await registerCreator(app);
+    await authed(app, other.session).get(`/api/v1/creator/memberships/${draft.id}`).expect(404);
+    expect((await authed(app, other.session).get('/api/v1/creator/memberships/stats')).body.data.totalMembers).toBe(0);
   });
 });

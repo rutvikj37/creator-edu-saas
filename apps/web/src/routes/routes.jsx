@@ -113,6 +113,7 @@ const AnalyticsPage = lazyNamed(() => import('../pages/creator/AnalyticsPage.jsx
 const AiStudioPage = lazyNamed(() => import('../pages/creator/AiStudioPage.jsx'), 'AiStudioPage');
 const CreatorMembershipsPage = lazyNamed(() => import('../pages/community/MembershipsPages.jsx'), 'CreatorMembershipsPage');
 const PublicMembershipsPage = lazyNamed(() => import('../pages/community/MembershipsPages.jsx'), 'PublicMembershipsPage');
+const MembershipBuilderPage = lazyNamed(() => import('../pages/community/MembershipBuilderPage.jsx'), 'MembershipBuilderPage');
 const SubscriptionsAdminPage = lazyNamed(() => import('../pages/admin/SubscriptionsAdminPage.jsx'), 'SubscriptionsAdminPage');
 const PlatformTransactionsPage = lazyNamed(() => import('../pages/finance/FinanceDashboardPage.jsx'), 'PlatformTransactionsPage');
 const TaxReportPage = lazyNamed(() => import('../pages/finance/TaxReportPage.jsx'), 'TaxReportPage');
@@ -253,6 +254,8 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/creator/communities/:id', element: page(CommunityFeedPage, { staff: true }) },
             { path: '/creator/communities/:id/posts/:postId', element: page(CommunityPostPage, { staff: true }) },
             { path: '/creator/memberships', element: page(CreatorMembershipsPage) },
+            { path: '/creator/memberships/new', element: page(MembershipBuilderPage) },
+            { path: '/creator/memberships/:id/edit', element: page(MembershipBuilderPage) },
             { path: '/creator/analytics', element: page(AnalyticsPage) },
             { path: '/creator/ai', element: page(AiStudioPage) },
             { path: '/creator/discussions', element: page(DiscussionsPage) },

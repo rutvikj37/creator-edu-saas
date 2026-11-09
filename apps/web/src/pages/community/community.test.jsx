@@ -1,10 +1,11 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { vi } from 'vitest';
 import { CommunityFeedPage } from './CommunityPages.jsx';
 import { CreatorMembershipsPage, PublicMembershipsPage } from './MembershipsPages.jsx';
+import { MembershipBuilderPage } from './MembershipBuilderPage.jsx';
 import { CheckoutPage } from '../student/CheckoutPage.jsx';
 import { communityApi, membershipsApi } from '../../services/api/community.js';
 import { checkoutApi } from '../../services/api/commerce.js';
@@ -12,10 +13,11 @@ import { checkoutApi } from '../../services/api/commerce.js';
 const learn = { posts: vi.fn(), createPost: vi.fn(), like: vi.fn() };
 vi.mock('../../services/api/community.js', () => ({
   communityApi: vi.fn(() => learn),
-  membershipsApi: { plans: vi.fn(), create: vi.fn(), update: vi.fn(), members: vi.fn(), publicPlans: vi.fn(), mine: vi.fn() },
+  membershipsApi: { plans: vi.fn(), stats: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), members: vi.fn(), publicPlans: vi.fn(), mine: vi.fn() },
 }));
 vi.mock('../../services/api/creator.js', () => ({ coursesApi: { list: vi.fn(async () => ({ items: [{ id: 'c1', title: 'SQL Basics', status: 'PUBLISHED' }, { id: 'c2', title: 'Excel', status: 'PUBLISHED' }] })) } }));
-vi.mock('../../services/api/commerce.js', () => ({ checkoutApi: { quote: vi.fn(), checkout: vi.fn(), pay: vi.fn(), confirm: vi.fn(), abandon: vi.fn() } }));
+vi.mock('../../services/api/commerce.js', () => ({ checkoutApi: { quote: vi.fn(), checkout: vi.fn(), pay: vi.fn(), confirm: vi.fn(), abandon: vi.fn() }, creatorCommerceApi: { gateway: vi.fn(async () => ({ configured: false })) } }));
+vi.mock('../../components/forms/FileUpload.jsx', () => ({ FileUpload: ({ label }) => <button type="button">{label}</button> }));
 vi.mock('../../services/api/learn.js', () => ({ catalogApi: { course: vi.fn() } }));
 vi.mock('../../services/api/auth.js', () => ({ academyApi: { site: vi.fn(async () => ({ name: 'Acme', theme: {} })) } }));
 vi.mock('../../context/AuthContext.jsx', () => ({ useAuth: () => ({ status: 'authenticated', user: { fullName: 'Priya', email: 'p@example.test' } }) }));
@@ -46,18 +48,61 @@ it('student feed: creates a post', async () => {
   await waitFor(() => expect(learn.createPost).toHaveBeenCalledWith('l1', { title: null, body: 'Anyone studying SQL?' }));
 });
 
-it('creator creates a membership plan with the chosen courses', async () => {
-  membershipsApi.plans.mockResolvedValue([]);
-  membershipsApi.create.mockResolvedValue(plan);
-  wrap([{ path: '/creator/memberships', element: <CreatorMembershipsPage /> }], '/creator/memberships');
-  await userEvent.click((await screen.findAllByRole('button', { name: 'New plan' }))[0]);
-  await userEvent.type(screen.getByLabelText(/Plan name/), 'All access');
-  await userEvent.type(screen.getByLabelText(/Price/), '499');
-  const create = screen.getByRole('button', { name: 'Create plan' });
-  expect(create).toBeDisabled(); // no courses yet
-  await userEvent.click(await screen.findByLabelText('SQL Basics'));
-  await userEvent.click(create);
-  await waitFor(() => expect(membershipsApi.create.mock.calls[0][0]).toEqual({ name: 'All access', description: null, priceAmount: 499, interval: 'MONTH', courseIds: ['c1'] }));
+it('memberships page shows totals, the payments banner and plan cards with filters', async () => {
+  membershipsApi.plans.mockResolvedValue([{ ...plan, coverUrl: null, revenue: '998' }, { ...plan, id: 'p2', name: 'My Membership', description: 'Welcome to my membership community', status: 'DRAFT', priceAmount: '0', activeMembers: 0, revenue: '0' }]);
+  membershipsApi.stats.mockResolvedValue({ totalMembers: 2, totalRevenue: '998', currency: 'INR' });
+  membershipsApi.update.mockResolvedValue({ ...plan, id: 'p2', status: 'ACTIVE' });
+  const router = wrap([{ path: '/creator/memberships', element: <CreatorMembershipsPage /> }, { path: '/creator/memberships/new', element: <p>builder</p> }], '/creator/memberships');
+  expect(await screen.findByText('Set up payments to receive money')).toBeInTheDocument();
+  expect(await screen.findByText('My Membership')).toBeInTheDocument();
+  expect(screen.getByText('Draft')).toBeInTheDocument();
+  expect(screen.getByText('Welcome to my membership community')).toBeInTheDocument();
+  expect(screen.getByText('2 memberships')).toBeInTheDocument();
+  await userEvent.type(screen.getByPlaceholderText('Search'), 'my mem');
+  await waitFor(() => expect(screen.queryByText('All access')).toBeNull());
+  await userEvent.click(screen.getByRole('button', { name: 'Actions for My Membership' }));
+  await userEvent.click(screen.getByRole('menuitem', { name: 'Publish' }));
+  await waitFor(() => expect(membershipsApi.update).toHaveBeenCalledWith('p2', { status: 'ACTIVE' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+  expect(router.state.location.pathname).toBe('/creator/memberships/new');
+});
+
+it('builder: details with FAQs, courses from the picker, then pricing and publish', async () => {
+  membershipsApi.create.mockResolvedValue({ id: 'p9' });
+  membershipsApi.update.mockResolvedValue({ id: 'p9' });
+  const router = wrap([{ path: '/creator/memberships/new', element: <MembershipBuilderPage /> }, { path: '/creator/memberships', element: <p>list</p> }], '/creator/memberships/new');
+  await userEvent.type(await screen.findByLabelText('Membership name'), 'My Membership');
+  await userEvent.type(screen.getByLabelText('Description'), 'Welcome to my membership community');
+  await userEvent.click(screen.getByRole('button', { name: 'Add' }));
+  let dialog = await screen.findByRole('dialog');
+  await userEvent.type(within(dialog).getByLabelText('Question'), 'What is included?');
+  await userEvent.type(within(dialog).getByLabelText('Answer'), 'Every course listed.');
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+  expect(await screen.findByText('What is included?')).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  await waitFor(() => expect(membershipsApi.create).toHaveBeenCalledWith({ name: 'My Membership', description: 'Welcome to my membership community', coverFileId: null, faqs: [{ question: 'What is included?', answer: 'Every course listed.' }] }));
+
+  // Step 2: empty state → picker → Select All → Add.
+  await userEvent.click(await screen.findByRole('button', { name: 'Continue' }));
+  expect(await screen.findByText('Add at least one course')).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Add Course' }));
+  dialog = await screen.findByRole('dialog');
+  await userEvent.click(await within(dialog).findByLabelText('Select All'));
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Add (2)' }));
+  expect(await screen.findByText('2 courses included')).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+  await waitFor(() => expect(membershipsApi.update).toHaveBeenCalledWith('p9', { courseIds: ['c1', 'c2'] }));
+
+  // Step 3: yearly, 1499 struck through, 999 charged → publish.
+  expect(await screen.findByRole('heading', { name: 'Setup Pricing' })).toBeInTheDocument();
+  await userEvent.type(screen.getByLabelText('Plan name'), 'Yearly pass');
+  await userEvent.selectOptions(screen.getByLabelText('Pricing type'), 'YEAR');
+  await userEvent.type(screen.getByLabelText('Price'), '1499');
+  await userEvent.type(screen.getByLabelText('Sale price'), '999');
+  expect(screen.getByText('33% off')).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Publish' }));
+  await waitFor(() => expect(membershipsApi.update).toHaveBeenLastCalledWith('p9', { planName: 'Yearly pass', interval: 'YEAR', priceAmount: 999, compareAtAmount: 1499, status: 'ACTIVE' }));
+  await waitFor(() => expect(router.state.location.pathname).toBe('/creator/memberships'));
 });
 
 it('public plans show an active membership as Renew and link to the plan checkout', async () => {

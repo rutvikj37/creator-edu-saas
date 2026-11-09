@@ -2973,19 +2973,28 @@ model CommunityReport {
 
 /// Paid access to a set of courses (and member communities) for a period; renewed by paying again.
 model MembershipPlan {
-  id          String          @id @default(cuid()) @db.Char(25)
-  tenantId    String          @db.Char(25)
-  name        String          @db.VarChar(120)
-  description String?         @db.VarChar(1000)
-  priceAmount Decimal         @db.Decimal(19, 4)
-  currency    String          @db.Char(3)
-  interval    BillingInterval
-  courseIds   Json
-  status      String          @default("ACTIVE") @db.VarChar(16)
-  createdById String          @db.Char(25)
-  createdAt   DateTime        @default(now()) @db.DateTime(3)
-  updatedAt   DateTime        @updatedAt @db.DateTime(3)
-  memberships Membership[]
+  id              String          @id @default(cuid()) @db.Char(25)
+  tenantId        String          @db.Char(25)
+  name            String          @db.VarChar(120)
+  description     String?         @db.VarChar(1000)
+  /// What the buyer pays per period; 0 while a draft has no price yet.
+  priceAmount     Decimal         @db.Decimal(19, 4)
+  /// Original price shown struck through.
+  compareAtAmount Decimal?        @db.Decimal(19, 4)
+  currency        String          @db.Char(3)
+  interval        BillingInterval
+  courseIds       Json
+  /// Pricing plan label shown on the buy button card.
+  planName        String?         @db.VarChar(100)
+  coverFileId     String?         @db.Char(25)
+  /// [{ question, answer }]
+  faqs            Json?
+  /// DRAFT (being built), ACTIVE (on sale) or ARCHIVED.
+  status          String          @default("ACTIVE") @db.VarChar(16)
+  createdById     String          @db.Char(25)
+  createdAt       DateTime        @default(now()) @db.DateTime(3)
+  updatedAt       DateTime        @updatedAt @db.DateTime(3)
+  memberships     Membership[]
 
   @@unique([tenantId, id])
   @@index([tenantId, status])

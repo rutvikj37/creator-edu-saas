@@ -1,60 +1,20 @@
 import { useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, Crown, Pencil, Plus, Users } from 'lucide-react';
+import { AlertTriangle, Archive, Crown, MoreHorizontal, Pencil, Plus, Users, Wallet } from 'lucide-react';
+import { creatorCommerceApi } from '../../services/api/commerce.js';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
 import { ListToolbar, MetricCard } from '../../components/common/ListToolbar.jsx';
 import { FilterChip } from '../../components/common/FilterChip.jsx';
 import { PERIOD_OPTIONS, inPeriod } from '../../utils/period.js';
-import { Alert } from '../../components/auth/Alert.jsx';
-import { Badge, Button, Card, CardBody, Checkbox, DataTable, Drawer, EmptyState, ErrorState, Input, Modal, Select, Skeleton, StatusBadge, Textarea, toast } from '../../components/ui/index.js';
+import { Badge, Button, Card, CardBody, Drawer, Dropdown, DropdownItem, EmptyState, ErrorState, Skeleton, StatusBadge, toast } from '../../components/ui/index.js';
 import { membershipsApi } from '../../services/api/community.js';
-import { coursesApi } from '../../services/api/creator.js';
 import { academyApi } from '../../services/api/auth.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { formatDate, formatMoney } from '../../utils/format.js';
 import { AcademyHeader } from '../public/AcademyLandingPage.jsx';
 
 const per = (interval) => (interval === 'YEAR' ? 'year' : 'month');
-
-function PlanForm({ plan, onDone }) {
-  const qc = useQueryClient();
-  const courses = useQuery({ queryKey: ['creator', 'courses', 'all'], queryFn: () => coursesApi.list({ pageSize: 100 }) });
-  const [v, setV] = useState({ name: plan?.name ?? '', description: plan?.description ?? '', priceAmount: plan?.priceAmount ?? '', interval: plan?.interval ?? 'MONTH', courseIds: plan?.courseIds ?? [] });
-  const [errors, setErrors] = useState({});
-  const save = useMutation({
-    mutationFn: () => {
-      const body = { name: v.name, description: v.description || null, priceAmount: Number(v.priceAmount), interval: v.interval, courseIds: v.courseIds };
-      return plan ? membershipsApi.update(plan.id, body) : membershipsApi.create(body);
-    },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['memberships'] }); toast.success(plan ? 'Plan updated' : 'Plan created'); onDone(); },
-    onError: (e) => { if (e.details?.length) setErrors(Object.fromEntries(e.details.map((x) => [x.field, x.message]))); else toast.error(e.message); },
-  });
-  const toggle = (id) => setV({ ...v, courseIds: v.courseIds.includes(id) ? v.courseIds.filter((x) => x !== id) : [...v.courseIds, id] });
-  const items = courses.data?.items ?? [];
-  return (
-    <div className="space-y-4">
-      <Input label="Plan name" value={v.name} error={errors.name} onChange={(e) => setV({ ...v, name: e.target.value })} required />
-      <Textarea label="Description" rows={2} value={v.description} onChange={(e) => setV({ ...v, description: e.target.value })} />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Input label="Price" type="number" min={1} step="0.01" value={v.priceAmount} error={errors.priceAmount} onChange={(e) => setV({ ...v, priceAmount: e.target.value })} required />
-        <Select label="Billed every" value={v.interval} onChange={(e) => setV({ ...v, interval: e.target.value })} options={[{ value: 'MONTH', label: 'Month' }, { value: 'YEAR', label: 'Year' }]} />
-      </div>
-      {plan && <p className="text-xs text-muted">Price changes apply to future payments; current members keep the period they paid for.</p>}
-      <fieldset>
-        <legend className="mb-2 text-sm font-medium">Courses included</legend>
-        {courses.isLoading ? <Skeleton className="h-20" /> : items.length === 0 ? <Alert tone="info">Create a course first.</Alert> : (
-          <div className="max-h-56 space-y-2 overflow-y-auto rounded-md border border-line p-3">
-            {items.map((c) => <Checkbox key={c.id} label={c.title} description={c.status === 'PUBLISHED' ? undefined : 'Not published yet — members get it once you publish'} checked={v.courseIds.includes(c.id)} onChange={() => toggle(c.id)} />)}
-          </div>
-        )}
-        {errors.courseIds && <p role="alert" className="mt-1.5 text-xs text-red-600">{errors.courseIds}</p>}
-      </fieldset>
-      <p className="text-xs text-muted">Members renew by paying again before the period ends; we email them a reminder 7 days before. There is no automatic card charge.</p>
-      <div className="flex justify-end gap-2"><Button variant="secondary" onClick={onDone}>Cancel</Button><Button disabled={!v.name.trim() || !v.priceAmount || v.courseIds.length === 0} loading={save.isPending} onClick={() => save.mutate()}>{plan ? 'Save' : 'Create plan'}</Button></div>
-    </div>
-  );
-}
 
 function MembersDrawer({ plan, onClose }) {
   const q = useQuery({ queryKey: ['memberships', 'members', plan?.id], queryFn: () => membershipsApi.members(plan.id), enabled: Boolean(plan) });
@@ -78,57 +38,75 @@ function MembersDrawer({ plan, onClose }) {
 
 export function CreatorMembershipsPage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const q = useQuery({ queryKey: ['memberships', 'plans'], queryFn: membershipsApi.plans });
-  const [editing, setEditing] = useState(null); // null | 'new' | plan
+  const stats = useQuery({ queryKey: ['memberships', 'stats'], queryFn: membershipsApi.stats });
+  const gateway = useQuery({ queryKey: ['creator', 'gateway'], queryFn: creatorCommerceApi.gateway, retry: false });
   const [members, setMembers] = useState(null);
-  const setStatus = useMutation({ mutationFn: ({ id, status }) => membershipsApi.update(id, { status }), onSuccess: () => qc.invalidateQueries({ queryKey: ['memberships'] }), onError: (e) => toast.error(e.message) });
+  const setStatus = useMutation({
+    mutationFn: ({ id, status }) => membershipsApi.update(id, { status }),
+    onSuccess: (p) => { toast.success(p.status === 'ACTIVE' ? 'Membership published' : p.status === 'ARCHIVED' ? 'Membership archived' : 'Moved to drafts'); qc.invalidateQueries({ queryKey: ['memberships'] }); },
+    onError: (e) => toast.error(e.details?.[0]?.message ?? e.message),
+  });
   const [search, setSearch] = useState('');
   const [statusF, setStatusF] = useState();
   const [periodF, setPeriodF] = useState();
   const all = q.data ?? [];
   const term = search.trim().toLowerCase();
   const rows = all.filter((r) => (!term || r.name.toLowerCase().includes(term)) && (!statusF || r.status === statusF) && inPeriod(r.createdAt, periodF));
-  const mrr = all.filter((r) => r.status === 'ACTIVE').reduce((n, r) => n + Number(r.priceAmount) * (r.activeMembers ?? 0) / (r.interval === 'YEAR' ? 12 : 1), 0);
   return (
     <>
-      <PageHeader title="Memberships" count={q.data ? all.length : undefined} description="Sell access to a bundle of courses for a monthly or yearly price." breadcrumbs={[{ label: 'Memberships' }]} actions={<Button leftIcon={Plus} onClick={() => setEditing('new')}>Create</Button>} />
+      <PageHeader title="Memberships" description="Sell a month or a year of access to a bundle of courses." actions={<Button leftIcon={Plus} onClick={() => navigate('/creator/memberships/new')}>Create</Button>} />
+      {gateway.data && !(gateway.data.configured && gateway.data.isActive) && (
+        <div className="mb-6 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center dark:border-amber-500/30 dark:bg-amber-500/10">
+          <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-amber-600 text-white"><AlertTriangle className="size-5" aria-hidden /></span>
+          <div className="flex-1"><p className="font-semibold text-amber-800 dark:text-amber-200">Set up payments to receive money</p><p className="text-sm text-amber-800/80 dark:text-amber-200/80">Memberships can’t be bought until you connect Razorpay.</p></div>
+          <Link to="/creator/payments" className="inline-flex h-9 items-center rounded-full border border-line bg-surface px-4 text-sm font-medium text-fg hover:bg-surface-2">Set up payments</Link>
+        </div>
+      )}
       <div className="mb-6 grid gap-4 sm:grid-cols-2">
-        <MetricCard label="Total members" value={all.reduce((n, r) => n + (r.activeMembers ?? 0), 0).toLocaleString('en-IN')} hint="With an active membership" loading={q.isLoading} />
-        <MetricCard label="Monthly revenue" value={formatMoney(mrr, all[0]?.currency ?? 'INR')} hint="Active members × plan price, per month" loading={q.isLoading} />
+        <MetricCard label="Total members" value={(stats.data?.totalMembers ?? 0).toLocaleString('en-IN')} hint="With an active membership" loading={stats.isLoading} />
+        <MetricCard label="Total revenue" value={formatMoney(stats.data?.totalRevenue ?? 0, stats.data?.currency ?? 'INR')} hint="Paid membership orders" loading={stats.isLoading} />
       </div>
       <Card>
-        <div className="border-b border-line px-4 pt-4"><h2 className="font-semibold">All plans</h2></div>
-        <ListToolbar search={search} onSearch={setSearch} placeholder="Search by plan name" count={rows.length} noun="plan"
+        <ListToolbar search={search} onSearch={setSearch} placeholder="Search" count={rows.length} noun="membership"
           filtered={Boolean(term || statusF || periodF)} onReset={() => { setSearch(''); setStatusF(undefined); setPeriodF(undefined); }}
           filters={<>
-            <FilterChip label="Status" value={statusF} onChange={setStatusF} options={[{ value: 'ACTIVE', label: 'Active' }, { value: 'ARCHIVED', label: 'Archived' }]} />
+            <FilterChip label="Status" value={statusF} onChange={setStatusF} options={[{ value: 'DRAFT', label: 'Draft' }, { value: 'ACTIVE', label: 'Published' }, { value: 'ARCHIVED', label: 'Archived' }]} />
             <FilterChip label="Created on" value={periodF} onChange={setPeriodF} options={PERIOD_OPTIONS} />
           </>} />
-        <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={rows}
-          empty={all.length ? <EmptyState icon={Crown} title="No plans match" description="Try a different search or clear the filters." /> : <EmptyState icon={Crown} title="No membership plans" description="Bundle courses into a plan students pay for every month or year." action={<Button leftIcon={Plus} onClick={() => setEditing('new')}>New plan</Button>} />}
-          columns={[
-            { key: 'status', header: 'Status', cell: (r) => <StatusBadge status={r.status} /> },
-            { key: 'name', header: 'Plan', cell: (r) => <div><p className="font-medium text-fg">{r.name}</p><p className="text-xs text-muted">{r.courseIds.length} course{r.courseIds.length === 1 ? '' : 's'}</p></div> },
-            { key: 'priceAmount', header: 'Price', cell: (r) => `${formatMoney(r.priceAmount, r.currency)} / ${per(r.interval)}` },
-            { key: 'activeMembers', header: 'Active members', align: 'right' },
-            {
-              key: 'actions', header: '', align: 'right',
-              cell: (r) => (
-                <div className="flex justify-end gap-1">
-                  <Button size="sm" variant="ghost" leftIcon={Users} onClick={() => setMembers(r)}>Members</Button>
-                  <Button size="sm" variant="ghost" leftIcon={Pencil} aria-label={`Edit ${r.name}`} onClick={() => setEditing(r)}>Edit</Button>
-                  {r.status === 'ACTIVE'
-                    ? <Button size="sm" variant="ghost" leftIcon={Archive} onClick={() => setStatus.mutate({ id: r.id, status: 'ARCHIVED' })}>Archive</Button>
-                    : <Button size="sm" variant="secondary" onClick={() => setStatus.mutate({ id: r.id, status: 'ACTIVE' })}>Restore</Button>}
+        {q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : q.isLoading ? <Skeleton className="m-4 h-64" /> : !rows.length ? (
+          all.length ? <EmptyState icon={Crown} title="No memberships match" description="Try a different search or clear the filters." />
+            : <EmptyState icon={Crown} title="No memberships yet" description="Bundle courses into a membership people pay for every month or year." action={<Button leftIcon={Plus} onClick={() => navigate('/creator/memberships/new')}>Create a membership</Button>} />
+        ) : (
+          <div className="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3">
+            {rows.map((r) => (
+              <article key={r.id} className="flex flex-col rounded-xl border border-line p-3">
+                <button type="button" aria-label={`Edit ${r.name}`} onClick={() => navigate(`/creator/memberships/${r.id}/edit`)} className="aspect-[4/3] overflow-hidden rounded-lg bg-gradient-to-br from-sky-200 via-blue-400 to-indigo-600">
+                  {r.coverUrl ? <img src={r.coverUrl} alt="" className="size-full object-cover" /> : <span className="grid size-full place-items-center"><span className="grid size-14 place-items-center rounded-full bg-white/50 text-indigo-700"><Crown className="size-6" aria-hidden /></span></span>}
+                </button>
+                <div className="mt-3 flex items-center justify-between">
+                  <Badge tone={r.status === 'ACTIVE' ? 'success' : 'neutral'}>{r.status === 'ACTIVE' ? 'Published' : r.status === 'DRAFT' ? 'Draft' : 'Archived'}</Badge>
+                  <Dropdown trigger={(p) => <button type="button" {...p} aria-label={`Actions for ${r.name}`} className="grid size-8 place-items-center rounded-md text-fg-2 hover:bg-surface-2"><MoreHorizontal className="size-4" aria-hidden /></button>}>
+                    <DropdownItem icon={Pencil} onClick={() => navigate(`/creator/memberships/${r.id}/edit`)}>Edit</DropdownItem>
+                    <DropdownItem icon={Users} onClick={() => setMembers(r)}>Members</DropdownItem>
+                    {r.status !== 'ACTIVE' && <DropdownItem onClick={() => setStatus.mutate({ id: r.id, status: 'ACTIVE' })}>{r.status === 'ARCHIVED' ? 'Restore' : 'Publish'}</DropdownItem>}
+                    {r.status === 'ACTIVE' && <DropdownItem icon={Archive} onClick={() => setStatus.mutate({ id: r.id, status: 'ARCHIVED' })}>Archive</DropdownItem>}
+                  </Dropdown>
                 </div>
-              ),
-            },
-          ]} />
+                <p className="mt-1 text-lg font-semibold text-fg">{r.name}</p>
+                <p className="line-clamp-2 text-sm text-muted">{r.description || `${r.courseIds.length} course${r.courseIds.length === 1 ? '' : 's'}`}</p>
+                <p className="mt-1 text-sm text-fg-2">{Number(r.priceAmount) > 0 ? `${formatMoney(r.priceAmount, r.currency)} / ${per(r.interval)}` : 'No price yet'}</p>
+                <div className="mt-3 flex items-center justify-between text-sm">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2.5 py-0.5" title="Active members"><Users className="size-3.5" aria-hidden />{r.activeMembers ?? 0}</span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2.5 py-0.5" title="Revenue"><Wallet className="size-3.5" aria-hidden />{formatMoney(r.revenue ?? 0, r.currency)}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </Card>
       <p className="mt-3 text-xs text-muted">Archiving stops new sales; existing members keep access until their period ends. Share <span className="font-mono">/memberships</span> on your academy to sell plans.</p>
-      <Modal open={Boolean(editing)} onClose={() => setEditing(null)} size="lg" title={editing === 'new' ? 'New membership plan' : 'Edit plan'}>
-        {editing && <PlanForm plan={editing === 'new' ? null : editing} onDone={() => setEditing(null)} />}
-      </Modal>
       <MembersDrawer plan={members} onClose={() => setMembers(null)} />
     </>
   );
