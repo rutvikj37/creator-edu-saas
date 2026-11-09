@@ -2,9 +2,12 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ScrollText } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
-import { SearchInput } from '../../components/common/SearchInput.jsx';
+import { ListToolbar } from '../../components/common/ListToolbar.jsx';
+import { FilterChip } from '../../components/common/FilterChip.jsx';
+import { PERIOD_OPTIONS } from '../../utils/period.js';
+import { presetRange } from '../../components/common/DateRangeFilter.jsx';
 import { JsonView } from '../../components/common/JsonView.jsx';
-import { Card, DataTable, Drawer, EmptyState, Input } from '../../components/ui/index.js';
+import { Card, DataTable, Drawer, EmptyState } from '../../components/ui/index.js';
 import { platformApi } from '../../services/api/platform.js';
 import { useListParams } from '../../hooks/useListParams.js';
 import { formatDate } from '../../utils/format.js';
@@ -14,18 +17,16 @@ export function AuditLogsPage() {
   const [selected, setSelected] = useState(null);
   const q = useQuery({
     queryKey: ['platform', 'audit', params],
-    queryFn: () => platformApi.auditLogs({ ...params, from: params.from ? `${params.from}T00:00:00Z` : undefined, to: params.to ? `${params.to}T23:59:59Z` : undefined }),
+    queryFn: () => { const r = params.period ? presetRange(params.period) : { from: params.from, to: params.to }; const { period: _p, ...rest } = params; return platformApi.auditLogs({ ...rest, from: r.from ? `${r.from}T00:00:00Z` : undefined, to: r.to ? `${r.to}T23:59:59Z` : undefined }); },
     placeholderData: (p) => p,
   });
   return (
     <>
-      <PageHeader title="Audit logs" description="Security-relevant and administrative actions. Entries cannot be edited." breadcrumbs={[{ label: 'System' }, { label: 'Audit logs' }]} />
+      <PageHeader title="Audit logs" count={q.data?.meta?.total} description="Security-relevant and administrative actions. Entries cannot be edited." breadcrumbs={[{ label: 'System' }, { label: 'Audit logs' }]} />
       <Card>
-        <div className="flex flex-col gap-3 border-b border-line p-4 md:flex-row md:items-end">
-          <SearchInput className="md:w-72" value={params.action ?? ''} onChange={(v) => update({ action: v })} placeholder="Action prefix, e.g. tenant." />
-          <Input label="From" type="date" value={params.from ?? ''} onChange={(e) => update({ from: e.target.value })} className="md:w-44" />
-          <Input label="To" type="date" value={params.to ?? ''} onChange={(e) => update({ to: e.target.value })} className="md:w-44" />
-        </div>
+        <ListToolbar search={params.action} onSearch={(v) => update({ action: v })} placeholder="Action prefix, e.g. tenant." count={q.data?.meta?.total} noun="entry" plural="entries"
+          filtered={Boolean(params.period || params.from || params.to)} onReset={() => update({ period: undefined, from: undefined, to: undefined })}
+          filters={<FilterChip label="Time period" value={params.period} onChange={(v) => update({ period: v, from: undefined, to: undefined })} options={PERIOD_OPTIONS} />} />
         <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data?.items ?? []} meta={q.data?.meta}
           onPageChange={(page) => update({ page }, { resetPage: false })} onRowClick={setSelected}
           empty={<EmptyState icon={ScrollText} title="No entries" description="Adjust the filters to see more." />}

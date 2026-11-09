@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BookOpen, CheckCircle2, Globe, GraduationCap, Mail, Plug, RefreshCw, RotateCcw, Send, ShoppingCart, Store, Trash2, TrendingUp, Users, XCircle } from 'lucide-react';
+import { BookOpen, CheckCircle2, Globe, GraduationCap, Mail, RefreshCw, RotateCcw, Send, ShoppingCart, Store, Trash2, TrendingUp, Users, XCircle } from 'lucide-react';
+import { ListToolbar } from '../../components/common/ListToolbar.jsx';
+import { FilterChip } from '../../components/common/FilterChip.jsx';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
-import { SearchInput } from '../../components/common/SearchInput.jsx';
 import { BreakdownChart, TrendChart } from '../../components/charts/ChartCard.jsx';
 import { DateRangeFilter, presetRange } from '../../components/common/DateRangeFilter.jsx';
-import {
-  Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, DataTable, EmptyState, ErrorState, Input, Select, Skeleton, StatCard, StatusBadge, Textarea, toast,
-} from '../../components/ui/index.js';
+import { Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, DataTable, EmptyState, ErrorState, Input, Skeleton, StatCard, StatusBadge, Textarea, toast } from '../../components/ui/index.js';
 import { platformApi } from '../../services/api/platform.js';
 import { useListParams } from '../../hooks/useListParams.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -80,7 +79,7 @@ export function DomainsAdminPage() {
   const s = summary.data;
   return (
     <>
-      <PageHeader title="Domains" description="Every academy hostname: platform subdomains and custom domains with their DNS verification." breadcrumbs={[{ label: 'Domains' }]} />
+      <PageHeader title="Domains" count={q.data?.meta?.total} description="Every academy hostname: platform subdomains and custom domains with their DNS verification." />
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Platform subdomains" value={formatNumber(s?.subdomains)} icon={Globe} loading={summary.isLoading} />
         <StatCard label="Custom domains" value={formatNumber(s?.custom)} hint={s && `CNAME → ${s.cnameTarget}`} icon={Globe} loading={summary.isLoading} />
@@ -88,11 +87,12 @@ export function DomainsAdminPage() {
         <StatCard label="Pending or failing" value={formatNumber((s?.customPending ?? 0) + (s?.customFailed ?? 0))} icon={XCircle} loading={summary.isLoading} />
       </div>
       <Card>
-        <div className="flex flex-col gap-3 border-b border-line p-4 md:flex-row md:items-end">
-          <SearchInput className="md:w-80" value={params.q ?? ''} onChange={(v) => update({ q: v })} placeholder="Search hostname or academy" />
-          <Select aria-label="Type" placeholder="All types" options={[{ value: 'CUSTOM', label: 'Custom domains' }, { value: 'SUBDOMAIN', label: 'Platform subdomains' }]} value={params.type ?? ''} onChange={(e) => update({ type: e.target.value })} className="md:w-48" />
-          <Select aria-label="Status" placeholder="All statuses" options={['VERIFIED', 'PENDING', 'FAILED'].map((v) => ({ value: v, label: v[0] + v.slice(1).toLowerCase() }))} value={params.status ?? ''} onChange={(e) => update({ status: e.target.value })} className="md:w-48" />
-        </div>
+        <ListToolbar search={params.q} onSearch={(v) => update({ q: v })} placeholder="Search hostname or academy" count={q.data?.meta?.total} noun="domain"
+          filtered={Boolean(params.type || params.status)} onReset={() => update({ type: undefined, status: undefined })}
+          filters={<>
+            <FilterChip label="Type" value={params.type} onChange={(v) => update({ type: v })} options={[{ value: 'CUSTOM', label: 'Custom domains' }, { value: 'SUBDOMAIN', label: 'Platform subdomains' }]} />
+            <FilterChip label="Status" value={params.status} onChange={(v) => update({ status: v })} options={['VERIFIED', 'PENDING', 'FAILED'].map((v) => ({ value: v, label: v[0] + v.slice(1).toLowerCase() }))} />
+          </>} />
         <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data?.items ?? []} meta={q.data?.meta} onPageChange={(page) => update({ page }, { resetPage: false })}
           empty={<EmptyState icon={Globe} title="No domains match" description="Try a different search or filter." />}
           columns={[
@@ -194,7 +194,7 @@ export function EmailTemplatesPage() {
   const q = useQuery({ queryKey: ['platform', 'email-templates'], queryFn: platformApi.emailTemplates });
   return (
     <>
-      <PageHeader title="Email templates" description="Reword the transactional emails every academy sends. Layout, branding and links are added automatically." breadcrumbs={[{ label: 'Email templates' }]} />
+      <PageHeader title="Email templates" count={Array.isArray(q.data) ? q.data.length : undefined} description="Reword the transactional emails every academy sends. Layout, branding and links are added automatically." breadcrumbs={[{ label: 'Email templates' }]} />
       <Card>
         <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data ?? []} rowKey="key" onRowClick={(r) => navigate(`/super-admin/templates/${r.key}`)}
           empty={<EmptyState icon={Mail} title="No editable emails" />}

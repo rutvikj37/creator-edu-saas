@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, CreditCard, Download, RefreshCw } from 'lucide-react';
+import { ListToolbar } from '../../components/common/ListToolbar.jsx';
+import { FilterChip } from '../../components/common/FilterChip.jsx';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
 import { Alert } from '../../components/auth/Alert.jsx';
-import { Badge, Button, Card, CardBody, CardHeader, DataTable, EmptyState, Input, Modal, Select, StatusBadge, Tabs, toast } from '../../components/ui/index.js';
+import { Badge, Button, Card, CardBody, CardHeader, DataTable, EmptyState, Input, Modal, StatusBadge, Tabs, toast } from '../../components/ui/index.js';
 import { platformBillingApi } from '../../services/api/commerce.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useListParams } from '../../hooks/useListParams.js';
@@ -87,15 +89,13 @@ export function SubscriptionsAdminPage({ initialTab = 'subscriptions' }) {
   const canManage = auth.can('platform.finance.manage');
   return (
     <>
-      <PageHeader title="Plan billing" description="Academy subscriptions and the invoices they pay the platform." breadcrumbs={[{ label: 'Finance' }, { label: 'Plan billing' }]} />
+      <PageHeader title="Plan billing" description="Academy subscriptions and the invoices they pay the platform." />
       <GatewayCard />
       <Tabs className="mb-4" value={tab} onChange={(v) => { setTab(v); update({ status: undefined, page: undefined }); }} tabs={[{ value: 'subscriptions', label: 'Subscriptions' }, { value: 'invoices', label: 'Invoices' }]} />
       {tab === 'subscriptions' ? (
         <Card>
-          <div className="border-b border-line p-4">
-            <Select aria-label="Status" className="sm:w-52" value={params.status ?? ''} onChange={(e) => update({ status: e.target.value || undefined })}
-              options={[{ value: '', label: 'All statuses' }, ...['TRIALING', 'ACTIVE', 'PAST_DUE', 'EXPIRED', 'CANCELED'].map((s) => ({ value: s, label: s.replace('_', ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase()) }))]} />
-          </div>
+          <ListToolbar count={subs.data?.meta?.total} noun="subscription" filtered={Boolean(params.status)} onReset={() => update({ status: undefined })}
+            filters={<FilterChip label="Status" value={params.status} onChange={(v) => update({ status: v })} options={['TRIALING', 'ACTIVE', 'PAST_DUE', 'EXPIRED', 'CANCELED'].map((s) => ({ value: s, label: s.replace('_', ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase()) }))} />} />
           <DataTable loading={subs.isLoading} error={subs.error} onRetry={() => subs.refetch()} rows={subs.data?.items ?? []} meta={subs.data?.meta} onPageChange={(page) => update({ page }, { resetPage: false })}
             empty={<EmptyState title="No subscriptions" />}
             columns={[
@@ -108,10 +108,8 @@ export function SubscriptionsAdminPage({ initialTab = 'subscriptions' }) {
         </Card>
       ) : (
         <Card>
-          <div className="border-b border-line p-4">
-            <Select aria-label="Status" className="sm:w-52" value={params.status ?? ''} onChange={(e) => update({ status: e.target.value || undefined })}
-              options={[{ value: '', label: 'All' }, { value: 'OPEN', label: 'Open' }, { value: 'PAID', label: 'Paid' }, { value: 'VOID', label: 'Void' }]} />
-          </div>
+          <ListToolbar count={invoices.data?.meta?.total} noun="invoice" filtered={Boolean(params.status)} onReset={() => update({ status: undefined })}
+            filters={<FilterChip label="Status" value={params.status} onChange={(v) => update({ status: v })} options={[{ value: 'OPEN', label: 'Open' }, { value: 'PAID', label: 'Paid' }, { value: 'VOID', label: 'Void' }]} />} />
           <DataTable loading={invoices.isLoading} error={invoices.error} onRetry={() => invoices.refetch()} rows={invoices.data?.items ?? []} meta={invoices.data?.meta} onPageChange={(page) => update({ page }, { resetPage: false })}
             empty={<EmptyState title="No invoices" />}
             columns={[

@@ -10,7 +10,7 @@ export function PlansPage() {
   const q = useQuery({ queryKey: ['platform', 'plans'], queryFn: platformApi.plans });
   return (
     <>
-      <PageHeader title="Subscription plans" description="Plans, prices and the features each one includes." breadcrumbs={[{ label: 'Subscriptions' }, { label: 'Plans' }]}
+      <PageHeader title="Subscription plans" count={Array.isArray(q.data) ? q.data.length : undefined} description="Plans, prices and the features each one includes." breadcrumbs={[{ label: 'Subscriptions' }, { label: 'Plans' }]}
         actions={<Link to="/super-admin/plans/new" className="inline-flex h-9 items-center gap-2 rounded-md bg-primary-600 px-4 text-sm font-medium text-on-primary hover:bg-primary-700"><Plus className="size-4" /> New plan</Link>} />
       {q.isError ? <Card><ErrorState error={q.error} onRetry={() => q.refetch()} /></Card> : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

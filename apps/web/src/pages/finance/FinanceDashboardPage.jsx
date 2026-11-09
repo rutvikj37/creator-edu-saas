@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, CalendarClock, CreditCard, Percent, ShoppingBag, Store, TrendingUp, Wallet } from 'lucide-react';
+import { ListToolbar } from '../../components/common/ListToolbar.jsx';
+import { FilterChip } from '../../components/common/FilterChip.jsx';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
-import { Card, CardBody, DataTable, EmptyState, ErrorState, Select, StatCard, StatusBadge } from '../../components/ui/index.js';
+import { Card, CardBody, DataTable, EmptyState, ErrorState, StatCard, StatusBadge } from '../../components/ui/index.js';
 import { BreakdownChart, TrendChart } from '../../components/charts/ChartCard.jsx';
 import { platformApi } from '../../services/api/platform.js';
 import { financeApi } from '../../services/api/commerce.js';
@@ -18,7 +20,7 @@ export function FinanceDashboardPage() {
   if (q.isError) return <Card><ErrorState error={q.error} onRetry={() => q.refetch()} /></Card>;
   return (
     <>
-      <PageHeader title="Finance overview" description="Subscription revenue and academy sales for the last 30 days." breadcrumbs={[{ label: 'Finance' }]} />
+      <PageHeader title="Finance overview" description="Subscription revenue and academy sales for the last 30 days."  />
       <h2 className="mb-3 text-sm font-semibold text-fg-2">Academy sales</h2>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Gross sales (GMV)" value={c && money(c.gmv)} hint="Collected by academies via their own Razorpay" icon={ShoppingBag} loading={q.isLoading} />
@@ -51,12 +53,10 @@ export function PlatformTransactionsPage() {
   const q = useQuery({ queryKey: ['platform', 'transactions', params], queryFn: () => financeApi.transactions(params), placeholderData: (p) => p });
   return (
     <>
-      <PageHeader title="Transactions" description="Razorpay payments across all academies." breadcrumbs={[{ label: 'Finance' }, { label: 'Transactions' }]} />
+      <PageHeader title="Transactions" count={q.data?.meta?.total} description="Razorpay payments across all academies." />
       <Card>
-        <div className="border-b border-line p-4">
-          <Select aria-label="Status" className="sm:w-52" value={params.status ?? ''} onChange={(e) => update({ status: e.target.value || undefined })}
-            options={[{ value: '', label: 'All' }, { value: 'CAPTURED', label: 'Captured' }, { value: 'FAILED', label: 'Failed' }, { value: 'CREATED', label: 'Started' }, { value: 'PARTIALLY_REFUNDED', label: 'Partially refunded' }, { value: 'REFUNDED', label: 'Refunded' }]} />
-        </div>
+        <ListToolbar count={q.data?.meta?.total} noun="transaction" filtered={Boolean(params.status)} onReset={() => update({ status: undefined })}
+          filters={<FilterChip label="Status" value={params.status} onChange={(v) => update({ status: v })} options={[{ value: 'CAPTURED', label: 'Captured' }, { value: 'FAILED', label: 'Failed' }, { value: 'CREATED', label: 'Started' }, { value: 'PARTIALLY_REFUNDED', label: 'Partially refunded' }, { value: 'REFUNDED', label: 'Refunded' }]} />} />
         <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data?.items ?? []} meta={q.data?.meta} onPageChange={(page) => update({ page }, { resetPage: false })}
           empty={<EmptyState icon={CreditCard} title="No transactions yet" />}
           columns={[

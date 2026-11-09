@@ -16,7 +16,7 @@ export function MetricCard({ label, value, hint, loading }) {
  * List header row (Graphy style): search, actions on the right, then "Filter by:" chips, a
  * Reset link when anything is filtered, and the item count. Sits at the top of the list card.
  */
-export function ListToolbar({ search, onSearch, placeholder = 'Search', actions, filters, filtered, onReset, count, noun = 'item' }) {
+export function ListToolbar({ search, onSearch, placeholder = 'Search', actions, filters, filtered, onReset, count, noun = 'item', plural }) {
   return (
     <div className="space-y-3 border-b border-line p-4">
       {(onSearch || actions) && (
@@ -29,7 +29,7 @@ export function ListToolbar({ search, onSearch, placeholder = 'Search', actions,
         <div className="flex flex-wrap items-center gap-2">
           {filters && <><span className="text-sm text-muted">Filter by:</span>{filters}</>}
           {filtered && onReset && <button type="button" className="ml-1 text-sm font-medium text-primary-700 hover:underline dark:text-primary-300" onClick={onReset}>Reset</button>}
-          {typeof count === 'number' && <span className="ml-auto text-sm text-muted">{count.toLocaleString('en-IN')} {noun}{count === 1 ? '' : 's'}</span>}
+          {typeof count === 'number' && <span className="ml-auto text-sm text-muted">{count.toLocaleString('en-IN')} {count === 1 ? noun : (plural ?? `${noun}s`)}</span>}
         </div>
       )}
     </div>

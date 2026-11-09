@@ -59,7 +59,7 @@ export function AdminsPage() {
 
   return (
     <>
-      <PageHeader title="Administrators" description="People who can operate the platform. Two-factor authentication is mandatory." breadcrumbs={[{ label: 'Users' }, { label: 'Admins & roles' }]}
+      <PageHeader title="Administrators" count={Array.isArray(q.data) ? q.data.length : undefined} description="People who can operate the platform. Two-factor authentication is mandatory." breadcrumbs={[{ label: 'Users' }, { label: 'Admins & roles' }]}
         actions={<Button leftIcon={UserPlus} onClick={() => setInviteOpen(true)}>Invite admin</Button>} />
       <Card>
         <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data ?? []}

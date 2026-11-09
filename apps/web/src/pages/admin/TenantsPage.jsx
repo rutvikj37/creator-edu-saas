@@ -2,8 +2,9 @@ import { useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Building2 } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
-import { SearchInput } from '../../components/common/SearchInput.jsx';
-import { Card, DataTable, EmptyState, Select, StatusBadge } from '../../components/ui/index.js';
+import { ListToolbar } from '../../components/common/ListToolbar.jsx';
+import { FilterChip } from '../../components/common/FilterChip.jsx';
+import { Card, DataTable, EmptyState, StatusBadge } from '../../components/ui/index.js';
 import { platformApi } from '../../services/api/platform.js';
 import { useListParams } from '../../hooks/useListParams.js';
 import { formatDate, formatNumber } from '../../utils/format.js';
@@ -18,13 +19,14 @@ export function TenantsPage() {
 
   return (
     <>
-      <PageHeader title="Tenants" description="Every academy on the platform." breadcrumbs={[{ label: 'Tenants' }]} />
+      <PageHeader title="Tenants" count={q.data?.meta?.total} description="Every academy on the platform." />
       <Card>
-        <div className="flex flex-col gap-3 border-b border-line p-4 md:flex-row md:items-end">
-          <SearchInput className="md:w-80" value={params.q ?? ''} onChange={(v) => update({ q: v })} placeholder="Search name, slug or owner email" />
-          <Select aria-label="Status" placeholder="All statuses" options={STATUSES} value={params.status ?? ''} onChange={(e) => update({ status: e.target.value })} className="md:w-48" />
-          <Select aria-label="Plan" placeholder="All plans" options={(plans.data ?? []).map((p) => ({ value: p.id, label: p.name }))} value={params.planId ?? ''} onChange={(e) => update({ planId: e.target.value })} className="md:w-48" />
-        </div>
+        <ListToolbar search={params.q} onSearch={(v) => update({ q: v })} placeholder="Search name, slug or owner email" count={q.data?.meta?.total} noun="tenant"
+          filtered={Boolean(params.status || params.planId)} onReset={() => update({ status: undefined, planId: undefined })}
+          filters={<>
+            <FilterChip label="Status" value={params.status} onChange={(v) => update({ status: v })} options={STATUSES} />
+            <FilterChip label="Plan" value={params.planId} onChange={(v) => update({ planId: v })} options={(plans.data ?? []).map((p) => ({ value: p.id, label: p.name }))} />
+          </>} />
         <DataTable
           loading={q.isLoading}
           error={q.error}

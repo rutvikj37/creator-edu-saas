@@ -22,13 +22,13 @@ export const NAV = {
       items: [item('Revenue', '/finance', Wallet, 3, { end: true, available: true, perm: 'platform.finance.read' }), item('Transactions', '/finance/transactions', Receipt, 7, { available: true, perm: 'platform.finance.read' }),
         item('Invoices', '/finance/invoices', FileText, 10, { available: true, perm: 'platform.finance.read' }), item('Tax reports', '/finance/tax', Percent, 10, { available: true, perm: 'platform.finance.read' })],
     },
-    { label: 'Users', items: [item('Creators', '/super-admin/tenants', Users, 3, { available: true, perm: 'platform.tenants.read' }), item('Admins & roles', '/super-admin/admins', ShieldCheck, 3, { available: true, perm: 'platform.admins.manage' })] },
+    { label: 'Users', icon: Users, items: [item('Creators', '/super-admin/tenants', Users, 3, { available: true, perm: 'platform.tenants.read' }), item('Admins & roles', '/super-admin/admins', ShieldCheck, 3, { available: true, perm: 'platform.admins.manage' })] },
     { label: 'Support', items: [item('Tickets', '/support', LifeBuoy, 3, { end: true, available: true, perm: 'platform.support.manage' }), item('Live chat', '/support/chat', MessageCircle, 10, { available: true, perm: 'platform.support.manage' })] },
     { label: 'Content', items: [item('Categories', '/super-admin/categories', FolderTree, 3, { available: true, perm: 'platform.content.manage' }), item('Announcements', '/super-admin/announcements', Megaphone, 3, { available: true, perm: 'platform.content.manage' }),
         item('Email templates', '/super-admin/templates', Mail, 10, { available: true, perm: 'platform.content.manage' })] },
     { label: 'Analytics', items: [item('Platform analytics', '/super-admin/analytics', BarChart3, 10, { available: true, perm: 'platform.tenants.read' })] },
     {
-      label: 'System',
+      label: 'System', icon: Settings,
       items: [
         item('Settings', '/super-admin/settings', Settings, 3, { available: true, perm: 'platform.settings.manage' }),
         item('Video usage', '/super-admin/video-usage', Video, 10, { available: true, perm: 'platform.system.read' }),

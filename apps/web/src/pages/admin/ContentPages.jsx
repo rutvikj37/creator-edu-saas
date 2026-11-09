@@ -25,7 +25,7 @@ export function CategoriesPage() {
 
   return (
     <>
-      <PageHeader title="Course categories" description="Shared categories creators can assign to courses." breadcrumbs={[{ label: 'Content' }, { label: 'Categories' }]}
+      <PageHeader title="Course categories" count={Array.isArray(q.data) ? q.data.length : undefined} description="Shared categories creators can assign to courses." breadcrumbs={[{ label: 'Content' }, { label: 'Categories' }]}
         actions={<Button leftIcon={Plus} onClick={() => open('new')}>Add category</Button>} />
       <Card>
         <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data ?? []}
@@ -82,7 +82,7 @@ export function AnnouncementsPage() {
   const now = Date.now();
   return (
     <>
-      <PageHeader title="Announcements" description="Banners shown to creators and/or students." breadcrumbs={[{ label: 'Content' }, { label: 'Announcements' }]}
+      <PageHeader title="Announcements" count={Array.isArray(q.data) ? q.data.length : undefined} description="Banners shown to creators and/or students." breadcrumbs={[{ label: 'Content' }, { label: 'Announcements' }]}
         actions={<Button leftIcon={Plus} onClick={() => open('new')}>New announcement</Button>} />
       <Card>
         <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data ?? []}

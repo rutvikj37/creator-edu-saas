@@ -5,8 +5,9 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Inbox, LifeBuoy, MessageCircle, Plus } from 'lucide-react';
+import { ListToolbar } from '../../components/common/ListToolbar.jsx';
+import { FilterChip } from '../../components/common/FilterChip.jsx';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
-import { SearchInput } from '../../components/common/SearchInput.jsx';
 import { Badge, Button, Card, CardBody, CardHeader, Checkbox, ConfirmDialog, DataTable, EmptyState, ErrorState, Input, Modal, Select, Skeleton, StatCard, StatusBadge, Tabs, Textarea, toast } from '../../components/ui/index.js';
 import { helpdeskApi, learnSupportApi } from '../../services/api/helpdesk.js';
 import { useListParams } from '../../hooks/useListParams.js';
@@ -131,7 +132,7 @@ export function CreatorHelpdeskPage() {
   const s = summary.data;
   return (
     <>
-      <PageHeader title="Help desk" description="Support requests from your students." breadcrumbs={[{ label: 'Students' }, { label: 'Help desk' }]} />
+      <PageHeader title="Help desk" count={q.data?.meta?.total} description="Support requests from your students." />
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Open" value={s?.byStatus?.OPEN ?? 0} loading={summary.isLoading} />
         <StatCard label="Waiting on student" value={s?.byStatus?.PENDING ?? 0} loading={summary.isLoading} />
@@ -140,11 +141,12 @@ export function CreatorHelpdeskPage() {
       </div>
       <Tabs className="mb-4" value={params.view} onChange={(view) => update({ view })} tabs={[{ value: 'all', label: 'All open' }, { value: 'unassigned', label: 'Unassigned' }, { value: 'mine', label: 'Assigned to me' }]} />
       <Card>
-        <div className="flex flex-col gap-3 border-b border-line p-4 md:flex-row md:items-end">
-          <SearchInput className="md:w-72" value={params.q ?? ''} onChange={(v) => update({ q: v })} placeholder="Subject or request #" />
-          <Select aria-label="Status" placeholder="Any open status" value={params.status ?? ''} onChange={(e) => update({ status: e.target.value })} className="md:w-44" options={STATUSES.map((v) => ({ value: v, label: statusLabel(v) }))} />
-          <Select aria-label="Priority" placeholder="Any priority" value={params.priority ?? ''} onChange={(e) => update({ priority: e.target.value })} className="md:w-40" options={['URGENT', 'HIGH', 'MEDIUM', 'LOW'].map((v) => ({ value: v, label: v.toLowerCase() }))} />
-        </div>
+        <ListToolbar search={params.q} onSearch={(v) => update({ q: v })} placeholder="Subject or request #" count={q.data?.meta?.total} noun="request"
+          filtered={Boolean(params.status || params.priority)} onReset={() => update({ status: undefined, priority: undefined })}
+          filters={<>
+            <FilterChip label="Status" value={params.status} onChange={(v) => update({ status: v })} options={STATUSES.map((v) => ({ value: v, label: statusLabel(v) }))} />
+            <FilterChip label="Priority" value={params.priority} onChange={(v) => update({ priority: v })} options={['URGENT', 'HIGH', 'MEDIUM', 'LOW'].map((v) => ({ value: v, label: v[0] + v.slice(1).toLowerCase() }))} />
+          </>} />
         <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data?.items ?? []} meta={q.data?.meta}
           onPageChange={(page) => update({ page }, { resetPage: false })} onRowClick={(r) => navigate(`/creator/helpdesk/${r.id}`)}
           empty={<EmptyState icon={Inbox} title="All caught up" description="No student requests in this view." />}
