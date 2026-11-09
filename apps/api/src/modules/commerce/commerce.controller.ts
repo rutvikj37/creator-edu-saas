@@ -109,6 +109,7 @@ class OfflineOrderDto {
   @ApiPropertyOptional({ description: 'Transaction ID / reference' }) @IsOptional() @Transform(trim) @IsString() @MaxLength(191) reference?: string | null;
   @ApiProperty({ description: 'Amount received' }) @IsNumber({ maxDecimalPlaces: 2 }) @Min(1) @Max(10_000_000) amount: number;
   @ApiPropertyOptional({ description: 'Email the learner a receipt' }) @IsOptional() @IsBoolean() sendEmail?: boolean;
+  @ApiPropertyOptional({ description: 'Credit this affiliate for the sale' }) @IsOptional() @Transform(trim) @IsString() @MaxLength(32) affiliateCode?: string | null;
 }
 class OrderCommentDto {
   @ApiProperty() @Transform(trim) @IsString() @Length(1, 2000) body: string;

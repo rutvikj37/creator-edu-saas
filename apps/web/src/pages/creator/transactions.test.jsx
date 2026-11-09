@@ -16,6 +16,7 @@ vi.mock('../../services/api/coaching.js', () => ({ coachingApi: { programs: vi.f
 vi.mock('../../services/api/analytics.js', () => ({ analyticsApi: { exportCsv: vi.fn() } }));
 vi.mock('../../services/api/creator.js', () => ({ coursesApi: { list: vi.fn(async () => ({ items: [{ id: 'c1', title: 'Accounts Basics', status: 'PUBLISHED', isFree: false, priceAmount: '2499', currency: 'INR' }] })) } }));
 vi.mock('../../services/api/learn.js', () => ({ creatorLearnApi: { students: vi.fn() } }));
+vi.mock('../../services/api/affiliates.js', () => ({ affiliatesApi: { list: vi.fn(async () => [{ id: 'a1', code: 'PROMO20', status: 'ACTIVE', commissionPercent: 20, userId: 'u9', user: { fullName: 'Promo Person', email: 'promo@example.com' } }]) } }));
 
 const order = { id: 'o1', number: 'ORD-000004', status: 'PAID', currency: 'INR', totalAmount: '2000', paidAt: '2026-11-06T13:26:00Z', createdAt: '2026-11-06T13:26:00Z', paymentMode: 'UPI', externalReference: 'UPI-778899', buyer: { fullName: 'Cash Learner', email: 'cash@example.com' }, items: [{ title: 'Accounts Basics', courseId: 'c1' }] };
 
@@ -81,9 +82,12 @@ it('add a transaction: pick product, learner, reference, mode and amount', async
   await userEvent.selectOptions(within(dialog).getByLabelText('Payment mode *'), 'BANK_TRANSFER');
   await userEvent.clear(within(dialog).getByLabelText('Amount *'));
   await userEvent.type(within(dialog).getByLabelText('Amount *'), '2000');
+  await userEvent.type(within(dialog).getByLabelText('Search affiliates'), 'promo');
+  await userEvent.click(await within(dialog).findByRole('option', { name: /Promo Person/ }));
+  expect(within(dialog).getByText('Code PROMO20 · 20% commission')).toBeInTheDocument();
   await userEvent.click(within(dialog).getByLabelText('No'));
   await userEvent.click(submit);
-  await waitFor(() => expect(creatorCommerceApi.recordOffline).toHaveBeenCalledWith({ itemKind: 'course', itemId: 'c1', userId: 'u1', mode: 'BANK_TRANSFER', reference: 'UTR123', amount: 2000, sendEmail: false }));
+  await waitFor(() => expect(creatorCommerceApi.recordOffline).toHaveBeenCalledWith({ itemKind: 'course', itemId: 'c1', userId: 'u1', mode: 'BANK_TRANSFER', reference: 'UTR123', amount: 2000, sendEmail: false, affiliateCode: 'PROMO20' }));
 });
 
 it('settlements: totals, list with UTR and transactions, search', async () => {

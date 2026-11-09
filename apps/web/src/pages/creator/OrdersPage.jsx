@@ -14,6 +14,7 @@ import { bundlesApi, creatorCommerceApi, productsApi } from '../../services/api/
 import { membershipsApi } from '../../services/api/community.js';
 import { coachingApi } from '../../services/api/coaching.js';
 import { creatorLearnApi } from '../../services/api/learn.js';
+import { affiliatesApi } from '../../services/api/affiliates.js';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.js';
 import { cn } from '../../utils/cn.js';
 import { analyticsApi } from '../../services/api/analytics.js';
@@ -266,15 +267,18 @@ const PICKERS = {
 /** Record a payment received outside checkout and give the learner access. */
 export function AddTransactionModal({ open, onClose }) {
   const qc = useQueryClient();
-  const [f, setF] = useState({ kind: 'course', itemId: '', itemTerm: '', learner: null, learnerTerm: '', mode: 'CASH', reference: '', amount: '', sendEmail: true });
+  const [f, setF] = useState({ kind: 'course', itemId: '', itemTerm: '', learner: null, learnerTerm: '', mode: 'CASH', reference: '', amount: '', sendEmail: true, affiliate: null, affiliateTerm: '' });
   const [errors, setErrors] = useState({});
-  useEffect(() => { if (open) { setF({ kind: 'course', itemId: '', itemTerm: '', learner: null, learnerTerm: '', mode: 'CASH', reference: '', amount: '', sendEmail: true }); setErrors({}); } }, [open]);
+  useEffect(() => { if (open) { setF({ kind: 'course', itemId: '', itemTerm: '', learner: null, learnerTerm: '', mode: 'CASH', reference: '', amount: '', sendEmail: true, affiliate: null, affiliateTerm: '' }); setErrors({}); } }, [open]);
   const items = useQuery({ queryKey: ['offline', 'items', f.kind], queryFn: PICKERS[f.kind].load, enabled: open });
   const debounced = useDebouncedValue(f.learnerTerm.trim(), 300);
   const learners = useQuery({ queryKey: ['offline', 'learners', debounced], queryFn: () => creatorLearnApi.students({ q: debounced, pageSize: 8 }), enabled: open && debounced.length >= 2 && !f.learner });
+  const affiliates = useQuery({ queryKey: ['offline', 'affiliates'], queryFn: () => affiliatesApi.list().catch(() => []), enabled: open });
+  const aTerm = f.affiliateTerm.trim().toLowerCase();
+  const shownAffiliates = aTerm.length < 2 || f.affiliate ? [] : (affiliates.data ?? []).filter((a) => a.status === 'ACTIVE' && a.userId !== f.learner?.id && [a.code, a.user?.fullName, a.user?.email].some((v) => v?.toLowerCase().includes(aTerm))).slice(0, 8);
   const shownItems = (items.data ?? []).filter((i) => i.title.toLowerCase().includes(f.itemTerm.trim().toLowerCase())).slice(0, 50);
   const save = useMutation({
-    mutationFn: () => creatorCommerceApi.recordOffline({ itemKind: f.kind, itemId: f.itemId, userId: f.learner.id, mode: f.mode, reference: f.reference.trim() || null, amount: Number(f.amount), sendEmail: f.sendEmail }),
+    mutationFn: () => creatorCommerceApi.recordOffline({ itemKind: f.kind, itemId: f.itemId, userId: f.learner.id, mode: f.mode, reference: f.reference.trim() || null, amount: Number(f.amount), sendEmail: f.sendEmail, ...(f.affiliate ? { affiliateCode: f.affiliate.code } : {}) }),
     onSuccess: (o) => { toast.success(`Recorded ${o.number}`, { description: 'The learner now has access.' }); qc.invalidateQueries({ queryKey: ['creator', 'orders'] }); onClose(); },
     onError: (e) => { setErrors(Object.fromEntries((e.details ?? []).map((x) => [x.field, x.message]))); toast.error(e.details?.[0]?.message ?? e.message); },
   });
@@ -314,6 +318,17 @@ export function AddTransactionModal({ open, onClose }) {
         <div className="grid gap-4 sm:grid-cols-2">
           <Select label="Payment mode *" value={f.mode} onChange={(e) => setF({ ...f, mode: e.target.value })} options={[{ value: 'CASH', label: 'Cash' }, { value: 'BANK_TRANSFER', label: 'Bank transfer' }, { value: 'UPI', label: 'UPI (direct)' }, { value: 'CHEQUE', label: 'Cheque' }, { value: 'OTHER', label: 'Other' }]} />
           <Input label="Amount *" type="number" min={1} step="0.01" placeholder="Amount received" value={f.amount} error={errors.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
+        </div>
+        <div>
+          <p className="mb-1.5 text-sm font-medium text-fg">Affiliate</p>
+          {f.affiliate ? (
+            <div className="flex items-center gap-2 rounded-md border border-line p-2"><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{f.affiliate.user?.fullName ?? f.affiliate.code}</p><p className="text-xs text-muted">Code {f.affiliate.code} · {f.affiliate.commissionPercent}% commission</p></div><Button size="sm" variant="ghost" onClick={() => setF({ ...f, affiliate: null })}>Remove</Button></div>
+          ) : <>
+            <Input aria-label="Search affiliates" placeholder="Search by name, email or code (optional)" value={f.affiliateTerm} error={errors.affiliateCode} onChange={(e) => setF({ ...f, affiliateTerm: e.target.value })} />
+            {shownAffiliates.length > 0 && <ul className="mt-1 max-h-40 overflow-y-auto rounded-md border border-line" role="listbox" aria-label="Affiliates">{shownAffiliates.map((a) => (
+              <li key={a.id}><button type="button" role="option" aria-selected={false} onClick={() => setF({ ...f, affiliate: a })} className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-surface-2"><span className="truncate">{a.user?.fullName ?? 'Affiliate'} · <span className="text-muted">{a.user?.email}</span></span><span className="shrink-0 font-mono text-xs text-muted">{a.code}</span></button></li>
+            ))}</ul>}
+          </>}
         </div>
         <fieldset>
           <legend className="mb-1.5 text-sm font-medium text-fg">Send the learner a receipt email</legend>

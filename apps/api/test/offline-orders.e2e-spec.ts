@@ -60,6 +60,20 @@ describe('Offline transactions (e2e)', () => {
     expect(await list('type=bundle')).toEqual([]);
     expect(await list('q=UPI-REF-778899')).toEqual([o.id]);
 
+    // Affiliate credited on an offline sale: conversion and ledger commission are recorded.
+    const promoterEmail = uniqueEmail('promo');
+    await api(app).post('/api/v1/auth/register/student').set('Host', tenantHost(c.tenant.slug)).send({ fullName: 'Promo Person', email: promoterEmail, password: 'student-password-1' }).expect(201);
+    const promoter = await prisma.user.findFirstOrThrow({ where: { email: promoterEmail, tenantId: c.tenant.id } });
+    await prisma.affiliateProgram.create({ data: { tenantId: c.tenant.id, enabled: true, defaultPercent: 20, holdDays: 7, cookieDays: 30 } as never });
+    await prisma.affiliate.create({ data: { tenantId: c.tenant.id, userId: promoter.id, code: 'PROMO20', commissionPercent: 20, status: 'ACTIVE', approvedAt: new Date() } });
+    const course2 = await course('Payroll', 1000);
+    await authed(app, cs).post('/api/v1/creator/orders/offline').send({ itemKind: 'course', itemId: course2.id, userId: learner.id, mode: 'CASH', reference: 'R-1', amount: 1000, affiliateCode: 'NOPE' }).expect(422);
+    await authed(app, cs).post('/api/v1/creator/orders/offline').send({ itemKind: 'course', itemId: course2.id, userId: promoter.id, mode: 'CASH', reference: 'R-2', amount: 1000, affiliateCode: 'PROMO20' }).expect(422); // no self-referral
+    const ao = (await authed(app, cs).post('/api/v1/creator/orders/offline').send({ itemKind: 'course', itemId: course2.id, userId: learner.id, mode: 'CASH', reference: 'R-3', amount: 1000, affiliateCode: 'promo20' }).expect(201)).body.data;
+    expect(await prisma.affiliateConversion.findFirstOrThrow({ where: { orderId: ao.id } })).toMatchObject({ commission: expect.anything() });
+    expect(Number((await prisma.affiliateConversion.findFirstOrThrow({ where: { orderId: ao.id } })).commission)).toBe(200);
+    expect(ao.ledger.find((l: any) => l.type === 'AFFILIATE_COMMISSION')).toMatchObject({ amount: '-200' });
+
     // Another academy can't record against these learners/items.
     const other = await registerCreator(app);
     await authed(app, other.session).post('/api/v1/creator/orders/offline').send({ itemKind: 'course', itemId: paid.id, userId: learner.id, mode: 'CASH', amount: 10 }).expect((r) => expect([404, 422]).toContain(r.status));

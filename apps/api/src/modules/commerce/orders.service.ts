@@ -817,7 +817,7 @@ export class OrdersService {
    * a paid order for the learner at the amount received, fulfilled like any other (access, ledger,
    * invoice), with the mode and reference kept on the order.
    */
-  async recordOffline(input: { itemKind: string; itemId: string; userId: string; mode: string; reference?: string | null; amount: number; sendEmail: boolean }, actorUserId: string) {
+  async recordOffline(input: { itemKind: string; itemId: string; userId: string; mode: string; reference?: string | null; amount: number; sendEmail: boolean; affiliateCode?: string | null }, actorUserId: string) {
     const tenantId = this.ctx.requireTenantId();
     if (!OFFLINE_MODES.includes(input.mode as never)) throw AppException.validation([{ field: 'mode', message: 'Choose a payment mode' }]);
     const user = await this.prisma.user.findFirst({ where: { id: input.userId, tenantId, realm: 'TENANT', deletedAt: null } });
@@ -827,6 +827,8 @@ export class OrdersService {
       throw e;
     });
     const line: Line = { ...base, unitMinor: toMinor(input.amount, base.currency), couponable: false, passFee: false };
+    const affiliateId = input.affiliateCode?.trim() ? await this.affiliates.attribute(input.affiliateCode.trim(), user.id) : null;
+    if (input.affiliateCode?.trim() && !affiliateId) throw AppException.validation([{ field: 'affiliateCode', message: 'No active affiliate with this code (learners can’t refer themselves)' }]);
     await this.assertBuyable(user.id, [line]);
     const { tax, q, cur } = await this.price(user.id, [line], null, user.country);
     const ref = input.reference?.trim() || null;
@@ -837,7 +839,7 @@ export class OrdersService {
           number: `ORD-${String(n).padStart(6, '0')}`, userId: user.id, currency: cur,
           subtotalAmount: fromMinor(q.subtotal, cur), discountAmount: '0', taxAmount: fromMinor(q.tax, cur), totalAmount: fromMinor(q.total, cur), taxRate: tax?.rate ?? null, taxInclusive: tax?.inclusive ?? true,
           billing: { name: user.fullName, email: user.email, phone: user.phone ?? null, country: user.country ?? null, state: null, gstin: null },
-          paymentMode: input.mode, externalReference: ref, recordedById: actorUserId, expiresAt: new Date(Date.now() + ORDER_TTL_MS),
+          paymentMode: input.mode, externalReference: ref, recordedById: actorUserId, affiliateId, expiresAt: new Date(Date.now() + ORDER_TTL_MS),
         } as never,
       });
       const kindRef = line.kind === 'course' ? { courseId: line.id } : line.kind === 'bundle' ? { bundleId: line.id } : line.kind === 'webinar' ? { liveClassId: line.id } : line.kind === 'product' ? { digitalProductId: line.id } : line.kind === 'coaching' ? { coachingProgramId: line.id } : { membershipPlanId: line.id };
