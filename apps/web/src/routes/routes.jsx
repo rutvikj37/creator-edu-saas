@@ -162,6 +162,7 @@ const sharedAuthRoutes = [
 export function buildRoutes(surface = getSurface()) {
   const platform = [
     { path: '/', element: page(PlatformLandingPage) },
+    { path: '/pricing', element: page(PlatformLandingPage, { section: 'pricing' }) },
     { element: <GuestOnly />, children: [{ path: '/login', element: page(LoginPage) }, { path: '/signup', element: page(SignupPage) }] },
     ...sharedAuthRoutes,
     { path: '/invite', element: page(InvitePage) },

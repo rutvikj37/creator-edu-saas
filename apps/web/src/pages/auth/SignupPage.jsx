@@ -8,6 +8,8 @@ import { AuthLayout } from '../../components/auth/AuthLayout.jsx';
 import { PasswordInput } from '../../components/auth/PasswordInput.jsx';
 import { Alert } from '../../components/auth/Alert.jsx';
 import { Button, Input, Select } from '../../components/ui/index.js';
+import { useQuery } from '@tanstack/react-query';
+import { creatorApi } from '../../services/api/platform.js';
 import { authApi } from '../../services/api/auth.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { applyApiErrors } from '../../utils/forms.js';
@@ -31,6 +33,8 @@ export function SignupPage() {
   const { i18n } = useTranslation();
   const countries = useMemo(() => countryOptions(i18n.language), [i18n.language]);
   const [error, setError] = useState(null);
+  const plans = useQuery({ queryKey: ['public', 'plans'], queryFn: creatorApi.publicPlans, staleTime: 5 * 60_000 });
+  const trialDays = plans.data?.find((p) => p.isDefault)?.trialDays ?? 0;
   const { register, handleSubmit, setError: setFieldError, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(signupSchema),
     defaultValues: { fullName: '', email: '', phone: '', password: '', country: 'IN', businessName: '' },
@@ -51,7 +55,7 @@ export function SignupPage() {
   return (
     <AuthLayout
       title="Create your academy"
-      subtitle="Start selling courses in minutes. You can change everything later."
+      subtitle={trialDays > 0 ? `Free for ${trialDays} days. No card needed — choose a plan only if you want to continue.` : 'Start selling courses in minutes. You can change everything later.'}
       footer={<>Already have an account? <Link to="/login" className="font-medium text-primary-600 hover:underline">Sign in</Link></>}
     >
       <form onSubmit={onSubmit} noValidate className="space-y-4">
