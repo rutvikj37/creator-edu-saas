@@ -75,9 +75,21 @@ export class ChatService implements OnModuleDestroy {
     return c as Conv;
   }
 
-  async list(scope: { kind: 'ACADEMY'; tenantId: string } | { kind: 'PLATFORM' }, params: { status?: string; unread?: boolean; page?: number }) {
+  /** Customers whose name or email (students) or academy name/slug (platform) contains `q`. */
+  private async matching(scope: { kind: 'ACADEMY'; tenantId: string } | { kind: 'PLATFORM' }, q: string) {
+    if (scope.kind === 'ACADEMY') {
+      const users = await this.prisma.user.findMany({ where: { realmKey: scope.tenantId, OR: [{ fullName: { contains: q } }, { email: { contains: q } }] }, select: { id: true }, take: 500 });
+      return { customerUserId: { in: users.map((u) => u.id) } };
+    }
+    const tenants = await this.prisma.tenant.findMany({ where: { OR: [{ name: { contains: q } }, { slug: { contains: q } }] }, select: { id: true }, take: 500 });
+    return { tenantId: { in: tenants.map((t) => t.id) } };
+  }
+
+  async list(scope: { kind: 'ACADEMY'; tenantId: string } | { kind: 'PLATFORM' }, params: { status?: string; unread?: boolean; page?: number; q?: string }) {
     const page = Math.max(1, Number(params.page) || 1);
+    const q = params.q?.trim().slice(0, 100);
     const where = {
+      ...(q ? await this.matching(scope, q) : {}),
       kind: scope.kind, ...(scope.kind === 'ACADEMY' ? { tenantId: scope.tenantId } : {}), lastMessageAt: { not: null },
       ...(params.status === 'OPEN' || params.status === 'CLOSED' ? { status: params.status as 'OPEN' | 'CLOSED' } : {}),
       ...(params.unread ? { agentUnread: { gt: 0 } } : {}),

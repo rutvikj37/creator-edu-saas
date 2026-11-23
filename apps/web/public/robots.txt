@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /creator/
+Disallow: /learn/
+Disallow: /super-admin/
+Disallow: /support/
+Disallow: /affiliate/
+Disallow: /checkout
+Disallow: /login
+Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /auth/

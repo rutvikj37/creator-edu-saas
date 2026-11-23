@@ -1,4 +1,5 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { PdfWatermarkService } from '../files/pdf-watermark.service.js';
 import { AppException } from '../../common/errors/app-exception.js';
 import { AuditService } from '../../core/audit/audit.service.js';
 import { PrismaService } from '../../core/prisma/prisma.service.js';
@@ -36,6 +37,7 @@ export class DigitalProductsService {
     private readonly files: FilesService,
     private readonly storage: StorageService,
     private readonly audit: AuditService,
+    @Optional() private readonly watermark?: PdfWatermarkService,
   ) {}
 
   private async uniqueSlug(base: string, excludeId?: string) {
@@ -233,7 +235,7 @@ export class DigitalProductsService {
     const asset = await this.db.fileAsset.findFirst({ where: { id: f.fileAssetId } });
     if (!asset || asset.status !== 'READY') throw AppException.notFound('File not available');
     await this.db.digitalProductDownload.create({ data: { productId, fileId, userId } as never });
-    const url = await this.storage.downloadUrl(asset, asset.fileName, apiOrigin, 600, false);
+    const url = (await this.watermark?.link(asset as never, userId, apiOrigin, true)) ?? await this.storage.downloadUrl(asset, asset.fileName, apiOrigin, 600, false);
     return { url, fileName: asset.fileName, expiresInSeconds: 600 };
   }
 }

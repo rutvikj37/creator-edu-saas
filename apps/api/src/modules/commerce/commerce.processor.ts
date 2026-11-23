@@ -3,6 +3,7 @@ import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
 import type { Job, Queue } from 'bullmq';
 import { QUEUES } from '../../core/queue/queue.constants.js';
 import { OrdersService } from './orders.service.js';
+import { RecoveryService } from './recovery.service.js';
 import { AffiliatesService } from '../affiliates/affiliates.service.js';
 import { MembershipsService } from '../memberships/memberships.service.js';
 import { WEBHOOK_JOB, WebhooksService } from './webhooks.service.js';
@@ -44,13 +45,13 @@ export class WebhooksProcessor extends WorkerHost {
 @Processor(QUEUES.COMMERCE)
 export class CommerceProcessor extends WorkerHost {
   private readonly logger = new Logger(CommerceProcessor.name);
-  constructor(private readonly orders: OrdersService, private readonly affiliates: AffiliatesService, private readonly memberships: MembershipsService) {
+  constructor(private readonly orders: OrdersService, private readonly affiliates: AffiliatesService, private readonly memberships: MembershipsService, private readonly recovery: RecoveryService) {
     super();
   }
   async process(job: Job) {
     if (job.name !== RECONCILE_JOB) throw new Error(`Unknown commerce job: ${job.name}`);
-    const stats = { ...(await this.orders.reconcile()), ...(await this.affiliates.approveDue()), memberships: await this.memberships.maintain() };
-    if (stats.payments || stats.refunds || stats.expired || stats.errors || stats.approved || stats.memberships.reminded || stats.memberships.expired) this.logger.log(stats, 'reconciliation');
+    const stats = { ...(await this.orders.reconcile()), ...(await this.affiliates.approveDue()), memberships: await this.memberships.maintain(), ...(await this.recovery.run()) };
+    if (stats.payments || stats.refunds || stats.expired || stats.errors || stats.approved || stats.memberships.reminded || stats.memberships.expired || stats.recoveryReminders) this.logger.log(stats, 'reconciliation');
     return stats;
   }
 }

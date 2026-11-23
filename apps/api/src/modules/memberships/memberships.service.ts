@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { AppException } from '../../common/errors/app-exception.js';
 import { AppConfig } from '../../config/app-config.service.js';
 import { AuditService } from '../../core/audit/audit.service.js';
@@ -10,9 +10,14 @@ import type { TenantPrismaClient } from '../../core/tenancy/tenant-prisma.js';
 import { TenantContext } from '../../core/tenancy/tenant-context.service.js';
 import { addInterval } from '../subscriptions/subscriptions.service.js';
 import { academyOrigin } from '../tenants/academy-origin.js';
+import { FilesService } from '../files/files.service.js';
+import { EntitlementsService } from '../subscriptions/entitlements.service.js';
+import { FEATURES } from '@ce/shared';
 
 type Tx = Parameters<Parameters<TenantPrismaClient['$transaction']>[0]>[0];
 const DAY = 86_400_000;
+/** Access end used for unlimited (lifetime) plans. */
+export const LIFETIME_END = new Date('2999-12-31T00:00:00Z');
 
 export interface PlanInput {
   name?: string;
@@ -21,7 +26,15 @@ export interface PlanInput {
   currency?: string;
   interval?: 'MONTH' | 'YEAR';
   courseIds?: string[];
-  status?: 'ACTIVE' | 'ARCHIVED';
+  status?: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+  compareAtAmount?: number | null;
+  planName?: string | null;
+  coverFileId?: string | null;
+  faqs?: { question: string; answer: string }[];
+  buttonText?: string | null;
+  lifetime?: boolean;
+  taxExclusive?: boolean | null;
+  passTransactionFee?: boolean;
 }
 
 /**
@@ -38,43 +51,114 @@ export class MembershipsService {
     private readonly audit: AuditService,
     private readonly mail: MailService,
     private readonly config: AppConfig,
+    /** Absent in the worker, which never builds cover URLs. */
+    @Optional() private readonly files?: FilesService,
+    @Optional() private readonly entitlements?: EntitlementsService,
   ) {}
 
   private view(p: any, extra: Record<string, unknown> = {}) {
-    return { id: p.id, name: p.name, description: p.description, priceAmount: p.priceAmount.toString(), currency: p.currency, interval: p.interval, courseIds: p.courseIds as string[], status: p.status, createdAt: p.createdAt, ...extra };
+    return {
+      id: p.id, name: p.name, description: p.description, priceAmount: p.priceAmount.toString(), compareAtAmount: p.compareAtAmount?.toString() ?? null, currency: p.currency, interval: p.interval,
+      courseIds: p.courseIds as string[], status: p.status, planName: p.planName ?? null, buttonText: p.buttonText ?? null, lifetime: Boolean(p.lifetime), taxExclusive: p.taxExclusive ?? null, passTransactionFee: Boolean(p.passTransactionFee), coverFileId: p.coverFileId ?? null, faqs: (p.faqs as unknown[] | null) ?? [], createdAt: p.createdAt, ...extra,
+    };
   }
 
-  private async validate(input: PlanInput) {
+  private async cover(p: { coverFileId?: string | null }, apiOrigin?: string) {
+    return apiOrigin && this.files ? this.files.urlFor(p.coverFileId ?? null, apiOrigin, 86_400) : null;
+  }
+
+  /** A plan can go on sale once it has a price and at least one course. */
+  private assertSellable(p: { priceAmount: unknown; courseIds: unknown }) {
+    const errors = [];
+    if (!(Number(p.priceAmount) >= 1)) errors.push({ field: 'priceAmount', message: 'Set a price before publishing' });
+    if (!(p.courseIds as string[]).length) errors.push({ field: 'courseIds', message: 'Add at least one course before publishing' });
+    if (errors.length) throw AppException.validation(errors);
+  }
+
+  private async validate(input: PlanInput, draft = false) {
     const errors: { field: string; message: string }[] = [];
+    if (input.compareAtAmount && input.priceAmount !== undefined && input.compareAtAmount <= input.priceAmount) errors.push({ field: 'compareAtAmount', message: 'The original price must be higher than the sale price' });
+    if (input.buttonText && input.buttonText.trim().length > 40) errors.push({ field: 'buttonText', message: 'Up to 40 characters' });
+    if (input.planName && input.planName.trim().length > 100) errors.push({ field: 'planName', message: 'Up to 100 characters' });
+    if (input.faqs && (input.faqs.length > 30 || input.faqs.some((f) => !f.question?.trim() || !f.answer?.trim()))) errors.push({ field: 'faqs', message: 'Up to 30 questions, each with an answer' });
+    if (input.coverFileId && this.files) await this.files.assertUsable(input.coverFileId, ['IMAGE', 'COURSE_THUMBNAIL', 'COURSE_BANNER']).catch(() => errors.push({ field: 'coverFileId', message: 'Upload an image' }));
     if (input.name !== undefined && (!input.name.trim() || input.name.length > 120)) errors.push({ field: 'name', message: '1–120 characters' });
     if (input.priceAmount !== undefined && (input.priceAmount < 1 || input.priceAmount > 10_000_000)) errors.push({ field: 'priceAmount', message: 'Enter a price' });
     if (input.currency !== undefined && !/^[A-Z]{3}$/.test(input.currency)) errors.push({ field: 'currency', message: 'Invalid currency' });
     if (input.courseIds !== undefined) {
       const ids = [...new Set(input.courseIds)];
-      if (!ids.length) errors.push({ field: 'courseIds', message: 'Include at least one course' });
+      if (!ids.length && !draft) errors.push({ field: 'courseIds', message: 'Include at least one course' });
+      else if (!ids.length) { /* drafts may start empty */ }
       else if ((await this.db.course.count({ where: { id: { in: ids }, deletedAt: null } })) !== ids.length) errors.push({ field: 'courseIds', message: 'Some courses were not found' });
     }
     if (errors.length) throw AppException.validation(errors);
   }
 
-  async list() {
+  async list(apiOrigin?: string) {
     const plans = await this.db.membershipPlan.findMany({ orderBy: { createdAt: 'desc' } });
     const counts = await this.db.membership.groupBy({ by: ['planId'], where: { status: 'ACTIVE', currentPeriodEnd: { gt: new Date() } }, _count: { _all: true } });
-    return plans.map((p) => this.view(p, { activeMembers: counts.find((c) => c.planId === p.id)?._count._all ?? 0 }));
+    const revenue = await this.db.orderItem.groupBy({ by: ['membershipPlanId'], where: { membershipPlanId: { in: plans.map((p) => p.id) }, order: { status: { in: ['PAID', 'PARTIALLY_REFUNDED'] } } }, _sum: { totalAmount: true } });
+    return Promise.all(plans.map(async (p) => this.view(p, {
+      activeMembers: counts.find((c) => c.planId === p.id)?._count._all ?? 0,
+      revenue: revenue.find((r) => r.membershipPlanId === p.id)?._sum.totalAmount?.toString() ?? '0',
+      coverUrl: await this.cover(p, apiOrigin),
+    })));
   }
 
-  async create(input: Required<Pick<PlanInput, 'name' | 'priceAmount' | 'interval' | 'courseIds'>> & PlanInput, actorUserId: string) {
-    await this.validate(input);
-    const t = await this.prisma.tenant.findUniqueOrThrow({ where: { id: this.ctx.requireTenantId() }, select: { defaultCurrency: true } });
-    const p = await this.db.membershipPlan.create({ data: { name: input.name.trim(), description: input.description?.trim() || null, priceAmount: input.priceAmount, currency: input.currency ?? t.defaultCurrency, interval: input.interval, courseIds: [...new Set(input.courseIds)], createdById: actorUserId } as never });
-    await this.audit.record({ action: 'membership.plan_create', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'MembershipPlan', targetId: p.id });
-    return this.view(p);
-  }
-
-  async update(id: string, input: PlanInput, actorUserId: string) {
+  async get(id: string, apiOrigin?: string) {
     const p = await this.db.membershipPlan.findFirst({ where: { id } });
     if (!p) throw AppException.notFound('Plan not found');
-    await this.validate(input);
+    return this.view(p, { coverUrl: await this.cover(p, apiOrigin) });
+  }
+
+  /** Totals for the Memberships page header. */
+  async stats() {
+    const [members, revenue, t] = await Promise.all([
+      this.db.membership.count({ where: { status: 'ACTIVE', currentPeriodEnd: { gt: new Date() } } }),
+      this.db.orderItem.aggregate({ where: { membershipPlanId: { not: null }, order: { status: { in: ['PAID', 'PARTIALLY_REFUNDED'] } } }, _sum: { totalAmount: true } }),
+      this.prisma.tenant.findUniqueOrThrow({ where: { id: this.ctx.requireTenantId() }, select: { defaultCurrency: true } }),
+    ]);
+    const tenantId = this.ctx.requireTenantId();
+    const [biz, ent] = await Promise.all([
+      this.prisma.tenantBusinessProfile.findUnique({ where: { tenantId }, select: { gstRegistered: true, taxRate: true, pricesIncludeTax: true } }),
+      this.entitlements ? this.entitlements.get(tenantId) : null,
+    ]);
+    return {
+      totalMembers: members, totalRevenue: revenue._sum.totalAmount?.toString() ?? '0', currency: t.defaultCurrency,
+      // What the pricing step needs to show the effective price and what the academy receives.
+      pricing: {
+        gstRegistered: Boolean(biz?.gstRegistered), taxRate: biz?.gstRegistered ? Number(biz.taxRate) : 0, pricesIncludeTax: biz?.pricesIncludeTax ?? true,
+        commissionPercent: ent?.features[FEATURES.COMMISSION_PERCENT.key]?.limit ?? 0,
+      },
+    };
+  }
+
+  /**
+   * Creates a plan. With price, interval and courses it goes on sale at once (as before); with just a
+   * name it starts as a DRAFT that the builder fills in step by step and publishes.
+   */
+  async create(input: PlanInput & { name: string }, actorUserId: string, apiOrigin?: string) {
+    const draft = input.priceAmount === undefined || input.courseIds === undefined || input.status === 'DRAFT';
+    await this.validate({ courseIds: [], ...input }, draft);
+    const t = await this.prisma.tenant.findUniqueOrThrow({ where: { id: this.ctx.requireTenantId() }, select: { defaultCurrency: true } });
+    const p = await this.db.membershipPlan.create({
+      data: {
+        name: input.name.trim(), description: input.description?.trim() || null, priceAmount: input.priceAmount ?? 0, compareAtAmount: input.compareAtAmount ?? null, currency: input.currency ?? t.defaultCurrency,
+        interval: input.interval ?? 'MONTH', courseIds: [...new Set(input.courseIds ?? [])], planName: input.planName?.trim() || null, coverFileId: input.coverFileId ?? null,
+        faqs: (input.faqs ?? []).map((f) => ({ question: f.question.trim(), answer: f.answer.trim() })), status: draft ? 'DRAFT' : 'ACTIVE', createdById: actorUserId,
+        buttonText: input.buttonText?.trim() || null, lifetime: input.lifetime ?? false, taxExclusive: input.taxExclusive ?? null, passTransactionFee: input.passTransactionFee ?? false,
+      } as never,
+    });
+    await this.audit.record({ action: 'membership.plan_create', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'MembershipPlan', targetId: p.id });
+    return this.view(p, { coverUrl: await this.cover(p, apiOrigin) });
+  }
+
+  async update(id: string, input: PlanInput, actorUserId: string, apiOrigin?: string) {
+    const p = await this.db.membershipPlan.findFirst({ where: { id } });
+    if (!p) throw AppException.notFound('Plan not found');
+    const nextStatus = input.status ?? p.status;
+    await this.validate({ ...input, ...(input.compareAtAmount && input.priceAmount === undefined ? { priceAmount: Number(p.priceAmount) } : {}) }, nextStatus === 'DRAFT');
+    if (nextStatus === 'ACTIVE') this.assertSellable({ priceAmount: input.priceAmount ?? p.priceAmount, courseIds: input.courseIds ?? p.courseIds });
     // Price/interval changes apply to future purchases; current members keep what they paid for.
     const u = await this.db.membershipPlan.update({
       where: { id },
@@ -85,10 +169,18 @@ export class MembershipsService {
         ...(input.interval !== undefined ? { interval: input.interval } : {}),
         ...(input.courseIds !== undefined ? { courseIds: [...new Set(input.courseIds)] } : {}),
         ...(input.status !== undefined ? { status: input.status } : {}),
+        ...(input.compareAtAmount !== undefined ? { compareAtAmount: input.compareAtAmount } : {}),
+        ...(input.planName !== undefined ? { planName: input.planName?.trim() || null } : {}),
+        ...(input.coverFileId !== undefined ? { coverFileId: input.coverFileId } : {}),
+        ...(input.faqs !== undefined ? { faqs: input.faqs.map((f) => ({ question: f.question.trim(), answer: f.answer.trim() })) } : {}),
+        ...(input.buttonText !== undefined ? { buttonText: input.buttonText?.trim() || null } : {}),
+        ...(input.lifetime !== undefined ? { lifetime: input.lifetime } : {}),
+        ...(input.taxExclusive !== undefined ? { taxExclusive: input.taxExclusive } : {}),
+        ...(input.passTransactionFee !== undefined ? { passTransactionFee: input.passTransactionFee } : {}),
       },
     });
     await this.audit.record({ action: 'membership.plan_update', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'MembershipPlan', targetId: id, after: input as never });
-    return this.view(u);
+    return this.view(u, { coverUrl: await this.cover(u, apiOrigin) });
   }
 
   async members(planId: string) {
@@ -99,11 +191,11 @@ export class MembershipsService {
   }
 
   // ── public & student ──────────────────────────────────────
-  async publicPlans() {
+  async publicPlans(apiOrigin?: string) {
     const plans = await this.db.membershipPlan.findMany({ where: { status: 'ACTIVE' }, orderBy: { priceAmount: 'asc' } });
     const courseIds = [...new Set(plans.flatMap((p) => p.courseIds as string[]))];
     const courses = await this.db.course.findMany({ where: { id: { in: courseIds }, status: 'PUBLISHED', deletedAt: null }, select: { id: true, title: true, slug: true } });
-    return plans.map((p) => this.view(p, { courses: (p.courseIds as string[]).map((id) => courses.find((c) => c.id === id)).filter(Boolean) }));
+    return Promise.all(plans.map(async (p) => this.view(p, { courses: (p.courseIds as string[]).map((id) => courses.find((c) => c.id === id)).filter(Boolean), coverUrl: await this.cover(p, apiOrigin) })));
   }
 
   async mine(userId: string) {
@@ -123,15 +215,16 @@ export class MembershipsService {
     const plan = await tx.membershipPlan.findFirstOrThrow({ where: { id: planId } });
     const existing = await tx.membership.findFirst({ where: { userId, planId } });
     const from = existing && existing.status === 'ACTIVE' && existing.currentPeriodEnd > now ? existing.currentPeriodEnd : now;
-    const end = addInterval(from, plan.interval);
+    const end = plan.lifetime ? LIFETIME_END : addInterval(from, plan.interval);
     if (existing) await tx.membership.update({ where: { id: existing.id }, data: { status: 'ACTIVE', currentPeriodEnd: end, lastOrderId: orderId, reminderSentFor: null, ...(from === now ? { startedAt: now } : {}) } });
     else await tx.membership.create({ data: { userId, planId, startedAt: now, currentPeriodEnd: end, lastOrderId: orderId } as never });
     for (const courseId of plan.courseIds as string[]) {
       const e = await tx.enrollment.findFirst({ where: { userId, courseId } });
       // Never shorten access the student already has (e.g. a lifetime purchase).
       if (e && e.status === 'ACTIVE' && (e.expiresAt === null || e.expiresAt >= end) && e.source !== 'MEMBERSHIP') continue;
-      if (e) await tx.enrollment.update({ where: { id: e.id }, data: { status: 'ACTIVE', expiresAt: end, source: e.source === 'MEMBERSHIP' || !(e.status === 'ACTIVE') ? 'MEMBERSHIP' : e.source } });
-      else await tx.enrollment.create({ data: { userId, courseId, source: 'MEMBERSHIP', expiresAt: end } as never });
+      const expiresAt = plan.lifetime ? null : end;
+      if (e) await tx.enrollment.update({ where: { id: e.id }, data: { status: 'ACTIVE', expiresAt, source: e.source === 'MEMBERSHIP' || !(e.status === 'ACTIVE') ? 'MEMBERSHIP' : e.source } });
+      else await tx.enrollment.create({ data: { userId, courseId, source: 'MEMBERSHIP', expiresAt } as never });
     }
     return end;
   }

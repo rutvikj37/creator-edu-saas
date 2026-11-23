@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Cloud, CloudOff, Database, Film, HardDrive, RefreshCw, RotateCcw, Upload } from 'lucide-react';
+import { ListToolbar } from '../../components/common/ListToolbar.jsx';
+import { FilterChip } from '../../components/common/FilterChip.jsx';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
 import { Alert } from '../../components/auth/Alert.jsx';
-import { Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, DataTable, EmptyState, Input, Select, Skeleton, StatCard, Tabs, toast } from '../../components/ui/index.js';
+import { Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, DataTable, EmptyState, Input, Skeleton, StatCard, Tabs, toast } from '../../components/ui/index.js';
 import { videoAdminApi } from '../../services/api/videoAdmin.js';
 import { formatDate, formatMoney, formatNumber } from '../../utils/format.js';
 import { fmtSize } from '../creator/VideosPage.jsx';
@@ -91,11 +93,12 @@ export function BackupsPage() {
   const restore = useMutation({ mutationFn: (id) => videoAdminApi.restore(id), onSuccess: () => { qc.invalidateQueries({ queryKey: ['backups'] }); setRestoring(null); toast.success('Restore started'); }, onError: (e) => { toast.error(e.message); setRestoring(null); } });
   return (
     <>
-      <PageHeader title="Backups" description="Original video uploads and documents, encrypted before they leave our servers." breadcrumbs={[{ label: 'System' }, { label: 'Backups' }]} />
+      <PageHeader title="Backups" description="Original video uploads and documents, encrypted before they leave our servers."  />
       <div className="mb-6 grid gap-6 lg:grid-cols-[1fr_380px]"><DriveCard /><CourseDocuments /></div>
       <Tabs className="mb-4" value={kind} onChange={(k) => { setKind(k); setPage(1); }} tabs={[{ value: 'video', label: 'Videos' }, { value: 'document', label: 'Documents' }]} />
-      <div className="mb-3 max-w-xs"><Select aria-label="Filter by status" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} placeholder="All statuses" options={Object.entries(BACKUP_TEXT).map(([value, label]) => ({ value, label }))} /></div>
       <Card>
+        <ListToolbar count={q.data?.meta?.total} noun="backup" filtered={Boolean(status)} onReset={() => { setStatus(''); setPage(1); }}
+          filters={<FilterChip label="Status" value={status || undefined} onChange={(v) => { setStatus(v ?? ''); setPage(1); }} options={Object.entries(BACKUP_TEXT).map(([value, label]) => ({ value, label }))} />} />
         <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data?.items ?? []} meta={q.data?.meta} onPageChange={setPage}
           empty={<EmptyState icon={Database} title="No backups yet" description="Backups start automatically after a video is uploaded." />}
           columns={[

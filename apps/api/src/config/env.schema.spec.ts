@@ -42,4 +42,11 @@ describe('validateEnv', () => {
       validateEnv({ ...base, NODE_ENV: 'production', JWT_ACCESS_SECRET: 'dev-only-' + 'x'.repeat(40) }),
     ).toThrow(/production/);
   });
+
+  it('refuses .env.example placeholders and short JWT secrets in production', () => {
+    const prod = { ...base, NODE_ENV: 'production', STORAGE_DRIVER: 's3', JWT_ACCESS_SECRET: 'k'.repeat(64), CSRF_SECRET: 'r4nd0m-csrf-value-xyz' };
+    expect(() => validateEnv({ ...prod, CSRF_SECRET: 'change-me' })).toThrow(/CSRF_SECRET/);
+    expect(() => validateEnv({ ...prod, JWT_ACCESS_SECRET: 'change-me-64-random-bytes-' + 'x'.repeat(30) })).toThrow(/JWT_ACCESS_SECRET/);
+    expect(() => validateEnv({ ...prod, JWT_ACCESS_SECRET: 'k'.repeat(40) })).toThrow(/48/);
+  });
 });

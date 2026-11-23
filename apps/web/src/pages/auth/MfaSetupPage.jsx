@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router';
+import { Navigate, useNavigate } from 'react-router';
 import { AuthLayout } from '../../components/auth/AuthLayout.jsx';
 import { TwoFactorSetup } from '../../components/account/TwoFactorSetup.jsx';
 import { Button } from '../../components/ui/index.js';
@@ -9,6 +9,7 @@ import { landingPath } from '../../routes/guards.jsx';
 export function MfaSetupPage() {
   const auth = useAuth();
   const navigate = useNavigate();
+  if (auth.me && !auth.me.mfaSetupRequired) return <Navigate to={landingPath(auth.me, auth.surface)} replace />;
   return (
     <AuthLayout
       title="Secure your admin account"

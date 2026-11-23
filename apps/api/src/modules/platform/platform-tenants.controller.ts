@@ -5,7 +5,7 @@ import { ClientMetaParam, CurrentAuth, RequirePermissions, RequireRealm } from '
 import type { AuthContext } from '../../core/tenancy/request-context.js';
 import type { ClientMeta } from '../auth/services/session.service.js';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto.js';
-import { AssignPlanDto, CreateTenantDto, DeleteTenantDto, LimitOverridesDto, SuspendDto, TenantDomainsQuery, TenantListQuery, UpdateTenantDto } from './dto/platform.dto.js';
+import { AssignPlanDto, CreateTenantDto, DeleteTenantDto, LimitOverridesDto, SuspendDto, TenantListQuery, UpdateTenantDto } from './dto/platform.dto.js';
 import { PlatformTenantsService } from './platform-tenants.service.js';
 
 @ApiTags('Platform · Tenants')
@@ -32,13 +32,6 @@ export class PlatformTenantsController {
   @ApiOperation({ summary: 'Create a new tenant / agency (super admin provision)' })
   create(@Body() dto: CreateTenantDto, @CurrentAuth() auth: AuthContext, @ClientMetaParam() meta: ClientMeta) {
     return this.tenants.createTenant(dto, this.actor(auth, meta));
-  }
-
-  @Get('domains')
-  @RequirePermissions(PERMISSIONS.PLATFORM_TENANTS_READ)
-  @ApiOperation({ summary: 'List all tenant domains across the platform' })
-  listDomains(@Query() q: TenantDomainsQuery) {
-    return this.tenants.listDomains(q);
   }
 
   @Get('creators')

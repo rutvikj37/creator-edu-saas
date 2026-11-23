@@ -54,7 +54,7 @@ const WORKSPACE_ROUTES_COVERED = [
   'GET /api/v1/creator/communities/:id/posts', 'POST /api/v1/creator/communities/:id/posts', 'GET /api/v1/creator/communities/posts/:postId',
   'POST /api/v1/creator/communities/posts/:postId/comments', 'POST /api/v1/creator/communities/posts/:postId/moderate', 'DELETE /api/v1/creator/communities/posts/:postId',
   'POST /api/v1/creator/communities/comments/:commentId/hide', 'GET /api/v1/creator/communities/reports', 'POST /api/v1/creator/communities/reports/:reportId/resolve',
-  'GET /api/v1/creator/memberships', 'POST /api/v1/creator/memberships', 'PATCH /api/v1/creator/memberships/:id', 'GET /api/v1/creator/memberships/:id/members',
+  'GET /api/v1/creator/memberships', 'POST /api/v1/creator/memberships', 'PATCH /api/v1/creator/memberships/:id', 'GET /api/v1/creator/memberships/:id/members', 'GET /api/v1/creator/memberships/stats', 'GET /api/v1/creator/memberships/:id', // :id and stats isolation asserted in community-membership.e2e-spec.ts
   // Phase 10 — AI (cross-tenant checks in ai.e2e-spec.ts)
   'GET /api/v1/creator/ai/usage', 'GET /api/v1/creator/ai/settings', 'PUT /api/v1/creator/ai/settings', 'POST /api/v1/creator/ai/course-outline',
   'POST /api/v1/creator/ai/courses/:id/apply-outline', 'POST /api/v1/creator/ai/lesson-draft', 'POST /api/v1/creator/ai/quiz-questions',
@@ -90,11 +90,14 @@ const WORKSPACE_ROUTES_COVERED = [
   // Phase 7 — commerce (cross-tenant behaviour is also exercised in commerce.e2e-spec.ts)
   'GET /api/v1/creator/payments/razorpay', 'PUT /api/v1/creator/payments/razorpay', 'POST /api/v1/creator/payments/razorpay/verify', 'PATCH /api/v1/creator/payments/razorpay', 'DELETE /api/v1/creator/payments/razorpay',
   'GET /api/v1/creator/coupons', 'POST /api/v1/creator/coupons', 'PATCH /api/v1/creator/coupons/:id', 'DELETE /api/v1/creator/coupons/:id',
-  'GET /api/v1/creator/analytics/conversions', // isolation asserted in conversion.e2e-spec.ts
+  'POST /api/v1/creator/orders/offline', 'GET /api/v1/creator/orders/:id/comments', 'POST /api/v1/creator/orders/:id/comments', 'PATCH /api/v1/creator/orders/:id', 'GET /api/v1/creator/settlements', 'GET /api/v1/creator/settlements.csv', 'GET /api/v1/creator/analytics/conversions', 'GET /api/v1/creator/analytics/reports', 'GET /api/v1/creator/analytics/exports', 'GET /api/v1/creator/analytics/exports/:id/download', // isolation asserted in conversion.e2e-spec.ts
   'GET /api/v1/creator/roles', 'GET /api/v1/creator/roles/permissions', 'POST /api/v1/creator/roles', 'PATCH /api/v1/creator/roles/:id', 'DELETE /api/v1/creator/roles/:id', // isolation asserted in custom-roles.e2e-spec.ts
   'GET /api/v1/creator/products', 'GET /api/v1/creator/products/:id', 'GET /api/v1/creator/products/:id/buyers', 'POST /api/v1/creator/products', 'PATCH /api/v1/creator/products/:id', 'POST /api/v1/creator/products/:id/status', // isolation asserted in digital-products.e2e-spec.ts
+  'GET /api/v1/creator/settings/security', 'PUT /api/v1/creator/settings/security', // isolation asserted in academy-security.e2e-spec.ts
+  'GET /api/v1/creator/coaching/stats', 'GET /api/v1/creator/coaching/programs', 'GET /api/v1/creator/coaching/programs/:id', 'POST /api/v1/creator/coaching/programs', 'PATCH /api/v1/creator/coaching/programs/:id', 'POST /api/v1/creator/coaching/programs/:id/status', 'GET /api/v1/creator/coaching/bookings', 'POST /api/v1/creator/coaching/bookings/:id/status', 'GET /api/v1/creator/coaching/team', 'GET /api/v1/creator/coaching/availability/me', 'PUT /api/v1/creator/coaching/availability/me', 'GET /api/v1/creator/coaching/availability/:userId', 'PUT /api/v1/creator/coaching/availability/:userId', 'POST /api/v1/creator/coaching/availability/me/google/connect', 'POST /api/v1/creator/coaching/availability/me/google/disconnect', 'POST /api/v1/creator/coaching/availability/:userId/google/connect', 'POST /api/v1/creator/coaching/availability/:userId/google/disconnect', // isolation asserted in coaching.e2e-spec.ts
   'GET /api/v1/creator/chat/conversations', 'GET /api/v1/creator/chat/conversations/:id', 'GET /api/v1/creator/chat/conversations/:id/messages', 'POST /api/v1/creator/chat/conversations/:id/messages', 'POST /api/v1/creator/chat/conversations/:id/read', 'POST /api/v1/creator/chat/conversations/:id/status', // isolation asserted in chat.e2e-spec.ts
   'GET /api/v1/creator/support-chat', 'GET /api/v1/creator/support-chat/messages', 'POST /api/v1/creator/support-chat/messages', 'POST /api/v1/creator/support-chat/read', // own thread only; asserted in chat.e2e-spec.ts
+  'GET /api/v1/creator/helpdesk/tickets', 'GET /api/v1/creator/helpdesk/summary', 'GET /api/v1/creator/helpdesk/team', 'GET /api/v1/creator/helpdesk/tickets/:id', 'POST /api/v1/creator/helpdesk/tickets/:id/messages', 'PATCH /api/v1/creator/helpdesk/tickets/:id', // isolation asserted in helpdesk.e2e-spec.ts
   'GET /api/v1/creator/live/integrations', 'POST /api/v1/creator/live/integrations/:provider/connect', 'DELETE /api/v1/creator/live/integrations/:provider', // isolation asserted in zoom-meet.e2e-spec.ts
   'GET /api/v1/creator/question-bank', 'GET /api/v1/creator/question-bank/tags', 'POST /api/v1/creator/question-bank', 'PUT /api/v1/creator/question-bank/:id', 'DELETE /api/v1/creator/question-bank/:id', // isolation asserted in question-bank.e2e-spec.ts
   'POST /api/v1/creator/courses/:id/lessons/:lessonId/quiz/questions/from-bank', 'POST /api/v1/creator/courses/:id/lessons/:lessonId/quiz/questions/:qid/save-to-bank',
@@ -102,6 +105,11 @@ const WORKSPACE_ROUTES_COVERED = [
   'GET /api/v1/creator/bundles', 'GET /api/v1/creator/bundles/:id', 'POST /api/v1/creator/bundles', 'PATCH /api/v1/creator/bundles/:id', 'POST /api/v1/creator/bundles/:id/status',
   'GET /api/v1/creator/orders', 'GET /api/v1/creator/orders/summary', 'GET /api/v1/creator/orders/:id', 'GET /api/v1/creator/orders/:id/invoice', 'POST /api/v1/creator/orders/:id/refunds',
   'GET /api/v1/creator/transactions',
+  // Sales funnels — isolation asserted in sales-funnels.e2e-spec.ts
+  'GET /api/v1/creator/sales/items', 'GET /api/v1/creator/sales/offers', 'POST /api/v1/creator/sales/offers', 'PUT /api/v1/creator/sales/offers/:id',
+  'POST /api/v1/creator/sales/offers/:id/status', 'DELETE /api/v1/creator/sales/offers/:id', 'GET /api/v1/creator/sales/links', 'POST /api/v1/creator/sales/links',
+  'PUT /api/v1/creator/sales/links/:id', 'DELETE /api/v1/creator/sales/links/:id', 'GET /api/v1/creator/sales/recovery', 'PUT /api/v1/creator/sales/recovery',
+  'GET /api/v1/creator/sales/recovery/stats', 'GET /api/v1/creator/sales/recovery/recent', 'GET /api/v1/creator/sales/tracking', 'PUT /api/v1/creator/sales/tracking',
   // Phase 7 — plan billing (cross-tenant checks in billing.e2e-spec.ts)
   'GET /api/v1/creator/billing/plans', 'POST /api/v1/creator/billing/quote', 'POST /api/v1/creator/billing/checkout', 'GET /api/v1/creator/billing/invoices',
   'GET /api/v1/creator/billing/invoices/:id', 'GET /api/v1/creator/billing/invoices/:id/pdf', 'POST /api/v1/creator/billing/invoices/:id/pay',

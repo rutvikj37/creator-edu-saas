@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { commissionMinor, computeQuote, proportional, computeLinesQuote } from './pricing.js';
+import { transactionFeeMinor, PASS_THROUGH_FEE_PERCENT, commissionMinor, computeQuote, proportional, computeLinesQuote } from './pricing.js';
 
 describe('computeQuote', () => {
   it('returns the price when there is no coupon or tax', () => {
@@ -72,5 +72,15 @@ describe('percentage coupon cap', () => {
     const q = computeLinesQuote([60_000, 40_000], [true, true], { type: 'PERCENT', value: 50, maxMinor: 10_000 }, null);
     expect(q.discount).toBe(10_000);
     expect(q.lines.map((l) => l.discount)).toEqual([6_000, 4_000]);
+  });
+});
+
+describe('transaction fee pass-through', () => {
+  it('charges 2.36% on the lines that pass it on', () => {
+    expect(PASS_THROUGH_FEE_PERCENT).toBe(2.36);
+    expect(transactionFeeMinor([100000], [true])).toBe(2360);
+    expect(transactionFeeMinor([100000, 50000], [false, true])).toBe(1180);
+    expect(transactionFeeMinor([100000], [false])).toBe(0);
+    expect(transactionFeeMinor([0], [true])).toBe(0);
   });
 });

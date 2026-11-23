@@ -4,10 +4,10 @@ interface InvoiceData {
   number: string;
   issuedAt: Date;
   orderNumber: string;
-  seller: { name: string; address?: string; gstin?: string | null; pan?: string | null };
+  seller: { name: string; address?: string; gstin?: string | null; pan?: string | null; details?: string | null; note?: string | null };
   buyer: { name?: string | null; email?: string | null; phone?: string | null; state?: string | null; gstin?: string | null };
   lines: { description: string; quantity: number; unitAmount: string; discountAmount: string; totalAmount: string }[];
-  totals: { currency: string; subtotal: string; discount: string; tax: string; taxRate: string | null; taxInclusive: boolean; total: string; paidVia: string; paymentId: string | null };
+  totals: { currency: string; subtotal: string; discount: string; tax: string; taxRate: string | null; taxInclusive: boolean; total: string; zeroRated?: boolean; paidVia: string; paymentId: string | null };
   refunded?: string | null;
 }
 
@@ -80,11 +80,18 @@ export async function renderInvoicePdf(inv: InvoiceData): Promise<Buffer> {
   row('Subtotal', money(inv.totals.subtotal, c));
   if (Number(inv.totals.discount)) row('Discount', `-${money(inv.totals.discount, c)}`);
   if (Number(inv.totals.tax)) row(`GST ${inv.totals.taxRate ?? ''}%${inv.totals.taxInclusive ? ' (included)' : ''}`, money(inv.totals.tax, c));
+  if (inv.totals.zeroRated) row('IGST 0% (export under LUT)', money('0', c));
   row('Total paid', money(inv.totals.total, c), bold);
   if (inv.refunded && Number(inv.refunded)) row('Refunded', `-${money(inv.refunded, c)}`);
 
   y -= 20;
   text(page, `Paid via ${inv.totals.paidVia}${inv.totals.paymentId ? ` · Payment ID ${inv.totals.paymentId}` : ''}`, L, y, font, 9, muted);
+  for (const [label, body] of [['Tax details', inv.seller.details], ['Note', inv.seller.note]] as const) {
+    if (!body) continue;
+    y -= 22;
+    text(page, label, L, y, bold, 9);
+    for (const para of body.split(/\r?\n/)) for (const l of wrap(para, 495)) { y -= 12; if (y < 80) break; text(page, l, L, y, font, 9, muted); }
+  }
   text(page, 'This is a computer-generated invoice and does not require a signature.', L, 60, font, 8, muted);
   return Buffer.from(await doc.save());
 }

@@ -22,6 +22,7 @@ export const SETTINGS: SettingDef[] = [
   { group: 'branding', key: 'branding.tagline', label: 'Tagline', schema: str(160), public: true },
   { group: 'branding', key: 'branding.logoUrl', label: 'Logo URL', schema: optUrl, public: true },
   { group: 'branding', key: 'branding.faviconUrl', label: 'Favicon URL', schema: optUrl, public: true },
+  { group: 'branding', key: 'branding.demoVideoUrl', label: 'Demo video link (YouTube, Vimeo or MP4) shown on the home page', schema: optUrl, public: true },
   { group: 'general', key: 'general.defaultCurrency', label: 'Default currency', schema: z.string().regex(/^[A-Z]{3}$/) },
   { group: 'general', key: 'general.defaultTimezone', label: 'Default time zone', schema: str(64).refine((tz) => isValidTimeZone(tz), 'Unknown time zone') },
   { group: 'general', key: 'general.defaultLocale', label: 'Default language', schema: z.enum(['en', 'hi', 'gu']) },

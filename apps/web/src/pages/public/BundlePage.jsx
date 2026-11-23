@@ -9,6 +9,7 @@ import { Button, Card, CardBody, ErrorState, Skeleton, toast } from '../../compo
 import { useAuth } from '../../context/AuthContext.jsx';
 import { formatMoney } from '../../utils/format.js';
 import { AcademyHeader } from './AcademyLandingPage.jsx';
+import { adAddToCart, useAdViewContent } from '../../utils/adTracking.js';
 
 /** Public page of a course bundle: what is included, the saving, buy or add to cart. */
 export function BundlePage() {
@@ -21,9 +22,10 @@ export function BundlePage() {
   const mine = useQuery({ queryKey: ['learn', 'enrollments'], queryFn: learnApi.enrollments, enabled: auth.status === 'authenticated' });
   const add = useMutation({
     mutationFn: () => cartApi.add({ bundleId: q.data.id }),
-    onSuccess: (cart) => { qc.setQueryData(['cart'], cart); toast.success('Added to your cart', { action: { label: 'View cart', onClick: () => navigate('/cart') } }); },
+    onSuccess: (cart) => { qc.setQueryData(['cart'], cart); adAddToCart('bundle', q.data); toast.success('Added to your cart', { action: { label: 'View cart', onClick: () => navigate('/cart') } }); },
     onError: (e) => toast.error(e.message),
   });
+  useAdViewContent('bundle', q.data);
   if (q.isError) return <div className="grid min-h-dvh place-items-center"><ErrorState title="Bundle not found" error={q.error} /></div>;
   const b = q.data;
   const color = site.data?.theme?.primaryColor;

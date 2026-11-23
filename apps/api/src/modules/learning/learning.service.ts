@@ -1,4 +1,5 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { PdfWatermarkService } from '../files/pdf-watermark.service.js';
 import { AppException } from '../../common/errors/app-exception.js';
 import { PrismaService } from '../../core/prisma/prisma.service.js';
 import { TENANT_PRISMA } from '../../core/tenancy/tenancy.module.js';
@@ -22,6 +23,7 @@ export class LearningService {
     private readonly files: FilesService,
     private readonly certificates: CertificatesService,
     private readonly events: AppEvents,
+    @Optional() private readonly watermark?: PdfWatermarkService,
   ) {}
 
   // ── enrolment ─────────────────────────────────────────────
@@ -114,7 +116,7 @@ export class LearningService {
     if (!lesson || lesson.course.deletedAt) throw AppException.notFound('Lesson not found');
     const enrollment = await this.enrollment(userId, lesson.courseId);
     if (!isEnrollmentUsable(enrollment)) {
-      if (lesson.isFreePreview && lesson.course.status === 'PUBLISHED') return { lesson, enrollment: null };
+      if (lesson.isFreePreview && lesson.course.status === 'PUBLISHED' && lesson.course.visibility !== 'PRIVATE') return { lesson, enrollment: null };
       throw AppException.forbidden(enrollment?.status === 'EXPIRED' ? 'Your access to this course has expired.' : 'Enrol in this course to open this lesson.');
     }
     const lock = this.lockInfo(lesson.course, enrollment!.startedAt, lesson.section, lesson);
@@ -129,7 +131,12 @@ export class LearningService {
     return {
       id: lesson.id, title: lesson.title, type: lesson.type, content: lesson.content, externalUrl: lesson.externalUrl, durationSeconds: lesson.durationSeconds, courseId: lesson.courseId,
       // Short-lived signed URL; downloads are only offered for DOWNLOAD lessons.
-      file: file && file.status === 'READY' ? { fileName: file.fileName, mimeType: file.mimeType, sizeBytes: Number(file.sizeBytes), url: await this.files.urlFor(file.id, apiOrigin, 600), downloadable: lesson.type === 'DOWNLOAD' } : null,
+      file: file && file.status === 'READY' ? {
+        fileName: file.fileName, mimeType: file.mimeType, sizeBytes: Number(file.sizeBytes), downloadable: lesson.type === 'DOWNLOAD',
+        // PDFs are stamped with the viewer's details when the academy turns on PDF watermarks.
+        url: (await this.watermark?.link(file as never, userId, apiOrigin, lesson.type === 'DOWNLOAD')) ?? await this.files.urlFor(file.id, apiOrigin, 600),
+        watermarked: Boolean(await this.watermark?.applies(file as never)),
+      } : null,
       hasVideo: lesson.type === 'VIDEO' && Boolean(lesson.videoAssetId),
       preview: !enrollment,
     };

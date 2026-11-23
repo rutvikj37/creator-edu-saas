@@ -8,6 +8,7 @@ import { Button, Card, CardBody, ErrorState, Skeleton, toast } from '../../compo
 import { useAuth } from '../../context/AuthContext.jsx';
 import { formatMoney } from '../../utils/format.js';
 import { AcademyHeader } from './AcademyLandingPage.jsx';
+import { adAddToCart, useAdViewContent } from '../../utils/adTracking.js';
 
 const size = (b) => (b == null ? '' : b > 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
 
@@ -21,7 +22,8 @@ export function ProductPage() {
   const q = useQuery({ queryKey: ['public', 'product', slug], queryFn: () => productsApi.publicGet(slug), retry: false });
   const mine = useQuery({ queryKey: ['learn', 'products'], queryFn: productsApi.mine, enabled: auth.status === 'authenticated' });
   const claim = useMutation({ mutationFn: () => productsApi.claim(q.data.id), onSuccess: () => { toast.success('Added to your downloads'); navigate('/learn/downloads'); }, onError: (e) => toast.error(e.message) });
-  const add = useMutation({ mutationFn: () => cartApi.add({ digitalProductId: q.data.id }), onSuccess: (c) => { qc.setQueryData(['cart'], c); toast.success('Added to your cart', { action: { label: 'View cart', onClick: () => navigate('/cart') } }); }, onError: (e) => toast.error(e.message) });
+  const add = useMutation({ mutationFn: () => cartApi.add({ digitalProductId: q.data.id }), onSuccess: (c) => { qc.setQueryData(['cart'], c); adAddToCart('product', q.data); toast.success('Added to your cart', { action: { label: 'View cart', onClick: () => navigate('/cart') } }); }, onError: (e) => toast.error(e.message) });
+  useAdViewContent('product', q.data);
   if (q.isError) return <div className="grid min-h-dvh place-items-center"><ErrorState title="Product not found" error={q.error} /></div>;
   const p = q.data;
   const color = site.data?.theme?.primaryColor;

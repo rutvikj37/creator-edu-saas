@@ -1,9 +1,10 @@
 import { Global, Module } from '@nestjs/common';
 import { CreatorMembershipsController, MembershipsPublicController } from './memberships.controller.js';
 import { MembershipsService } from './memberships.service.js';
+import { FilesModule } from '../files/files.module.js';
 
 @Global()
-@Module({ controllers: [CreatorMembershipsController, MembershipsPublicController], providers: [MembershipsService], exports: [MembershipsService] })
+@Module({ imports: [FilesModule], controllers: [CreatorMembershipsController, MembershipsPublicController], providers: [MembershipsService], exports: [MembershipsService] })
 export class MembershipsModule {}
 
 @Global()

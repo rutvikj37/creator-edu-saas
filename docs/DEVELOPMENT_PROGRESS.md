@@ -190,6 +190,14 @@ Legend: ⬜ not started · 🟨 in progress · ✅ done (meets Definition of Don
 
 Bunny Stream as primary video host (direct TUS uploads, webhook + API-verified processing status, token-authenticated playback), encrypted Google Drive backups with verification and restore, usage tracking and Super Admin dashboards. Full record, test mapping and items to verify with real accounts: [video-management/implementation-progress.md](video-management/implementation-progress.md). Verified by API e2e 108 ✅, API unit 103 ✅, web 96 ✅.
 
+## Sales funnels, ad tracking and Super Admin tools (✅ 2026-11-09)
+
+**Delivered (API)**: models `SalesOffer` (BUMP/UPSELL), `SalesOfferResponse`, `PaymentLink`, `EmailTemplateOverride`; order fields for payment link and recovery stage; order item `source`/`offerId` · checkout resolves payment links, upsells and up to 3 bumps (ownership-checked; promo codes never discount bump/upsell prices; a link without "allow coupons" refuses buyer codes) · `GET/POST /learn/orders/:id/upsell…` · `creator/sales/*` (items, offers, links, recovery, tracking) and public `GET /public/pay/:code` · recovery runs in the 5-minute commerce job: claims each stage atomically, skips settled checkouts, email (respects the orders preference) and WhatsApp · `/public/site` exposes tracking IDs · Super Admin `platform/integrations`, `platform/domains`, `platform/analytics`, `platform/email-templates` (placeholder validation, required placeholders, audit, 30 s override cache in `MailService`).
+
+**Delivered (Web)**: Super Admin Integrations, Domains, Platform analytics, Email templates (list + editor with live preview) · creator Upsells & bumps, Payment links, Cart recovery, Tracking pixels · checkout: bump checkboxes, `/checkout/link/:code`, `/checkout/offer/:id?from=`, `?coupon=` prefill, locked coupon for links · public `/pay/:code` · upsell card with countdown on the order page · `utils/adTracking.js` loads Meta Pixel / gtag / GTM on academy pages.
+
+**Verification**: API e2e 143 ✅ (new: sales funnels 6, platform tools 4; isolation covers all 16 `creator/sales` routes) · API unit 114 ✅ · web 165 ✅ · lint ✅ · production build ✅. Local note: the root `.env` has empty `LIVEKIT_*`/`ZOOM_*`/`PLUGNMEET_*` entries, which make the 8 live-class e2e tests fail locally (they pass without those empty lines). **Not verified**: real pixel/GA4 delivery, WhatsApp delivery, click-through in a browser with an admin session.
+
 ## Change log of this file
 - 2026-11-04 — Phase 0 documents drafted and approved.
 - 2026-11-04 — Phase 1 foundation completed.
@@ -211,3 +219,4 @@ Bunny Stream as primary video host (direct TUS uploads, webhook + API-verified p
 - 2026-11-05 — Course reviews and ratings.
 - 2026-11-05 — Shared question bank.
 - 2026-11-05 — Zoom and Google Meet integration.
+- 2026-11-09 — Sales funnels (bumps, upsells, payment links, cart recovery), ad tracking, Super Admin integrations/domains/analytics/email templates.

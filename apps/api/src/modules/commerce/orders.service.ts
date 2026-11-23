@@ -20,9 +20,11 @@ import { MembershipsService } from '../memberships/memberships.service.js';
 import { enrollmentExpiry, isEnrollmentUsable } from '../learning/access.js';
 import { CouponsService } from './coupons.service.js';
 import { DigitalProductsService } from './digital-products.service.js';
+import { CoachingService } from './coaching/coaching.service.js';
+import { FunnelService, itemKey } from './funnel.service.js';
 import { GatewayService } from './gateway.service.js';
 import { renderInvoicePdf } from './invoice-pdf.js';
-import { commissionMinor, computeLinesQuote, proportional, type Quote } from './pricing.js';
+import { commissionMinor, computeLinesQuote, proportional, transactionFeeMinor, type Quote } from './pricing.js';
 import { fromMinor, toMinor } from './providers/money.js';
 import { PaymentProviders } from './providers/registry.js';
 import { type NormalizedPayment, ProviderError } from './providers/types.js';
@@ -31,6 +33,8 @@ import { type NormalizedPayment, ProviderError } from './providers/types.js';
 const ORDER_TTL_MS = 2 * 3600_000;
 /** Orders in these states become PAID when a matching capture is confirmed (money was taken). */
 const PAYABLE = ['PENDING', 'PAYMENT_INITIATED', 'FAILED', 'EXPIRED', 'CANCELLED'] as const;
+export const OFFLINE_MODES = ['CASH', 'BANK_TRANSFER', 'UPI', 'CHEQUE', 'OTHER'] as const;
+const OFFLINE_LABEL: Record<string, string> = { CASH: 'Cash', BANK_TRANSFER: 'Bank transfer', UPI: 'UPI (direct)', CHEQUE: 'Cheque', OTHER: 'Offline payment' };
 
 export interface BillingInput {
   name: string;
@@ -48,22 +52,49 @@ export interface ProductRef {
   webinarId?: string;
   /** A paid digital product (download). */
   digitalProductId?: string;
+  /** A paid 1:1 coaching program. */
+  coachingProgramId?: string;
   bundleId?: string;
   membershipPlanId?: string;
   /** Buy everything in the student's cart (courses and bundles). */
   fromCart?: boolean;
+  /** Buyer's country (ISO 2) for zero-rated exports; defaults to the account's country. */
+  country?: string;
+  /** Buy through a shareable payment link (replaces the fields above). */
+  paymentLinkCode?: string;
+  /** Take a post-purchase upsell offered after `sourceOrderId` (replaces the fields above). */
+  upsellOfferId?: string;
+  sourceOrderId?: string;
+  /** Order bumps ticked on the checkout page. */
+  bumpOfferIds?: string[];
 }
 
 /** One thing being bought. `grant` = courses it unlocks. */
 interface Line {
-  kind: 'course' | 'bundle' | 'membership' | 'webinar' | 'product';
+  kind: 'course' | 'bundle' | 'membership' | 'webinar' | 'product' | 'coaching';
   id: string;
   title: string;
   slug: string | null;
   unitMinor: number;
   currency: string;
   grant: string[];
+  /** How the line was added when it isn't a plain purchase. */
+  source?: 'BUMP' | 'UPSELL' | 'LINK';
+  offerId?: string;
+  /** Promo codes don't discount bump and upsell prices. */
+  couponable?: boolean;
+  /** The item's own GST display (true = included); undefined = the academy's setting. */
+  taxInclusive?: boolean;
+  /** A lifetime membership: bought once. */
+  lifetime?: boolean;
+  /** The seller passes the Razorpay charge to the buyer as a transaction fee. */
+  passFee?: boolean;
 }
+
+/** Order states a buyer can come back from (reminders, recovery). */
+const UNPAID = ['PENDING', 'PAYMENT_INITIATED', 'FAILED', 'EXPIRED'] as const;
+/** recoveryStage meaning "no reminders for this order" (a newer order or a purchase took over). */
+export const RECOVERY_DONE = 99;
 
 export interface CheckoutInput extends ProductRef {
   couponCode?: string | null;
@@ -97,11 +128,8 @@ export function fmtMoney(minor: number, currency: string) {
   return `${currency} ${Number(fromMinor(minor, currency)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-/** Indian financial year label used in invoice series, e.g. 2026-27 for dates from 1 April 2026. */
-export function financialYear(d: Date) {
-  const y = d.getUTCMonth() >= 3 ? d.getUTCFullYear() : d.getUTCFullYear() - 1;
-  return `${y}-${String((y + 1) % 100).padStart(2, '0')}`;
-}
+import { financialYear, invoiceNumber } from './invoice-number.js';
+export { financialYear };
 
 export async function nextSequence(tx: { $executeRaw: any; $queryRaw: any }, tenantId: string, name: string): Promise<number> {
   await tx.$executeRaw`INSERT INTO TenantSequence (tenantId, name, value) VALUES (${tenantId}, ${name}, 1) ON DUPLICATE KEY UPDATE value = value + 1`;
@@ -137,6 +165,8 @@ export class OrdersService {
     private readonly affiliates: AffiliatesService,
     private readonly memberships: MembershipsService,
     private readonly digital: DigitalProductsService,
+    private readonly coaching: CoachingService,
+    private readonly funnel: FunnelService,
   ) {}
 
   // ── views ─────────────────────────────────────────────────
@@ -145,9 +175,10 @@ export class OrdersService {
     return {
       id: o.id, number: o.number, status: o.status, currency: o.currency,
       subtotalAmount: m(o.subtotalAmount), discountAmount: m(o.discountAmount), taxAmount: m(o.taxAmount), totalAmount: m(o.totalAmount), refundedAmount: m(o.refundedAmount),
-      taxRate: m(o.taxRate), taxInclusive: o.taxInclusive, couponCode: o.couponCode, provider: o.provider, billing: o.billing,
+      taxRate: m(o.taxRate), taxInclusive: o.taxInclusive, transactionFeeAmount: m(o.transactionFeeAmount ?? 0), couponCode: o.couponCode, provider: o.provider, billing: o.billing, paymentMode: o.paymentMode ?? (o.provider ?? null), externalReference: o.externalReference ?? null,
       paidAt: o.paidAt, failureReason: o.failureReason, expiresAt: o.expiresAt, createdAt: o.createdAt, userId: o.userId,
-      items: o.items?.map((i: any) => ({ id: i.id, courseId: i.courseId, bundleId: i.bundleId ?? null, membershipPlanId: i.membershipPlanId ?? null, liveClassId: i.liveClassId ?? null, digitalProductId: i.digitalProductId ?? null, title: i.title, unitAmount: m(i.unitAmount), discountAmount: m(i.discountAmount), totalAmount: m(i.totalAmount) })),
+      items: o.items?.map((i: any) => ({ id: i.id, courseId: i.courseId, bundleId: i.bundleId ?? null, membershipPlanId: i.membershipPlanId ?? null, liveClassId: i.liveClassId ?? null, digitalProductId: i.digitalProductId ?? null, coachingProgramId: i.coachingProgramId ?? null, title: i.title, unitAmount: m(i.unitAmount), discountAmount: m(i.discountAmount), totalAmount: m(i.totalAmount), source: i.source ?? null, offerId: i.offerId ?? null })),
+      paymentLinkId: o.paymentLinkId ?? null,
       payments: o.payments?.map((p: any) => ({
         id: p.id, provider: p.provider, providerOrderId: p.providerOrderId, providerPaymentId: p.providerPaymentId, status: p.status,
         amount: m(p.amount), currency: p.currency, method: p.method, feeAmount: m(p.feeAmount), failureReason: p.failureReason, capturedAt: p.capturedAt, createdAt: p.createdAt,
@@ -183,7 +214,10 @@ export class OrdersService {
   private async product(ref: { courseId?: string; membershipPlanId?: string }): Promise<Line> {
     if (ref.membershipPlanId) {
       const p = await this.memberships.sellable(ref.membershipPlanId);
-      return { kind: 'membership', id: p.id, title: `${p.name} membership (${p.interval === 'YEAR' ? 'yearly' : 'monthly'})`, slug: null, unitMinor: toMinor(p.priceAmount, p.currency), currency: p.currency, grant: [] };
+      return {
+        kind: 'membership', id: p.id, title: `${p.name} membership (${p.lifetime ? 'lifetime' : p.interval === 'YEAR' ? 'yearly' : 'monthly'})`, slug: null, unitMinor: toMinor(p.priceAmount, p.currency), currency: p.currency, grant: [],
+        ...(p.taxExclusive === null || p.taxExclusive === undefined ? {} : { taxInclusive: !p.taxExclusive }), lifetime: p.lifetime, passFee: p.passTransactionFee,
+      };
     }
     if (!ref.courseId) throw AppException.validation([{ field: 'courseId', message: 'Choose what to buy' }]);
     const c = await this.sellableCourse(ref.courseId);
@@ -201,6 +235,14 @@ export class OrdersService {
     if (!p) throw AppException.notFound('Product not found');
     if (Number(p.priceAmount) <= 0) throw AppException.conflict('This product is free — get it on its page.');
     return { kind: 'product', id: p.id, title: p.title.slice(0, 200), slug: p.slug, unitMinor: toMinor(p.priceAmount, p.currency), currency: p.currency, grant: [] };
+  }
+
+  /** A published, paid coaching program with at least one coach and session. */
+  async sellableCoaching(id: string): Promise<Line> {
+    const p = await this.db.coachingProgram.findFirst({ where: { id, status: 'PUBLISHED' } });
+    if (!p) throw AppException.notFound('Coaching program not found');
+    if (Number(p.priceAmount) <= 0) throw AppException.conflict('This program is free — get it on its page.');
+    return { kind: 'coaching', id: p.id, title: `${p.title} (1:1 coaching)`.slice(0, 200), slug: p.slug, unitMinor: toMinor(p.priceAmount, p.currency), currency: p.currency, grant: [], passFee: p.passTransactionFee };
   }
 
   /** A paid webinar with upcoming sessions and seats left. */
@@ -223,6 +265,68 @@ export class OrdersService {
     return { kind: 'bundle', id: b.id, title: `${b.title} (bundle)`, slug: b.slug, unitMinor: toMinor(b.priceAmount, b.currency), currency: b.currency, grant: ids };
   }
 
+  /** Any sellable item by kind, as a checkout line at its own price. */
+  async sellableItem(kind: string, id: string): Promise<Line> {
+    if (kind === 'course') return this.product({ courseId: id });
+    if (kind === 'membership') return this.product({ membershipPlanId: id });
+    if (kind === 'bundle') return this.sellableBundle(id);
+    if (kind === 'product') return this.sellableProduct(id);
+    if (kind === 'webinar') return this.sellableWebinar(id);
+    if (kind === 'coaching') return this.sellableCoaching(id);
+    throw AppException.validation([{ field: 'itemKind', message: 'Unknown item type' }]);
+  }
+
+  /**
+   * Everything a checkout sells: the main lines (cart, item, payment link or upsell), the bumps on offer
+   * for them and the bumps the buyer ticked. Owned items and unavailable offers are refused or skipped.
+   */
+  private async resolve(userId: string, ref: ProductRef) {
+    let lines: Line[];
+    let link: Awaited<ReturnType<FunnelService['link']>> | null = null;
+    let upsell: { offerId: string; sourceOrderId: string } | null = null;
+    if (ref.paymentLinkCode) {
+      link = await this.funnel.link(ref.paymentLinkCode);
+      const base = await this.sellableItem(link.itemKind, link.itemId);
+      const custom = link.priceAmount !== null && base.currency === link.currency;
+      lines = [{ ...base, source: 'LINK', unitMinor: custom ? toMinor(link.priceAmount!, base.currency) : base.unitMinor }];
+    } else if (ref.upsellOfferId) {
+      if (!ref.sourceOrderId) throw AppException.validation([{ field: 'sourceOrderId', message: 'Missing the order this offer follows' }]);
+      const offer = await this.funnel.upsell(userId, ref.sourceOrderId, ref.upsellOfferId);
+      const base = await this.sellableItem(offer.itemKind, offer.itemId);
+      if (base.currency !== offer.currency) throw AppException.conflict('This offer is no longer available');
+      lines = [{ ...base, source: 'UPSELL', offerId: offer.id, couponable: false, unitMinor: toMinor(offer.priceAmount, offer.currency) }];
+      upsell = { offerId: offer.id, sourceOrderId: ref.sourceOrderId };
+    } else {
+      lines = await this.lines(userId, ref);
+    }
+    if (!link && !upsell) await this.assertBuyable(userId, lines);
+
+    const bumps: { offer: { id: string; headline: string; description: string | null }; line: Line; regularMinor: number }[] = [];
+    if (!link && !upsell) {
+      const cur = lines[0].currency;
+      for (const o of await this.funnel.bumpOffers(lines.map((l) => itemKey(l.kind, l.id)), cur)) {
+        if (bumps.length >= 3) break;
+        try {
+          const base = await this.sellableItem(o.itemKind, o.itemId);
+          if (base.currency !== cur) continue;
+          const line: Line = { ...base, source: 'BUMP', offerId: o.id, couponable: false, unitMinor: toMinor(o.priceAmount, cur) };
+          await this.assertBuyable(userId, [...lines, line]);
+          bumps.push({ offer: o, line, regularMinor: base.unitMinor });
+        } catch {
+          // Not sellable right now or already owned: simply not offered.
+        }
+      }
+    }
+    const chosen = [...new Set(ref.bumpOfferIds ?? [])];
+    for (const id of chosen) {
+      const b = bumps.find((x) => x.offer.id === id);
+      if (!b) throw AppException.validation([{ field: 'bumpOfferIds', message: 'An add-on you picked is no longer available. Refresh and try again.' }]);
+      lines.push(b.line);
+    }
+    if (link || upsell || chosen.length) await this.assertBuyable(userId, lines);
+    return { lines, link, upsell, bumps, chosen };
+  }
+
   private async lines(userId: string, ref: ProductRef): Promise<Line[]> {
     let lines: Line[];
     if (ref.fromCart) {
@@ -236,11 +340,12 @@ export class OrdersService {
       lines = [await this.sellableWebinar(ref.webinarId)];
     } else if (ref.digitalProductId) {
       lines = [await this.sellableProduct(ref.digitalProductId)];
+    } else if (ref.coachingProgramId) {
+      lines = [await this.sellableCoaching(ref.coachingProgramId)];
     } else {
       lines = [await this.product(ref)];
     }
     if (new Set(lines.map((l) => l.currency)).size > 1) throw AppException.conflict('Items in your cart are priced in different currencies. Buy them separately.');
-    await this.assertBuyable(userId, lines);
     return lines;
   }
 
@@ -255,6 +360,12 @@ export class OrdersService {
     for (const p of lines.filter((l) => l.kind === 'product')) {
       if (await this.db.digitalProductAccess.findFirst({ where: { productId: p.id, userId, revokedAt: null } })) throw AppException.conflict(lines.length > 1 ? `You already have “${p.title}”. Remove it from your cart.` : 'You already have this product. Find it under My downloads.');
     }
+    for (const m of lines.filter((l) => l.kind === 'membership' && l.lifetime)) {
+      if (await this.db.membership.findFirst({ where: { userId, planId: m.id, status: 'ACTIVE', currentPeriodEnd: { gt: new Date() } } })) throw AppException.conflict('You already have lifetime access to this membership.');
+    }
+    for (const c of lines.filter((l) => l.kind === 'coaching')) {
+      if (await this.db.coachingAccess.findFirst({ where: { programId: c.id, userId, revokedAt: null } })) throw AppException.conflict('You already have this coaching program. Book your sessions under My coaching.');
+    }
     for (const w of lines.filter((l) => l.kind === 'webinar')) {
       const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
       const reg = await this.db.webinarRegistration.findFirst({ where: { liveClassId: w.id, cancelledAt: null, OR: [{ userId }, ...(user ? [{ email: user.email.toLowerCase() }] : [])] } });
@@ -266,38 +377,58 @@ export class OrdersService {
     }
   }
 
-  private async price(userId: string, lines: Line[], couponCode?: string | null) {
+  private async price(userId: string, lines: Line[], couponCode?: string | null, buyerCountry?: string | null) {
     const tenantId = this.ctx.requireTenantId();
     const cur = lines[0].currency;
-    const coupon = couponCode ? await this.coupons.evaluateLines(couponCode, lines, userId, cur) : null;
-    const tax = await this.taxRule(tenantId);
-    const q = computeLinesQuote(lines.map((l) => l.unitMinor), coupon?.eligible ?? lines.map(() => true), coupon?.rule ?? null, tax);
+    const couponable = lines.filter((l) => l.couponable !== false);
+    if (couponCode && !couponable.length) throw AppException.validation([{ field: 'couponCode', message: 'Promo codes can’t be used with this offer' }]);
+    const coupon = couponCode ? await this.coupons.evaluateLines(couponCode, couponable, userId, cur) : null;
+    let k = 0;
+    const eligible = lines.map((l) => (l.couponable === false ? false : coupon ? coupon.eligible[k++] : true));
+    const rule = await this.taxRule(tenantId);
+    // Items can set their own GST display; it applies when every item in the order agrees.
+    const own = [...new Set(lines.map((l) => l.taxInclusive))];
+    let tax = rule && own.length === 1 && own[0] !== undefined ? { ...rule, inclusive: own[0] } : rule;
+    // Exports under a valid LUT are zero-rated: no GST for buyers outside India.
+    if (tax && buyerCountry && buyerCountry !== 'IN' && (await this.prisma.tenantBusinessProfile.findUnique({ where: { tenantId }, select: { exportsUnderLut: true } }))?.exportsUnderLut) tax = { ...tax, rate: 0 };
+    const base = computeLinesQuote(lines.map((l) => l.unitMinor), eligible, coupon?.rule ?? null, tax);
+    // Sellers can pass the gateway charge to buyers ("Charge transaction fee"); it isn't taxed or discounted.
+    const fee = transactionFeeMinor(base.lines.map((l) => l.total), lines.map((l) => Boolean(l.passFee)));
+    const q = { ...base, total: base.total + fee, net: base.net + fee, fee };
     return { coupon, tax, q, cur };
   }
 
   async quote(userId: string, ref: ProductRef, couponCode?: string | null) {
-    const lines = await this.lines(userId, ref);
+    const { lines, link, upsell, bumps, chosen } = await this.resolve(userId, ref);
     const tenantId = this.ctx.requireTenantId();
-    const { coupon, tax, q, cur } = await this.price(userId, lines, couponCode);
+    const buyer = await this.prisma.user.findUnique({ where: { id: userId }, select: { country: true } });
+    const { coupon, tax, q, cur } = await this.price(userId, lines, this.funnel.linkCoupon(link, couponCode), ref.country ?? buyer?.country);
     const first = lines[0];
+    const main = lines.filter((l) => l.source !== 'BUMP');
     const active = (await this.entitlements.get(tenantId)).active;
     const selling = active ? await this.gateways.sellingAccount() : null;
     return {
-      kind: lines.length > 1 ? ('cart' as const) : first.kind, course: { id: first.id, title: first.title, slug: first.slug }, currency: cur, couponCode: coupon?.code ?? null,
-      items: lines.map((l, i) => ({ kind: l.kind, id: l.id, title: l.title, slug: l.slug, unit: fromMinor(l.unitMinor, cur), discount: fromMinor(q.lines[i].discount, cur), total: fromMinor(q.lines[i].total, cur), courseCount: l.grant.length })),
+      kind: main.length > 1 ? ('cart' as const) : first.kind, course: { id: first.id, title: first.title, slug: first.slug }, currency: cur, couponCode: coupon?.code ?? null,
+      items: lines.map((l, i) => ({ kind: l.kind, id: l.id, title: l.title, slug: l.slug, unit: fromMinor(l.unitMinor, cur), discount: fromMinor(q.lines[i].discount, cur), total: fromMinor(q.lines[i].total, cur), courseCount: l.grant.length, source: l.source ?? null, offerId: l.offerId ?? null })),
       subtotal: fromMinor(q.subtotal, cur), discount: fromMinor(q.discount, cur), tax: fromMinor(q.tax, cur), total: fromMinor(q.total, cur),
-      taxRate: tax?.rate ?? null, taxInclusive: tax?.inclusive ?? true, paymentsEnabled: Boolean(selling) || (q.total === 0 && active),
+      taxRate: tax?.rate ?? null, taxInclusive: tax?.inclusive ?? true, transactionFee: fromMinor(q.fee, cur), paymentsEnabled: Boolean(selling) || (q.total === 0 && active),
+      bumps: bumps.map((b) => ({
+        offerId: b.offer.id, headline: b.offer.headline, description: b.offer.description, kind: b.line.kind, itemId: b.line.id, title: b.line.title, slug: b.line.slug,
+        price: fromMinor(b.line.unitMinor, cur), regularPrice: fromMinor(b.regularMinor, cur), selected: chosen.includes(b.offer.id),
+      })),
+      paymentLink: link ? { code: link.code, title: link.title, note: link.note, couponLocked: !link.allowCoupons } : null,
+      upsell,
     };
   }
 
-  private static signature(items: { courseId?: string | null; bundleId?: string | null; membershipPlanId?: string | null; liveClassId?: string | null; digitalProductId?: string | null }[]) {
-    return items.map((i) => (i.bundleId ? `b:${i.bundleId}` : i.membershipPlanId ? `m:${i.membershipPlanId}` : i.liveClassId ? `w:${i.liveClassId}` : i.digitalProductId ? `p:${i.digitalProductId}` : `c:${i.courseId}`)).sort().join(',');
+  private static signature(items: { courseId?: string | null; bundleId?: string | null; membershipPlanId?: string | null; liveClassId?: string | null; digitalProductId?: string | null; coachingProgramId?: string | null }[]) {
+    return items.map((i) => (i.coachingProgramId ? `k:${i.coachingProgramId}` : i.bundleId ? `b:${i.bundleId}` : i.membershipPlanId ? `m:${i.membershipPlanId}` : i.liveClassId ? `w:${i.liveClassId}` : i.digitalProductId ? `p:${i.digitalProductId}` : `c:${i.courseId}`)).sort().join(',');
   }
 
   async checkout(userId: string, input: CheckoutInput, idempotencyKey?: string) {
     const tenantId = this.ctx.requireTenantId();
-    const lines = await this.lines(userId, input);
-    const sig = OrdersService.signature(lines.map((l) => ({ courseId: l.kind === 'course' ? l.id : null, bundleId: l.kind === 'bundle' ? l.id : null, membershipPlanId: l.kind === 'membership' ? l.id : null, liveClassId: l.kind === 'webinar' ? l.id : null, digitalProductId: l.kind === 'product' ? l.id : null })));
+    const { lines, link, upsell } = await this.resolve(userId, input);
+    const sig = OrdersService.signature(lines.map((l) => ({ courseId: l.kind === 'course' ? l.id : null, bundleId: l.kind === 'bundle' ? l.id : null, membershipPlanId: l.kind === 'membership' ? l.id : null, liveClassId: l.kind === 'webinar' ? l.id : null, digitalProductId: l.kind === 'product' ? l.id : null, coachingProgramId: l.kind === 'coaching' ? l.id : null })));
     if (idempotencyKey) {
       const prior = await this.db.order.findFirst({ where: { userId, idempotencyKey }, include: { items: true } });
       if (prior) {
@@ -306,7 +437,7 @@ export class OrdersService {
       }
     }
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
-    const { coupon, tax, q, cur } = await this.price(userId, lines, input.couponCode);
+    const { coupon, tax, q, cur } = await this.price(userId, lines, this.funnel.linkCoupon(link, input.couponCode), input.billing.country ?? user.country);
     if (!(await this.entitlements.get(tenantId)).active) throw AppException.conflict('This academy is not accepting new purchases right now.');
     if (q.total > 0 && !(await this.gateways.sellingAccount())) throw AppException.integrationNotConfigured('Online payments for this academy');
     if (q.total > 0 && q.total < 100 && cur === 'INR') throw AppException.validation([{ field: 'couponCode', message: 'The amount to pay must be at least ₹1' }]);
@@ -318,17 +449,23 @@ export class OrdersService {
     const affiliateId = await this.affiliates.attribute(input.affiliateCode, userId);
     const order = await this.db.$transaction(async (tx) => {
       // A new checkout supersedes this buyer's earlier unpaid orders for any of the same items.
-      const ref = (l: Line) => (l.kind === 'course' ? { courseId: l.id } : l.kind === 'bundle' ? { bundleId: l.id } : l.kind === 'webinar' ? { liveClassId: l.id } : l.kind === 'product' ? { digitalProductId: l.id } : { membershipPlanId: l.id });
+      const ref = (l: Line) => (l.kind === 'course' ? { courseId: l.id } : l.kind === 'bundle' ? { bundleId: l.id } : l.kind === 'webinar' ? { liveClassId: l.id } : l.kind === 'product' ? { digitalProductId: l.id } : l.kind === 'coaching' ? { coachingProgramId: l.id } : { membershipPlanId: l.id });
       const match = lines.map(ref);
       const open = await tx.order.findMany({ where: { userId, status: { in: ['PENDING', 'PAYMENT_INITIATED'] }, items: { some: { OR: match } } }, select: { id: true } });
       if (open.length) await tx.order.updateMany({ where: { id: { in: open.map((o) => o.id) } }, data: { status: 'CANCELLED', failureReason: 'Superseded by a newer checkout' } });
+      // Reminders already sent for these items carry over, so coming back doesn't restart the sequence.
+      const reminded = await tx.order.aggregate({
+        where: { userId, createdAt: { gte: new Date(Date.now() - 7 * 86_400_000) }, recoveryStage: { gt: 0, lt: RECOVERY_DONE }, items: { some: { OR: match } } },
+        _max: { recoveryStage: true },
+      });
       const n = await nextSequence(tx, tenantId, 'order');
       const o = await tx.order.create({
         data: {
           number: `ORD-${String(n).padStart(6, '0')}`, userId, currency: cur,
-          subtotalAmount: fromMinor(q.subtotal, cur), discountAmount: fromMinor(q.discount, cur), taxAmount: fromMinor(q.tax, cur), totalAmount: fromMinor(q.total, cur),
+          subtotalAmount: fromMinor(q.subtotal, cur), discountAmount: fromMinor(q.discount, cur), taxAmount: fromMinor(q.tax, cur), totalAmount: fromMinor(q.total, cur), transactionFeeAmount: fromMinor(q.fee, cur),
           taxRate: tax?.rate ?? null, taxInclusive: tax?.inclusive ?? true, couponId: coupon?.id ?? null, couponCode: coupon?.code ?? null,
           billing, idempotencyKey: idempotencyKey ?? null, expiresAt: new Date(Date.now() + ORDER_TTL_MS), affiliateId, attribution: cleanAttribution(input.attribution),
+          paymentLinkId: link?.id ?? null, recoveryStage: reminded._max.recoveryStage ?? 0,
         } as never,
       });
       for (const [i, l] of lines.entries()) {
@@ -336,15 +473,41 @@ export class OrdersService {
           data: {
             orderId: o.id, ...ref(l), grantCourseIds: l.grant.length ? l.grant : undefined,
             title: l.title.slice(0, 200), unitAmount: fromMinor(q.lines[i].unit, cur), discountAmount: fromMinor(q.lines[i].discount, cur), totalAmount: fromMinor(q.lines[i].total, cur),
+            offerId: l.offerId ?? null, source: l.source ?? null,
           } as never,
         });
       }
       return o;
     });
+    if (upsell) await this.funnel.recordUpsellCheckout(userId, upsell.offerId, upsell.sourceOrderId);
     await this.audit.record({ action: 'order.create', tenantId, actorUserId: userId, actorRealm: 'TENANT', targetType: 'Order', targetId: order.id, after: { number: order.number, total: order.totalAmount.toString(), coupon: coupon?.code ?? null, items: lines.length } });
 
     if (q.total === 0) await this.fulfil(order.id, null, q);
     return this.getForUser(userId, order.id);
+  }
+
+  /** The one-time offer to show after this paid order, or null. */
+  async upsellFor(userId: string, orderId: string) {
+    const { order, offers } = await this.funnel.upsellsAfter(userId, orderId);
+    if (!order) return null;
+    for (const o of offers) {
+      try {
+        const base = await this.sellableItem(o.itemKind, o.itemId);
+        if (base.currency !== o.currency) continue;
+        await this.assertBuyable(userId, [base]);
+        return {
+          offerId: o.id, sourceOrderId: order.id, headline: o.headline, description: o.description, kind: base.kind, itemId: base.id, title: base.title, slug: base.slug,
+          currency: o.currency, price: o.priceAmount.toString(), regularPrice: fromMinor(base.unitMinor, o.currency), expiresAt: new Date(order.paidAt!.getTime() + o.windowMinutes * 60_000),
+        };
+      } catch {
+        // Unavailable or already owned: try the next offer.
+      }
+    }
+    return null;
+  }
+
+  declineUpsell(userId: string, orderId: string, offerId: string) {
+    return this.funnel.decline(userId, orderId, offerId);
   }
 
   async getForUser(userId: string, id: string) {
@@ -477,7 +640,7 @@ export class OrdersService {
   }
 
   /** Returns false when another path already fulfilled the order. */
-  private async fulfil(orderId: string, paid: { paymentId: string; result: NormalizedPayment } | null, q: Quote): Promise<boolean> {
+  private async fulfil(orderId: string, paid: { paymentId: string; result: NormalizedPayment } | null, q: Quote, opts: { offline?: { mode: string; reference: string | null }; notify?: boolean } = {}): Promise<boolean> {
     const tenantId = this.ctx.requireTenantId();
     const ent = await this.entitlements.get(tenantId);
     const commissionPct = ent.features[FEATURES.COMMISSION_PERCENT.key]?.limit ?? 0;
@@ -516,6 +679,7 @@ export class OrdersService {
       const bundles = order.items.map((i) => i.bundleId).filter((x): x is string => Boolean(x));
       const products = order.items.map((i) => i.digitalProductId).filter((x): x is string => Boolean(x));
       for (const pid of products) await this.digital.grant(tx, order.userId, pid, 'PURCHASE', order.id);
+      for (const item of order.items) if (item.coachingProgramId) await this.coaching.grant(tx, order.userId, item.coachingProgramId, 'PURCHASE', order.id);
       await tx.cartItem.deleteMany({ where: { userId: order.userId, OR: [{ courseId: { in: granted } }, ...(bundles.length ? [{ bundleId: { in: bundles } }] : []), ...(products.length ? [{ digitalProductId: { in: products } }] : [])] } });
       if (order.couponId) {
         await tx.couponRedemption.create({ data: { couponId: order.couponId, orderId: order.id, userId: order.userId, amount: order.discountAmount } as never });
@@ -531,20 +695,26 @@ export class OrdersService {
         if (conversion) entries.push({ type: 'AFFILIATE_COMMISSION', amount: -toMinor(conversion.commission, cur), description: `Affiliate commission ${Number(conversion.percent)}%` });
         for (const e of entries) await tx.ledgerEntry.create({ data: { orderId: order.id, type: e.type, amount: e.amount < 0 ? `-${fromMinor(-e.amount, cur)}` : fromMinor(e.amount, cur), currency: cur, description: e.description } as never });
       }
+      if (business && !business.invoicesEnabled) return { order, invoice: null, tickets };
       const fy = financialYear(now);
       const seq = await nextSequence(tx, tenantId, `invoice:${fy}`);
       const prefix = business?.invoicePrefix || 'INV';
       const billing = order.billing as Record<string, string | null>;
+      const zeroRated = Boolean(business?.exportsUnderLut && billing.country && billing.country !== 'IN' && Number(order.taxAmount) === 0 && order.taxRate !== null);
       const invoice = await tx.invoice.create({
         data: {
-          orderId: order.id, number: `${prefix}/${fy}/${String(seq).padStart(5, '0')}`, issuedAt: now,
+          orderId: order.id, number: invoiceNumber(prefix, fy, business?.invoiceStartNumber ?? 1, seq), issuedAt: now,
           seller: {
             name: business?.legalName || tenant.name, address: [business?.addressLine1, business?.addressLine2, business?.city, business?.state, business?.postalCode, business?.country].filter(Boolean).join(', '),
             gstin: business?.gstRegistered ? business?.gstin ?? null : null, pan: business?.pan ?? null, state: business?.state ?? null,
+            details: business?.taxDetails ?? null, note: business?.invoiceNote ?? null,
           },
           buyer: billing,
-          lines: order.items.map((i) => ({ description: i.title, quantity: 1, unitAmount: i.unitAmount.toString(), discountAmount: i.discountAmount.toString(), totalAmount: i.totalAmount.toString() })),
-          totals: { currency: cur, subtotal: order.subtotalAmount.toString(), discount: order.discountAmount.toString(), tax: order.taxAmount.toString(), taxRate: order.taxRate?.toString() ?? null, taxInclusive: order.taxInclusive, total: order.totalAmount.toString(), paidVia: paid ? `Razorpay ${paid.result.method ?? ''}`.trim() : 'Free (100% discount)', paymentId: paid?.result.providerPaymentId ?? null },
+          lines: [
+            ...order.items.map((i) => ({ description: i.title, quantity: 1, unitAmount: i.unitAmount.toString(), discountAmount: i.discountAmount.toString(), totalAmount: i.totalAmount.toString() })),
+            ...(Number(order.transactionFeeAmount) > 0 ? [{ description: 'Transaction fee (payment gateway charges)', quantity: 1, unitAmount: order.transactionFeeAmount.toString(), discountAmount: '0', totalAmount: order.transactionFeeAmount.toString() }] : []),
+          ],
+          totals: { currency: cur, subtotal: order.subtotalAmount.toString(), discount: order.discountAmount.toString(), tax: order.taxAmount.toString(), taxRate: order.taxRate?.toString() ?? null, taxInclusive: order.taxInclusive, total: order.totalAmount.toString(), zeroRated, paidVia: paid ? `Razorpay ${paid.result.method ?? ''}`.trim() : opts.offline ? OFFLINE_LABEL[opts.offline.mode] ?? 'Offline payment' : 'Free (100% discount)', paymentId: paid?.result.providerPaymentId ?? opts.offline?.reference ?? null },
         } as never,
       });
       return { order, invoice, tickets };
@@ -552,11 +722,12 @@ export class OrdersService {
 
     if (!done) return false;
     const { order } = done;
+    await this.afterPaid(order).catch((e) => this.logger.warn({ err: (e as Error).message, orderId: order.id }, 'funnel bookkeeping failed'));
     const billing = order.billing as Record<string, string | null>;
     await this.audit.record({ action: 'order.paid', tenantId, actorRealm: 'SYSTEM', targetType: 'Order', targetId: order.id, after: { number: order.number, total: order.totalAmount.toString(), paymentId: paid?.result.providerPaymentId ?? null } });
     await this.events.emit('order.paid', { tenantId, userId: order.userId, orderId: order.id, courseIds: grantedCourses(order.items), total: order.totalAmount.toString(), currency: order.currency });
     await this.notifications.notify({ userId: order.userId, tenantId, category: 'orders', title: 'Purchase confirmed', body: `You now have access to ${order.items.map((i) => i.title).join(', ')}.`, link: '/learn', brand: tenant.name, skipEmail: true }).catch(() => undefined);
-    if (billing.email) {
+    if (billing.email && opts.notify !== false) {
       await this.mail.send({
         to: billing.email, tenantId, tag: 'purchase-receipt',
         ...emailTemplates.purchaseReceipt({ brand: tenant.name, name: billing.name ?? '', orderNumber: order.number, items: order.items.map((i) => i.title), total: fmtMoney(q.total, order.currency), url: `${origin}/learn` }),
@@ -564,6 +735,18 @@ export class OrdersService {
     }
     for (const t of done.tickets) await this.sendTicket(tenantId, order.userId, t.liveClassId, t.code, tenant.name, origin).catch((e) => this.logger.warn({ err: (e as Error).message }, 'webinar ticket email failed'));
     return true;
+  }
+
+  /** Upsells in the order count as accepted; reminded orders for the same items count as recovered. */
+  private async afterPaid(order: { id: string; userId: string; recoveryStage: number; items: { courseId: string | null; bundleId: string | null; liveClassId: string | null; digitalProductId: string | null; coachingProgramId?: string | null; membershipPlanId: string | null; offerId: string | null; source: string | null }[] }) {
+    await this.funnel.markAccepted(order.userId, order.items);
+    const match = order.items.map((i) => (i.coachingProgramId ? { coachingProgramId: i.coachingProgramId } : i.bundleId ? { bundleId: i.bundleId } : i.liveClassId ? { liveClassId: i.liveClassId } : i.digitalProductId ? { digitalProductId: i.digitalProductId } : i.membershipPlanId ? { membershipPlanId: i.membershipPlanId } : { courseId: i.courseId }));
+    const now = new Date();
+    const earlier = await this.db.order.updateMany({
+      where: { userId: order.userId, id: { not: order.id }, recoveryStage: { gt: 0, lt: RECOVERY_DONE }, recoveredAt: null, status: { in: [...UNPAID, 'CANCELLED'] }, createdAt: { gte: new Date(now.getTime() - 14 * 86_400_000) }, items: { some: { OR: match } } },
+      data: { recoveredAt: now, recoveredByOrderId: order.id },
+    });
+    if (!earlier.count && order.recoveryStage > 0 && order.recoveryStage < RECOVERY_DONE) await this.db.order.update({ where: { id: order.id }, data: { recoveredAt: now, recoveredByOrderId: order.id } });
   }
 
   /** Emails the personal join link of a paid webinar ticket. */
@@ -587,7 +770,10 @@ export class OrdersService {
     const o = await this.db.order.findFirst({ where: { id: orderId, ...(userId ? { userId } : {}) } });
     if (!o) throw AppException.notFound('Order not found');
     const inv = await this.db.invoice.findFirst({ where: { orderId: o.id } });
-    if (!inv) throw AppException.notFound('An invoice is issued once the order is paid');
+    if (!inv) {
+      const b = await this.prisma.tenantBusinessProfile.findUnique({ where: { tenantId: o.tenantId }, select: { invoicesEnabled: true } });
+      throw AppException.notFound(b && !b.invoicesEnabled && ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(o.status) ? 'This academy does not issue invoices for purchases.' : 'An invoice is issued once the order is paid');
+    }
     const pdf = await renderInvoicePdf({
       number: inv.number, issuedAt: inv.issuedAt, orderNumber: o.number, seller: inv.seller as never, buyer: inv.buyer as never,
       lines: inv.lines as never, totals: inv.totals as never, refunded: o.refundedAmount.toString(),
@@ -596,16 +782,23 @@ export class OrdersService {
   }
 
   // ── creator views ─────────────────────────────────────────
-  async list(params: { status?: string; q?: string; courseId?: string; from?: string; to?: string; page?: number; pageSize?: number }) {
+  async list(params: { status?: string; q?: string; courseId?: string; channel?: string; type?: string; from?: string; to?: string; page?: number; pageSize?: number }) {
     const page = Math.max(1, params.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, params.pageSize ?? 20));
     const where: Record<string, unknown> = { status: params.status ? params.status : { notIn: ['CANCELLED'] } };
     if (params.q) {
       const q = params.q.trim();
       const users = await this.prisma.user.findMany({ where: { tenantId: this.ctx.requireTenantId(), OR: [{ email: { contains: q } }, { fullName: { contains: q } }] }, select: { id: true }, take: 200 });
-      where.OR = [{ number: { contains: q.toUpperCase() } }, { userId: { in: users.map((u) => u.id) } }];
+      where.OR = [{ number: { contains: q.toUpperCase() } }, { userId: { in: users.map((u) => u.id) } }, { couponCode: { contains: q.toUpperCase() } }, { externalReference: { contains: q } }, { payments: { some: { providerPaymentId: { contains: q } } } }];
     }
-    if (params.courseId) where.items = { some: { courseId: params.courseId } };
+    const items: Record<string, unknown>[] = [];
+    if (params.courseId) items.push({ courseId: params.courseId });
+    const TYPE: Record<string, Record<string, unknown>> = { course: { courseId: { not: null }, bundleId: null }, bundle: { bundleId: { not: null } }, membership: { membershipPlanId: { not: null } }, webinar: { liveClassId: { not: null } }, product: { digitalProductId: { not: null } }, coaching: { coachingProgramId: { not: null } } };
+    if (params.type && TYPE[params.type]) items.push(TYPE[params.type]);
+    if (items.length) where.items = { some: items.length === 1 ? items[0] : { AND: items } };
+    if (params.channel === 'razorpay') where.provider = 'RAZORPAY';
+    if (params.channel === 'offline') where.paymentMode = { in: [...OFFLINE_MODES] };
+    if (params.channel === 'free') where.totalAmount = 0;
     if (params.from || params.to) {
       // Whole days, inclusive of `to`
       where.createdAt = { ...(params.from ? { gte: new Date(`${params.from}T00:00:00.000Z`) } : {}), ...(params.to ? { lt: new Date(new Date(`${params.to}T00:00:00.000Z`).getTime() + 86_400_000) } : {}) };
@@ -617,6 +810,92 @@ export class OrdersService {
     const users = await this.prisma.user.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.userId))] } }, select: { id: true, fullName: true, email: true } });
     const byId = new Map(users.map((u) => [u.id, u]));
     return { items: rows.map((o) => ({ ...this.view(o), buyer: byId.get(o.userId) ?? null })), meta: { page, pageSize, total } };
+  }
+
+  /**
+   * Records a payment the academy received outside the checkout (cash, bank transfer, direct UPI…):
+   * a paid order for the learner at the amount received, fulfilled like any other (access, ledger,
+   * invoice), with the mode and reference kept on the order.
+   */
+  async recordOffline(input: { itemKind: string; itemId: string; userId: string; mode: string; reference?: string | null; amount: number; sendEmail: boolean; affiliateCode?: string | null }, actorUserId: string) {
+    const tenantId = this.ctx.requireTenantId();
+    if (!OFFLINE_MODES.includes(input.mode as never)) throw AppException.validation([{ field: 'mode', message: 'Choose a payment mode' }]);
+    const user = await this.prisma.user.findFirst({ where: { id: input.userId, tenantId, realm: 'TENANT', deletedAt: null } });
+    if (!user) throw AppException.validation([{ field: 'userId', message: 'Choose a learner of your academy' }]);
+    const base = await this.sellableItem(input.itemKind, input.itemId).catch((e) => {
+      if (e instanceof AppException && /free/i.test(e.message)) throw AppException.conflict('This item is free — enrol the learner instead of recording a payment.');
+      throw e;
+    });
+    const line: Line = { ...base, unitMinor: toMinor(input.amount, base.currency), couponable: false, passFee: false };
+    const affiliateId = input.affiliateCode?.trim() ? await this.affiliates.attribute(input.affiliateCode.trim(), user.id) : null;
+    if (input.affiliateCode?.trim() && !affiliateId) throw AppException.validation([{ field: 'affiliateCode', message: 'No active affiliate with this code (learners can’t refer themselves)' }]);
+    await this.assertBuyable(user.id, [line]);
+    const { tax, q, cur } = await this.price(user.id, [line], null, user.country);
+    const ref = input.reference?.trim() || null;
+    const order = await this.db.$transaction(async (tx) => {
+      const n = await nextSequence(tx, tenantId, 'order');
+      const o = await tx.order.create({
+        data: {
+          number: `ORD-${String(n).padStart(6, '0')}`, userId: user.id, currency: cur,
+          subtotalAmount: fromMinor(q.subtotal, cur), discountAmount: '0', taxAmount: fromMinor(q.tax, cur), totalAmount: fromMinor(q.total, cur), taxRate: tax?.rate ?? null, taxInclusive: tax?.inclusive ?? true,
+          billing: { name: user.fullName, email: user.email, phone: user.phone ?? null, country: user.country ?? null, state: null, gstin: null },
+          paymentMode: input.mode, externalReference: ref, recordedById: actorUserId, affiliateId, expiresAt: new Date(Date.now() + ORDER_TTL_MS),
+        } as never,
+      });
+      const kindRef = line.kind === 'course' ? { courseId: line.id } : line.kind === 'bundle' ? { bundleId: line.id } : line.kind === 'webinar' ? { liveClassId: line.id } : line.kind === 'product' ? { digitalProductId: line.id } : line.kind === 'coaching' ? { coachingProgramId: line.id } : { membershipPlanId: line.id };
+      await tx.orderItem.create({ data: { orderId: o.id, ...kindRef, grantCourseIds: line.grant.length ? line.grant : undefined, title: line.title.slice(0, 200), unitAmount: fromMinor(q.lines[0].unit, cur), discountAmount: '0', totalAmount: fromMinor(q.lines[0].total, cur) } as never });
+      return o;
+    });
+    await this.fulfil(order.id, null, q, { offline: { mode: input.mode, reference: ref }, notify: input.sendEmail });
+    await this.audit.record({ action: 'order.offline_recorded', tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'Order', targetId: order.id, after: { mode: input.mode, reference: ref, total: fromMinor(q.total, cur), item: `${line.kind}:${line.id}` } });
+    return this.get(order.id);
+  }
+
+  // ── order comments and edits (academy) ──────────────────
+  async comments(orderId: string) {
+    await this.get(orderId);
+    const rows = await this.db.orderComment.findMany({ where: { orderId }, orderBy: { createdAt: 'asc' } });
+    const users = await this.prisma.user.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.authorId))] } }, select: { id: true, fullName: true } });
+    return rows.map((r) => ({ id: r.id, body: r.body, createdAt: r.createdAt, author: users.find((u) => u.id === r.authorId)?.fullName ?? '' }));
+  }
+
+  async addComment(orderId: string, body: string, authorId: string) {
+    await this.get(orderId);
+    const text = body.trim();
+    if (!text) throw AppException.validation([{ field: 'body', message: 'Write a comment' }]);
+    await this.db.orderComment.create({ data: { orderId, authorId, body: text.slice(0, 2000) } as never });
+    return this.comments(orderId);
+  }
+
+  /**
+   * Edit order: the buyer's state, GSTIN and GST address (also updated on the invoice), and an
+   * affiliate credited after the fact — only on a paid order that has no affiliate yet.
+   */
+  async editOrder(orderId: string, input: { state?: string | null; gstin?: string | null; gstAddress?: string | null; affiliateCode?: string | null }, actorUserId: string) {
+    const o = await this.db.order.findFirst({ where: { id: orderId } });
+    if (!o) throw AppException.notFound('Order not found');
+    const billing = { ...(o.billing as Record<string, string | null>) };
+    if (input.state !== undefined) billing.state = input.state?.trim() || null;
+    if (input.gstin !== undefined) billing.gstin = input.gstin?.trim().toUpperCase() || null;
+    if (input.gstAddress !== undefined) billing.address = input.gstAddress?.trim() || null;
+    let affiliateId: string | null = null;
+    if (input.affiliateCode) {
+      if (o.affiliateId) throw AppException.conflict('This order already credits an affiliate.');
+      if (!['PAID', 'PARTIALLY_REFUNDED'].includes(o.status)) throw AppException.conflict('Affiliates can be added to paid orders only.');
+      affiliateId = await this.affiliates.attribute(input.affiliateCode, o.userId);
+      if (!affiliateId) throw AppException.validation([{ field: 'affiliateCode', message: 'No active affiliate with this code (buyers can’t refer themselves)' }]);
+    }
+    await this.db.$transaction(async (tx) => {
+      const u = await tx.order.update({ where: { id: orderId }, data: { billing: billing as never, ...(affiliateId ? { affiliateId } : {}) } });
+      const inv = await tx.invoice.findFirst({ where: { orderId } });
+      if (inv) await tx.invoice.update({ where: { id: inv.id }, data: { buyer: { ...(inv.buyer as Record<string, unknown>), state: billing.state, gstin: billing.gstin, address: billing.address ?? null } as never } });
+      if (affiliateId && u.paidAt) {
+        const conv = await this.affiliates.recordConversion(tx, { ...u, paidAt: u.paidAt });
+        if (conv) await tx.ledgerEntry.create({ data: { orderId, type: 'AFFILIATE_COMMISSION', amount: `-${fromMinor(toMinor(conv.commission, u.currency), u.currency)}`, currency: u.currency, description: `Affiliate commission ${Number(conv.percent)}% (added later)` } as never });
+      }
+    });
+    await this.audit.record({ action: 'order.edit', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'Order', targetId: orderId, after: input as never });
+    return this.get(orderId);
   }
 
   async get(id: string) {
@@ -746,6 +1025,11 @@ export class OrdersService {
         for (const i of o.items) if (i.membershipPlanId) await this.memberships.revokeForRefund(tx, o.userId, i.membershipPlanId);
         await tx.webinarRegistration.updateMany({ where: { orderId: o.id, cancelledAt: null }, data: { cancelledAt: new Date() } });
         await tx.digitalProductAccess.updateMany({ where: { orderId: o.id, revokedAt: null }, data: { revokedAt: new Date() } });
+        const coachingAccess = await tx.coachingAccess.findMany({ where: { orderId: o.id, revokedAt: null }, select: { id: true } });
+        if (coachingAccess.length) {
+          await tx.coachingAccess.updateMany({ where: { id: { in: coachingAccess.map((a) => a.id) } }, data: { revokedAt: new Date() } });
+          await tx.coachingBooking.updateMany({ where: { accessId: { in: coachingAccess.map((a) => a.id) }, status: 'BOOKED', startsAt: { gt: new Date() } }, data: { status: 'CANCELLED', cancelledAt: new Date(), cancelledBy: 'REFUND' } });
+        }
       }
       return { r, o, amount };
     });

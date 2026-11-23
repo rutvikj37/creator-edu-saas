@@ -1,0 +1,11 @@
+# Rendered by the nginx image's envsubst step at container start (only CSP_* variables are substituted).
+# Deployment-specific origins come from the environment:
+#   CSP_CONNECT_SRC  e.g. "wss://live.example.com https://live.example.com https://minio.example.com"
+#   CSP_FRAME_SRC    e.g. "https://meet.example.com https://minio.example.com"
+# Creator-supplied Google Tag Manager tags that load other third-party scripts are blocked by design.
+add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://checkout.razorpay.com https://cdn.razorpay.com https://connect.facebook.net https://www.googletagmanager.com https://www.google-analytics.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://api.razorpay.com https://lumberjack.razorpay.com https://*.amazonaws.com https://video.bunnycdn.com https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://www.facebook.com ${CSP_CONNECT_SRC}; frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com https://iframe.mediadelivery.net https://www.youtube-nocookie.com https://www.youtube.com https://player.vimeo.com https://*.amazonaws.com https://www.googletagmanager.com ${CSP_FRAME_SRC}; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self' https://api.razorpay.com; frame-ancestors 'self'" always;
+add_header X-Content-Type-Options nosniff always;
+add_header Referrer-Policy strict-origin-when-cross-origin always;
+add_header X-Frame-Options SAMEORIGIN always;
+add_header Permissions-Policy "camera=(self), microphone=(self), display-capture=(self), geolocation=(), payment=(self \"https://api.razorpay.com\" \"https://checkout.razorpay.com\"), usb=()" always;
+add_header Cross-Origin-Opener-Policy "same-origin-allow-popups" always;

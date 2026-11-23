@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import { useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronsUpDown } from 'lucide-react';
@@ -71,40 +72,35 @@ export function SuperAdminLayout(props) {
   const account = useShellAccount('/super-admin/account/security');
   const roles = auth.me?.platformRoles ?? [];
   const subtitle = roles.includes('SUPER_ADMIN') ? 'Super Admin' : 'Platform Admin';
-  return <DashboardShell nav={filterNav(NAV.superAdmin, auth.can)} brand={usePlatformBrand(subtitle, 'super-admin')} {...account} {...props} />;
+  return <DashboardShell nav={filterNav(NAV.superAdmin, auth.can)} brand={usePlatformBrand(subtitle, 'super-admin')} defaultCollapsed {...account} {...props} />;
 }
-function StandaloneFinanceLayout(props) {
-  const auth = useAuth();
-  const account = useShellAccount('/super-admin/account/security');
-  const brand = usePlatformBrand('Finance', 'finance');
-  return <DashboardShell nav={filterNav(NAV.finance, auth.can)} brand={brand} {...account} {...props} />;
+/** Super/Platform Admins keep their full sidebar on the Finance and Support pages; only dedicated role holders get the focused panel. */
+function isPlatformWideAdmin(me) {
+  const roles = me?.platformRoles ?? [];
+  return roles.includes('SUPER_ADMIN') || roles.includes('PLATFORM_ADMIN');
 }
 
 export function FinanceLayout(props) {
   const auth = useAuth();
-  const roles = auth.me?.platformRoles ?? [];
-  const isSuperOrPlatformAdmin = roles.includes('SUPER_ADMIN') || roles.includes('PLATFORM_ADMIN');
-  if (isSuperOrPlatformAdmin) {
-    return <SuperAdminLayout {...props} />;
-  }
-  return <StandaloneFinanceLayout {...props} />;
+  const account = useShellAccount('/super-admin/account/security');
+  const brand = usePlatformBrand('Finance', 'finance');
+  if (isPlatformWideAdmin(auth.me)) return <SuperAdminLayout {...props} />;
+  return <DashboardShell nav={filterNav(NAV.finance, auth.can)} brand={brand} defaultCollapsed {...account} {...props} />;
 }
-
-function StandaloneSupportLayout(props) {
+export function SupportLayout(props) {
   const auth = useAuth();
   const account = useShellAccount('/super-admin/account/security');
   const brand = usePlatformBrand('Support', 'support');
-  return <DashboardShell nav={filterNav(NAV.support, auth.can)} brand={brand} {...account} {...props} />;
+  if (isPlatformWideAdmin(auth.me)) return <SuperAdminLayout {...props} />;
+  return <DashboardShell nav={filterNav(NAV.support, auth.can)} brand={brand} defaultCollapsed {...account} {...props} />;
 }
-
-export function SupportLayout(props) {
-  const auth = useAuth();
-  const roles = auth.me?.platformRoles ?? [];
-  const isSuperOrPlatformAdmin = roles.includes('SUPER_ADMIN') || roles.includes('PLATFORM_ADMIN');
-  if (isSuperOrPlatformAdmin) {
-    return <SuperAdminLayout {...props} />;
-  }
-  return <StandaloneSupportLayout {...props} />;
+/** Shown when the academy requires 2FA for its team and this account hasn't turned it on. */
+function TeamTwoFactorBanner() {
+  return (
+    <div role="alert" className="border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+      This academy requires two-factor authentication. <Link to="/creator/account/security" className="font-semibold underline">Turn it on in Account security</Link> to use the workspace.
+    </div>
+  );
 }
 export function CreatorLayout({ preview = false, ...props }) {
   const auth = useAuth();
@@ -113,7 +109,7 @@ export function CreatorLayout({ preview = false, ...props }) {
   return (
     <DashboardShell
       nav={preview ? NAV.creator : filterNav(NAV.creator, auth.can)}
-      banner={preview ? undefined : <AnnouncementsBanner />}
+      banner={preview ? undefined : auth.me?.workspaceRequiresTwoFactor ? <TeamTwoFactorBanner /> : <AnnouncementsBanner />}
       brand={{ key: 'creator', mark: name.slice(0, 2).toUpperCase(), name, subtitle: auth.activeTenant?.role?.name ?? 'Creator workspace' }}
       footer={preview ? undefined : <WorkspaceSwitcher />}
       defaultCollapsed

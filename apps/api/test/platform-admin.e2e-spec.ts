@@ -88,8 +88,6 @@ describe('Platform administration (e2e)', () => {
     expect(edited.body.data.slug).toBe('bright-minds-two');
     expect(edited.body.data.domains[0].hostname).toBe('bright-minds-two.lvh.me');
 
-    const domains = await authed(app, root).get('/api/v1/platform/tenants/domains?q=bright-minds-two').expect(200);
-    expect(domains.body.data).toEqual([expect.objectContaining({ hostname: 'bright-minds-two.lvh.me', type: 'SUBDOMAIN', tenant: expect.objectContaining({ id: tenant.id }) })]);
     const creators = await authed(app, root).get(`/api/v1/platform/tenants/creators?q=${encodeURIComponent(email)}`).expect(200);
     expect(creators.body.data).toEqual([expect.objectContaining({ email, fullName: 'Neha K', academies: [expect.objectContaining({ id: tenant.id })] })]);
 

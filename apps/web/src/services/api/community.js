@@ -24,6 +24,8 @@ export const communityApi = (base) => ({
 
 export const membershipsApi = {
   plans: () => http.get('/creator/memberships').then(d),
+  stats: () => http.get('/creator/memberships/stats').then(d),
+  get: (id) => http.get(`/creator/memberships/${id}`).then(d),
   create: (body) => http.post('/creator/memberships', body).then(d),
   update: (id, body) => http.patch(`/creator/memberships/${id}`, body).then(d),
   members: (id) => http.get(`/creator/memberships/${id}/members`).then(d),

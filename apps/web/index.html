@@ -12,15 +12,7 @@
       rel="stylesheet"
     />
     <title>Creator Education</title>
-    <script>
-      // Apply the saved theme before first paint to avoid a flash of the wrong theme.
-      try {
-        var t = localStorage.getItem('ce.theme');
-        if (t === 'dark' || (!t && matchMedia('(prefers-color-scheme: dark)').matches)) {
-          document.documentElement.classList.add('dark');
-        }
-      } catch (e) {}
-    </script>
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

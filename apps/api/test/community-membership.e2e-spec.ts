@@ -2,7 +2,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { PrismaService } from '../src/core/prisma/prisma.service.js';
 import { HostResolverService } from '../src/core/tenancy/host-resolver.service.js';
 import { MembershipsService } from '../src/modules/memberships/memberships.service.js';
-import { api, authed, createTestApp, lastEmail, parseSession, registerCreator, resetDatabase, type Session, tenantHost, uniqueEmail } from './helpers.js';
+import { api, authed, createTestApp, lastEmail, parseSession, PNG, registerCreator, resetDatabase, type Session, tenantHost, uniqueEmail, uploadFile } from './helpers.js';
 import { RazorpaySim } from './razorpay-sim.js';
 
 const doc = (t: string) => ({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: t }] }] });
@@ -139,5 +139,77 @@ describe('Memberships and communities (e2e)', () => {
     const other = await registerCreator(app);
     await authed(app, other.session).get(`/api/v1/creator/communities/${open.id}/posts`).expect(404);
     expect((await authed(app, other.session).get('/api/v1/creator/communities')).body.data.communities).toEqual([]);
+  });
+  it('membership builder: draft from a name, details, courses, then pricing with a sale price; publish rules; stats; drafts stay hidden', async () => {
+    const cover = (await uploadFile(app, cs, 'IMAGE', 'cover.png', 'image/png', PNG)).body.data;
+    const draft = (await authed(app, cs).post('/api/v1/creator/memberships').send({ name: 'My Membership', description: 'Welcome to my membership community', coverFileId: cover.id, faqs: [{ question: 'What is included?', answer: 'Every course listed.' }] }).expect(201)).body.data;
+    expect(draft).toMatchObject({ status: 'DRAFT', priceAmount: '0', courseIds: [], coverUrl: expect.any(String), faqs: [{ question: 'What is included?', answer: 'Every course listed.' }] });
+    await authed(app, cs).post('/api/v1/creator/memberships').send({ name: 'Bad', faqs: [{ question: 'Q', answer: '' }] }).expect(422);
+    // Not sellable yet: hidden publicly, refused at checkout, can't be published without courses and a price.
+    expect((await api(app).get('/api/v1/public/memberships').set('Host', tenantHost(c.tenant.slug))).body.data.map((p: any) => p.id)).not.toContain(draft.id);
+    const m = await student('Draft Peeker');
+    await authed(app, m.s).post('/api/v1/learn/checkout').send({ membershipPlanId: draft.id, billing: { name: 'Peeker' } }).expect(404);
+    const refused = await authed(app, cs).patch(`/api/v1/creator/memberships/${draft.id}`).send({ status: 'ACTIVE' }).expect(422);
+    expect(refused.body.error.details.map((d: any) => d.field).sort()).toEqual(['courseIds', 'priceAmount']);
+    // Step 2: courses. Step 3: plan name, price 1499 struck through, charged 999 a year; publish.
+    await authed(app, cs).patch(`/api/v1/creator/memberships/${draft.id}`).send({ courseIds: courses.map((x) => x.id) }).expect(200);
+    await authed(app, cs).patch(`/api/v1/creator/memberships/${draft.id}`).send({ priceAmount: 999, compareAtAmount: 999 }).expect(422);
+    const live = (await authed(app, cs).patch(`/api/v1/creator/memberships/${draft.id}`).send({ planName: 'Yearly pass', priceAmount: 999, compareAtAmount: 1499, interval: 'YEAR', status: 'ACTIVE' }).expect(200)).body.data;
+    expect(live).toMatchObject({ status: 'ACTIVE', planName: 'Yearly pass', interval: 'YEAR' });
+    expect([Number(live.priceAmount), Number(live.compareAtAmount)]).toEqual([999, 1499]);
+    expect((await authed(app, cs).get(`/api/v1/creator/memberships/${draft.id}`).expect(200)).body.data).toMatchObject({ name: 'My Membership', coverUrl: expect.any(String) });
+    const pub = (await api(app).get('/api/v1/public/memberships').set('Host', tenantHost(c.tenant.slug))).body.data.find((p: any) => p.id === draft.id);
+    expect(pub).toMatchObject({ planName: 'Yearly pass', courses: expect.arrayContaining([expect.objectContaining({ title: 'Members course A' })]) });
+    // A buyer pays the sale price; the header totals and the card numbers count it.
+    const before = (await authed(app, cs).get('/api/v1/creator/memberships/stats').expect(200)).body.data;
+    await buyPlan(m.s, draft.id);
+    const after = (await authed(app, cs).get('/api/v1/creator/memberships/stats')).body.data;
+    expect(after.totalMembers).toBe(before.totalMembers + 1);
+    expect(Number(after.totalRevenue) - Number(before.totalRevenue)).toBe(999);
+    expect((await authed(app, cs).get('/api/v1/creator/memberships')).body.data.find((p: any) => p.id === draft.id)).toMatchObject({ activeMembers: 1, revenue: '999' });
+    // Another academy can't read it.
+    const other = await registerCreator(app);
+    await authed(app, other.session).get(`/api/v1/creator/memberships/${draft.id}`).expect(404);
+    expect((await authed(app, other.session).get('/api/v1/creator/memberships/stats')).body.data.totalMembers).toBe(0);
+  });
+  it('advanced pricing: unlimited (lifetime) access bought once, GST shown separately, custom button text, receive estimate inputs', async () => {
+    await prisma.tenantBusinessProfile.upsert({ where: { tenantId: c.tenant.id }, update: { gstRegistered: true, taxRate: 18, pricesIncludeTax: true }, create: { tenantId: c.tenant.id, gstRegistered: true, taxRate: 18, pricesIncludeTax: true } as never });
+    const p = (await authed(app, cs).post('/api/v1/creator/memberships').send({ name: 'Lifetime club' }).expect(201)).body.data;
+    await authed(app, cs).patch(`/api/v1/creator/memberships/${p.id}`).send({ buttonText: 'x'.repeat(41) }).expect(422);
+    const live = (await authed(app, cs).patch(`/api/v1/creator/memberships/${p.id}`).send({ courseIds: [courses[1].id], priceAmount: 1000, lifetime: true, taxExclusive: true, buttonText: 'Join for life', status: 'ACTIVE' }).expect(200)).body.data;
+    expect(live).toMatchObject({ lifetime: true, taxExclusive: true, buttonText: 'Join for life' });
+    const stats = (await authed(app, cs).get('/api/v1/creator/memberships/stats')).body.data;
+    expect(stats.pricing).toMatchObject({ gstRegistered: true, taxRate: 18, pricesIncludeTax: true, commissionPercent: expect.any(Number) });
+    expect((await api(app).get('/api/v1/public/memberships').set('Host', tenantHost(c.tenant.slug))).body.data.find((x: any) => x.id === p.id)).toMatchObject({ buttonText: 'Join for life', lifetime: true });
+
+    // GST is added on top for this plan even though the academy's prices include GST.
+    const m = await student('Lifetime Buyer');
+    const q = (await authed(app, m.s).post('/api/v1/learn/checkout/quote').send({ membershipPlanId: p.id }).expect(200)).body.data;
+    expect(q).toMatchObject({ taxInclusive: false, subtotal: '1000.00', tax: '180.00', total: '1180.00' });
+    await buyPlan(m.s, p.id);
+    const mine = (await authed(app, m.s).get('/api/v1/learn/memberships')).body.data.find((x: any) => x.plan.id === p.id);
+    expect(mine.active).toBe(true);
+    expect(new Date(mine.currentPeriodEnd).getUTCFullYear()).toBe(2999);
+    expect((await prisma.enrollment.findFirstOrThrow({ where: { userId: m.id, courseId: courses[1].id } })).expiresAt).toBeNull();
+    // Bought once: a second purchase is refused.
+    await authed(app, m.s).post('/api/v1/learn/checkout').send({ membershipPlanId: p.id, billing: { name: 'Member' } }).expect(409);
+    await prisma.tenantBusinessProfile.update({ where: { tenantId: c.tenant.id }, data: { gstRegistered: false } });
+  });
+  it('charge transaction fee: the buyer pays 2.36% on top, shown in the quote, order and invoice', async () => {
+    const p = (await authed(app, cs).post('/api/v1/creator/memberships').send({ name: 'Fee plan' }).expect(201)).body.data;
+    const live = (await authed(app, cs).patch(`/api/v1/creator/memberships/${p.id}`).send({ courseIds: [courses[0].id], priceAmount: 1000, passTransactionFee: true, status: 'ACTIVE' }).expect(200)).body.data;
+    expect(live.passTransactionFee).toBe(true);
+    const m = await student('Fee Buyer');
+    const q = (await authed(app, m.s).post('/api/v1/learn/checkout/quote').send({ membershipPlanId: p.id }).expect(200)).body.data;
+    expect(q).toMatchObject({ subtotal: '1000.00', transactionFee: '23.60', total: '1023.60' });
+    const o = await buyPlan(m.s, p.id);
+    const order = await prisma.order.findUniqueOrThrow({ where: { id: o.id } });
+    expect([order.totalAmount.toString(), order.transactionFeeAmount.toString()]).toEqual(['1023.6', '23.6']);
+    const inv = await prisma.invoice.findFirstOrThrow({ where: { orderId: o.id } });
+    expect(inv.lines).toEqual(expect.arrayContaining([expect.objectContaining({ description: 'Transaction fee (payment gateway charges)', totalAmount: '23.6' })]));
+    // Off again: no fee.
+    await authed(app, cs).patch(`/api/v1/creator/memberships/${p.id}`).send({ passTransactionFee: false }).expect(200);
+    const m2 = await student('No Fee Buyer');
+    expect((await authed(app, m2.s).post('/api/v1/learn/checkout/quote').send({ membershipPlanId: p.id }).expect(200)).body.data).toMatchObject({ transactionFee: '0.00', total: '1000.00' });
   });
 });

@@ -13,11 +13,6 @@ export class TenantListQuery extends PaginationQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @Length(25, 25) planId?: string;
 }
 
-export class TenantDomainsQuery extends PaginationQueryDto {
-  @ApiPropertyOptional() @IsOptional() @IsIn(['SUBDOMAIN', 'CUSTOM']) type?: string;
-  @ApiPropertyOptional() @IsOptional() @IsIn(['PENDING', 'VERIFIED', 'FAILED']) status?: string;
-}
-
 export class CreateTenantDto {
   @ApiProperty() @Transform(trim) @IsString() @Length(2, 120) name: string;
   @ApiProperty() @Transform(trim) @IsString() @Length(2, 120) ownerName: string;
@@ -162,6 +157,18 @@ export class CreateTicketDto {
   @ApiProperty({ enum: TICKET_CATEGORIES }) @IsIn(TICKET_CATEGORIES) category: string;
   @ApiProperty({ enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'] }) @IsIn(['LOW', 'MEDIUM', 'HIGH', 'URGENT']) priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
   @ApiProperty() @Transform(trim) @IsString() @Length(10, 10000) body: string;
+}
+
+export const STUDENT_TICKET_CATEGORIES = ['course', 'payment', 'access', 'certificate', 'technical', 'other'] as const;
+
+export class StudentTicketDto {
+  @ApiProperty() @Transform(trim) @IsString() @Length(5, 200) subject: string;
+  @ApiProperty({ enum: STUDENT_TICKET_CATEGORIES }) @IsIn(STUDENT_TICKET_CATEGORIES) category: string;
+  @ApiProperty() @Transform(trim) @IsString() @Length(10, 5000) body: string;
+}
+
+export class StudentReplyDto {
+  @ApiProperty() @Transform(trim) @IsString() @Length(1, 5000) body: string;
 }
 
 export class TicketReplyDto {

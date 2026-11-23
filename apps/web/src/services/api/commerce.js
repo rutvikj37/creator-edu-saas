@@ -15,6 +15,12 @@ export const creatorCommerceApi = {
   updateCoupon: (id, body) => http.patch(`/creator/coupons/${id}`, body).then(d),
   deleteCoupon: (id) => http.delete(`/creator/coupons/${id}`).then(d),
   orders: (params) => http.get('/creator/orders', { params }).then(page),
+  recordOffline: (body) => http.post('/creator/orders/offline', body).then(d),
+  comments: (id) => http.get(`/creator/orders/${id}/comments`).then(d),
+  addComment: (id, body) => http.post(`/creator/orders/${id}/comments`, { body }).then(d),
+  editOrder: (id, body) => http.patch(`/creator/orders/${id}`, body).then(d),
+  settlements: (params) => http.get('/creator/settlements', { params }).then(d),
+  settlementsCsv: (params) => http.get('/creator/settlements.csv', { params, responseType: 'blob' }).then(d),
   order: (id) => http.get(`/creator/orders/${id}`).then(d),
   summary: (params) => http.get('/creator/orders/summary', { params }).then(d),
   refund: (id, body) => http.post(`/creator/orders/${id}/refunds`, body).then(d),
@@ -32,11 +38,35 @@ export const checkoutApi = {
   confirm: (id, body) => http.post(`/learn/orders/${id}/confirm`, body).then(d),
   abandon: (id, reason) => http.post(`/learn/orders/${id}/abandon`, { reason }).then(d),
   invoice: (id) => http.get(`/learn/orders/${id}/invoice`, { responseType: 'blob' }).then(blob),
+  upsell: (id) => http.get(`/learn/orders/${id}/upsell`).then(d),
+  declineUpsell: (id, offerId) => http.post(`/learn/orders/${id}/upsell/${offerId}/decline`).then(d),
+  paymentLink: (code) => http.get(`/public/pay/${encodeURIComponent(code)}`).then(d),
+};
+
+/** Academy sales funnels: order bumps, upsells, payment links, cart recovery, ad tracking. */
+export const salesApi = {
+  items: () => http.get('/creator/sales/items').then(d),
+  offers: (type) => http.get('/creator/sales/offers', { params: type ? { type } : {} }).then(d),
+  createOffer: (body) => http.post('/creator/sales/offers', body).then(d),
+  updateOffer: (id, body) => http.put(`/creator/sales/offers/${id}`, body).then(d),
+  offerStatus: (id, status) => http.post(`/creator/sales/offers/${id}/status`, { status }).then(d),
+  deleteOffer: (id) => http.delete(`/creator/sales/offers/${id}`).then(d),
+  links: () => http.get('/creator/sales/links').then(d),
+  createLink: (body) => http.post('/creator/sales/links', body).then(d),
+  updateLink: (id, body) => http.put(`/creator/sales/links/${id}`, body).then(d),
+  deleteLink: (id) => http.delete(`/creator/sales/links/${id}`).then(d),
+  recovery: () => http.get('/creator/sales/recovery').then(d),
+  saveRecovery: (body) => http.put('/creator/sales/recovery', body).then(d),
+  recoveryStats: () => http.get('/creator/sales/recovery/stats').then(d),
+  recoveryRecent: () => http.get('/creator/sales/recovery/recent').then(d),
+  tracking: () => http.get('/creator/sales/tracking').then(d),
+  saveTracking: (body) => http.put('/creator/sales/tracking', body).then(d),
 };
 
 export const financeApi = {
   overview: (params) => http.get('/platform/finance/overview', { params }).then(d),
   transactions: (params) => http.get('/platform/finance/transactions', { params }).then(page),
+  tax: (params) => http.get('/platform/finance/tax', { params }).then(d),
 };
 
 export const planBillingApi = {

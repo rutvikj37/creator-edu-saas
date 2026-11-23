@@ -19,7 +19,7 @@ import { isValidSlug, slugify } from '../tenants/slug.js';
 import { escapeHtml } from '../../core/mail/templates.js';
 import { academyOrigin } from '../tenants/academy-origin.js';
 import { purgeExpiredTenants } from './tenant-purge.js';
-import type { AssignPlanDto, CreateTenantDto, LimitOverridesDto, TenantDomainsQuery, TenantListQuery, UpdateTenantDto } from './dto/platform.dto.js';
+import type { AssignPlanDto, CreateTenantDto, LimitOverridesDto, TenantListQuery, UpdateTenantDto } from './dto/platform.dto.js';
 
 /** Days a tenant stays restorable after a deletion request (data is retained; financial records are never deleted). */
 export const DELETION_RETENTION_DAYS = 30;
@@ -256,34 +256,6 @@ export class PlatformTenantsService {
       rows.map(({ subscriptions, _count, ...t }) => ({ ...t, subscription: subscriptions[0] ?? null, studentCount: _count.users, staffCount: _count.members })),
       { page: q.page, pageSize: q.pageSize, total },
     );
-  }
-
-  async listDomains(q: TenantDomainsQuery) {
-    const where: Prisma.TenantDomainWhereInput = {
-      ...(q.type ? { type: q.type as never } : {}),
-      ...(q.status ? { status: q.status as never } : {}),
-      ...(q.q ? { OR: [{ hostname: { contains: q.q } }, { tenant: { name: { contains: q.q } } }, { tenant: { slug: { contains: q.q } } }] } : {}),
-    };
-    const [rows, total] = await Promise.all([
-      this.prisma.tenantDomain.findMany({
-        where,
-        orderBy: toOrderBy(q.sort, ['createdAt', 'hostname', 'status'] as const, { createdAt: 'desc' }),
-        ...toSkipTake(q),
-        select: {
-          id: true,
-          tenantId: true,
-          hostname: true,
-          type: true,
-          isPrimary: true,
-          status: true,
-          createdAt: true,
-          verifiedAt: true,
-          tenant: { select: { id: true, name: true, slug: true, status: true } },
-        },
-      }),
-      this.prisma.tenantDomain.count({ where }),
-    ]);
-    return new Paginated(rows, { page: q.page, pageSize: q.pageSize, total });
   }
 
   async listCreators(q: PaginationQueryDto) {

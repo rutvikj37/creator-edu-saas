@@ -2,6 +2,15 @@
 
 Format: Keep a Changelog. Versions follow SemVer once Phase 1 ships.
 
+## [0.20.0] — 2026-11-09 — Sales funnels, ad tracking and Super Admin tools
+### Added
+- Order bumps: one-click add-ons at a special price shown as checkboxes at checkout, optionally only with chosen items.
+- Post-purchase upsells: a time-limited one-time offer on the order confirmation page; accept goes to a one-item checkout, decline hides it.
+- Payment links: shareable `/pay/CODE` links for any course, bundle, product, webinar or membership, with optional custom price, preset promo code, sales limit and expiry; uses and revenue per link.
+- Cart recovery: up to three reminders (email, and WhatsApp when configured) for unpaid checkouts, with an optional promo code in the last one; abandoned/reminded/recovered stats.
+- Tracking pixels: Meta Pixel, Google Analytics 4 and Google Tag Manager per academy; PageView, ViewContent, AddToCart, InitiateCheckout and Purchase (once per order). Not loaded when Do Not Track is on.
+- Super Admin: Integrations status (what is configured, never the secrets), Domains across all academies (re-check DNS, detach), Platform analytics (growth, learning, sales, activation, feature adoption), and editable wording for transactional emails with live preview, test send and reset.
+
 ## [0.19.0] — 2026-11-05 — Zoom and Google Meet
 ### Added
 - Connect the academy's own Zoom and Google accounts. Zoom: meetings created and kept in sync for every session, personal join links, attendance and cloud recordings back in the platform. Google Meet: a Meet link per session in Google Calendar.

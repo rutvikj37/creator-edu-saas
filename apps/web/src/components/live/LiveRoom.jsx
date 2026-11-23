@@ -1,3 +1,4 @@
+import { Watermark } from '../video/Watermark.jsx';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LiveKitRoom, RoomAudioRenderer, VideoConference } from '@livekit/components-react';
@@ -124,6 +125,7 @@ export function LiveRoom({ join, title, api, host = false, sessionId, onLeave, e
       </header>
       <div className="flex min-h-0 flex-1">
         <main className="relative min-w-0 flex-1">
+          <Watermark enabled={!host} />
           {status === 'DENIED' ? (
             <div className="grid h-full place-items-center text-white/80"><p>The host did not admit you to this session.</p></div>
           ) : status !== 'ADMITTED' ? (

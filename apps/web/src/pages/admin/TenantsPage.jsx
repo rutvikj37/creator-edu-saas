@@ -3,21 +3,9 @@ import { useNavigate } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ban, Building2, CheckCircle2, CreditCard, Eye, MoreVertical, Pencil, Plus, Trash2 } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
-import { SearchInput } from '../../components/common/SearchInput.jsx';
-import {
-  Button,
-  Card,
-  ConfirmDialog,
-  DataTable,
-  Dropdown,
-  DropdownItem,
-  EmptyState,
-  Modal,
-  Select,
-  StatusBadge,
-  Textarea,
-  toast,
-} from '../../components/ui/index.js';
+import { ListToolbar } from '../../components/common/ListToolbar.jsx';
+import { FilterChip } from '../../components/common/FilterChip.jsx';
+import { Button, Card, ConfirmDialog, DataTable, Dropdown, DropdownItem, EmptyState, Modal, StatusBadge, Textarea, toast } from '../../components/ui/index.js';
 import { platformApi } from '../../services/api/platform.js';
 import { useListParams } from '../../hooks/useListParams.js';
 import { formatDate, formatNumber } from '../../utils/format.js';
@@ -84,6 +72,7 @@ export function TenantsPage() {
     <>
       <PageHeader
         title="Agencies & Tenants"
+        count={q.data?.meta?.total}
         description="Every agency and academy on the platform."
         breadcrumbs={[{ label: 'Agencies' }]}
         actions={
@@ -163,32 +152,13 @@ export function TenantsPage() {
         />
       )}
 
-      <Card className="min-h-[380px]">
-        <div className="flex flex-col gap-3 border-b border-line p-4 md:flex-row md:items-end">
-          <SearchInput
-            className="md:w-80"
-            value={params.q ?? ''}
-            onChange={(v) => update({ q: v })}
-            placeholder="Search name, slug or owner email"
-          />
-          <Select
-            aria-label="Status"
-            placeholder="All statuses"
-            options={STATUSES}
-            value={params.status ?? ''}
-            onChange={(e) => update({ status: e.target.value })}
-            className="md:w-48"
-          />
-          <Select
-            aria-label="Plan"
-            placeholder="All plans"
-            options={(plans.data ?? []).map((p) => ({ value: p.id, label: p.name }))}
-            value={params.planId ?? ''}
-            onChange={(e) => update({ planId: e.target.value })}
-            className="md:w-48"
-          />
-        </div>
-
+      <Card>
+        <ListToolbar search={params.q} onSearch={(v) => update({ q: v })} placeholder="Search name, slug or owner email" count={q.data?.meta?.total} noun="tenant"
+          filtered={Boolean(params.status || params.planId)} onReset={() => update({ status: undefined, planId: undefined })}
+          filters={<>
+            <FilterChip label="Status" value={params.status} onChange={(v) => update({ status: v })} options={STATUSES} />
+            <FilterChip label="Plan" value={params.planId} onChange={(v) => update({ planId: v })} options={(plans.data ?? []).map((p) => ({ value: p.id, label: p.name }))} />
+          </>} />
         <DataTable
           loading={q.isLoading}
           error={q.error}

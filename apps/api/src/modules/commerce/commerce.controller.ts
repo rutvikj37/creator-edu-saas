@@ -1,3 +1,4 @@
+import { SettlementsService } from './settlements.service.js';
 import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Patch, Post, Put, Query, Req, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
@@ -63,7 +64,13 @@ class QuoteDto {
   @ApiPropertyOptional({ description: 'Buy everything in the cart' }) @IsOptional() @IsBoolean() fromCart?: boolean;
   @ApiPropertyOptional({ description: 'Buy a paid webinar ticket' }) @IsOptional() @IsString() @Length(25, 25) webinarId?: string;
   @ApiPropertyOptional({ description: 'Buy a digital product' }) @IsOptional() @IsString() @Length(25, 25) digitalProductId?: string;
+  @ApiPropertyOptional({ description: 'Buy a 1:1 coaching program' }) @IsOptional() @IsString() @Length(25, 25) coachingProgramId?: string;
+  @ApiPropertyOptional({ description: 'Buyer country (ISO 2) for zero-rated export pricing' }) @IsOptional() @Matches(/^[A-Z]{2}$/) country?: string;
   @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(40) couponCode?: string | null;
+  @ApiPropertyOptional({ description: 'Buy through a shareable payment link' }) @IsOptional() @Transform(trim) @IsString() @Length(4, 16) paymentLinkCode?: string;
+  @ApiPropertyOptional({ description: 'Take a post-purchase upsell (with sourceOrderId)' }) @IsOptional() @IsString() @Length(25, 25) upsellOfferId?: string;
+  @ApiPropertyOptional({ description: 'The paid order the upsell follows' }) @IsOptional() @IsString() @Length(25, 25) sourceOrderId?: string;
+  @ApiPropertyOptional({ description: 'Order bumps ticked at checkout', type: [String] }) @IsOptional() @IsArray() @ArrayMaxSize(3) @IsString({ each: true }) @Length(25, 25, { each: true }) bumpOfferIds?: string[];
 }
 class CheckoutDto extends QuoteDto {
   @ApiPropertyOptional({ description: 'Affiliate referral code (?ref=)' }) @IsOptional() @Transform(trim) @IsString() @MaxLength(32) affiliateCode?: string | null;
@@ -87,10 +94,36 @@ class ListQuery {
   @IsOptional() @IsIn(ORDER_STATUSES) status?: string;
   @IsOptional() @IsString() @MaxLength(100) q?: string;
   @IsOptional() @IsString() @Length(25, 25) courseId?: string;
+  @IsOptional() @IsIn(['razorpay', 'offline', 'free']) channel?: string;
+  @IsOptional() @IsIn(['course', 'bundle', 'membership', 'webinar', 'product', 'coaching']) type?: string;
   @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Use YYYY-MM-DD' }) from?: string;
   @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Use YYYY-MM-DD' }) to?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize?: number;
+}
+class OfflineOrderDto {
+  @ApiProperty({ enum: ['course', 'bundle', 'membership', 'webinar', 'product', 'coaching'] }) @IsIn(['course', 'bundle', 'membership', 'webinar', 'product', 'coaching']) itemKind: string;
+  @ApiProperty() @IsString() @Length(25, 25) itemId: string;
+  @ApiProperty({ description: 'The learner (a student of this academy)' }) @IsString() @Length(25, 25) userId: string;
+  @ApiProperty({ enum: ['CASH', 'BANK_TRANSFER', 'UPI', 'CHEQUE', 'OTHER'] }) @IsIn(['CASH', 'BANK_TRANSFER', 'UPI', 'CHEQUE', 'OTHER']) mode: string;
+  @ApiPropertyOptional({ description: 'Transaction ID / reference' }) @IsOptional() @Transform(trim) @IsString() @MaxLength(191) reference?: string | null;
+  @ApiProperty({ description: 'Amount received' }) @IsNumber({ maxDecimalPlaces: 2 }) @Min(1) @Max(10_000_000) amount: number;
+  @ApiPropertyOptional({ description: 'Email the learner a receipt' }) @IsOptional() @IsBoolean() sendEmail?: boolean;
+  @ApiPropertyOptional({ description: 'Credit this affiliate for the sale' }) @IsOptional() @Transform(trim) @IsString() @MaxLength(32) affiliateCode?: string | null;
+}
+class OrderCommentDto {
+  @ApiProperty() @Transform(trim) @IsString() @Length(1, 2000) body: string;
+}
+class EditOrderDto {
+  @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(100) state?: string | null;
+  @ApiPropertyOptional() @IsOptional() @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value)) @Matches(/^([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z])?$/, { message: 'Invalid GSTIN format' }) gstin?: string | null;
+  @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(300) gstAddress?: string | null;
+  @ApiPropertyOptional({ description: 'Credit an affiliate (paid orders without one)' }) @IsOptional() @Transform(trim) @IsString() @MaxLength(32) affiliateCode?: string | null;
+}
+class SettlementsQuery {
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Use YYYY-MM-DD' }) from?: string;
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'Use YYYY-MM-DD' }) to?: string;
+  @IsOptional() @IsString() @MaxLength(60) q?: string;
 }
 class PaymentsQuery {
   @IsOptional() @IsIn(['CREATED', 'CAPTURED', 'FAILED', 'REFUNDED', 'PARTIALLY_REFUNDED']) status?: string;
@@ -161,7 +194,7 @@ export class CreatorCouponsController {
 @TenantScoped('workspace')
 @Controller({ path: 'creator', version: '1' })
 export class CreatorOrdersController {
-  constructor(private readonly orders: OrdersService) {}
+  constructor(private readonly orders: OrdersService, private readonly settlementsSvc: SettlementsService) {}
 
   @Get('orders') @RequirePermissions(PERMISSIONS.ORDERS_READ)
   async list(@Query() q: ListQuery) {
@@ -173,6 +206,20 @@ export class CreatorOrdersController {
   @ApiOperation({ summary: 'Revenue from the ledger: gross, refunds, GST, Razorpay fees, platform commission, net' })
   summary(@Query() q: RangeQuery) { return this.orders.summary(q.from ? new Date(q.from) : undefined, q.to ? new Date(q.to) : undefined); }
 
+  @Post('orders/offline') @RequirePermissions(PERMISSIONS.REFUNDS_MANAGE)
+  @ApiOperation({ summary: 'Record a payment received outside checkout (cash, bank transfer, UPI…) and give access' })
+  offline(@Body() dto: OfflineOrderDto, @CurrentAuth() auth: AuthContext) { return this.orders.recordOffline({ ...dto, sendEmail: dto.sendEmail ?? true }, auth.userId); }
+
+  @Get('orders/:id/comments') @RequirePermissions(PERMISSIONS.ORDERS_READ)
+  comments(@Param('id') id: string) { return this.orders.comments(id); }
+
+  @Post('orders/:id/comments') @RequirePermissions(PERMISSIONS.ORDERS_READ)
+  addComment(@Param('id') id: string, @Body() dto: OrderCommentDto, @CurrentAuth() auth: AuthContext) { return this.orders.addComment(id, dto.body, auth.userId); }
+
+  @Patch('orders/:id') @RequirePermissions(PERMISSIONS.REFUNDS_MANAGE)
+  @ApiOperation({ summary: 'Edit buyer state / GSTIN / GST address, or credit an affiliate' })
+  edit(@Param('id') id: string, @Body() dto: EditOrderDto, @CurrentAuth() auth: AuthContext) { return this.orders.editOrder(id, dto, auth.userId); }
+
   @Get('orders/:id') @RequirePermissions(PERMISSIONS.ORDERS_READ)
   get(@Param('id') id: string) { return this.orders.get(id); }
 
@@ -182,6 +229,17 @@ export class CreatorOrdersController {
   @Post('orders/:id/refunds') @RequirePermissions(PERMISSIONS.REFUNDS_MANAGE)
   @ApiOperation({ summary: 'Refund through Razorpay (full or partial)' })
   refund(@Param('id') id: string, @Body() dto: RefundDto, @CurrentAuth() auth: AuthContext) { return this.orders.refund(id, dto, auth.userId); }
+
+  @Get('settlements') @RequirePermissions(PERMISSIONS.ORDERS_READ)
+  @ApiOperation({ summary: 'Payouts from the academy’s Razorpay account, with earnings and amount still to be settled' })
+  settlements(@Query() q: SettlementsQuery) { return this.settlementsSvc.overview(q); }
+
+  @Get('settlements.csv') @RequirePermissions(PERMISSIONS.ORDERS_READ)
+  async settlementsCsv(@Query() q: SettlementsQuery, @Res() res: Response) {
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="settlements.csv"');
+    res.end(`\uFEFF${await this.settlementsSvc.csv(q)}`);
+  }
 
   @Get('transactions') @RequirePermissions(PERMISSIONS.ORDERS_READ)
   async transactions(@Query() q: PaymentsQuery) {
@@ -230,6 +288,14 @@ export class LearnCommerceController {
 
   @Post('orders/:id/abandon') @HttpCode(200)
   abandon(@Param('id') id: string, @Body() dto: AbandonDto, @CurrentAuth() auth: AuthContext) { return this.orders.markAbandoned(auth.userId, id, dto.reason); }
+
+  @Get('orders/:id/upsell')
+  @ApiOperation({ summary: 'The one-time offer shown after this paid order (null when there is none)' })
+  async upsell(@Param('id') id: string, @CurrentAuth() auth: AuthContext) { return { offer: await this.orders.upsellFor(auth.userId, id) }; }
+
+  @Post('orders/:id/upsell/:offerId/decline') @HttpCode(200)
+  @ApiOperation({ summary: 'No thanks — stop showing this offer for the order' })
+  declineUpsell(@Param('id') id: string, @Param('offerId') offerId: string, @CurrentAuth() auth: AuthContext) { return this.orders.declineUpsell(auth.userId, id, offerId); }
 
   @Get('orders/:id/invoice')
   async invoice(@Param('id') id: string, @CurrentAuth() auth: AuthContext, @Res() res: Response) { sendPdf(res, await this.orders.invoicePdf(id, auth.userId)); }

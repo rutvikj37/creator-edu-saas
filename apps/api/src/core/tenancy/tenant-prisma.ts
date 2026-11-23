@@ -12,13 +12,14 @@ export const TENANT_MODELS = new Set<string>(['TenantMember', 'TenantSetting', '
   'Enrollment', 'LessonProgress', 'LessonNote', 'CourseBookmark', 'LessonComment', 'Quiz', 'QuizQuestion', 'QuizOption', 'QuizAttempt', 'QuizAnswer',
   'Assignment', 'AssignmentSubmission', 'CertificateTemplate', 'Certificate',
   'VideoAsset', 'VideoPlaybackSession', 'VideoStatusHistory', 'VideoUploadSession', 'VideoProcessingEvent', 'VideoBackup', 'DocumentBackup', 'VideoUsageRecord',
-  'AiRequest', 'PaymentGatewayAccount', 'Coupon', 'CouponRedemption', 'Order', 'OrderItem', 'Payment', 'Refund', 'LedgerEntry', 'Invoice', 'TenantSequence',
+  'AiRequest', 'OrderComment', 'ReportExport', 'CoachingProgram', 'CoachingCoach', 'CoachingSession', 'CoachProfile', 'CoachAvailability', 'CoachingAccess', 'CoachingBooking', 'PaymentGatewayAccount', 'Coupon', 'CouponRedemption', 'Order', 'OrderItem', 'Payment', 'Refund', 'LedgerEntry', 'Invoice', 'TenantSequence',
   'BillingInvoice', 'BillingPayment',
   'SiteSettings', 'SitePage', 'SitePageVersion', 'BlogPost',
   'Lead', 'ConsentEvent', 'Campaign', 'CampaignRecipient', 'Automation', 'AutomationRun',
   'AffiliateProgram', 'Affiliate', 'AffiliateClick', 'AffiliateConversion',
   'Community', 'CommunityPost', 'CommunityComment', 'CommunityReport', 'MembershipPlan', 'Membership',
   'Batch', 'BatchMember', 'LiveClass', 'LiveSession', 'LiveAttendance', 'LiveRecording', 'Bundle', 'CartItem', 'CourseReview', 'BankQuestion', 'LiveIntegration', 'LiveSessionRegistrant', 'DigitalProduct', 'DigitalProductFile', 'DigitalProductAccess', 'DigitalProductDownload', 'AnalyticsEvent', 'ChatConversation', 'ChatMessage', 'LiveAdmission', 'LivePoll', 'LivePollVote', 'LiveQuestion', 'WebinarRegistration',
+  'SalesOffer', 'SalesOfferResponse', 'PaymentLink',
 ]);
 
 export class TenantContextMissingError extends Error {

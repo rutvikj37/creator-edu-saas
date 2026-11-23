@@ -34,7 +34,7 @@ export class SupportService {
   }
 
   async listForTenant(tenantId: string, q: TicketListQuery) {
-    const where: Prisma.SupportTicketWhereInput = { tenantId, ...(q.status ? { status: q.status as never } : {}) };
+    const where: Prisma.SupportTicketWhereInput = { scope: 'PLATFORM', tenantId, ...(q.status ? { status: q.status as never } : {}) };
     const [rows, total] = await Promise.all([
       this.prisma.supportTicket.findMany({ where, orderBy: { lastActivityAt: 'desc' }, ...toSkipTake(q) }),
       this.prisma.supportTicket.count({ where }),
@@ -43,14 +43,14 @@ export class SupportService {
   }
 
   async getForRequester(tenantId: string, id: string) {
-    const t = await this.prisma.supportTicket.findFirst({ where: { id, tenantId }, include: { messages: { where: { isInternalNote: false }, orderBy: { createdAt: 'asc' } } } });
+    const t = await this.prisma.supportTicket.findFirst({ where: { id, tenantId, scope: 'PLATFORM' }, include: { messages: { where: { isInternalNote: false }, orderBy: { createdAt: 'asc' } } } });
     if (!t) throw AppException.notFound('Ticket not found');
     const people = await this.people(t.messages.map((m) => m.authorId));
     return { ...t, messages: t.messages.map((m) => ({ id: m.id, body: m.body, isStaff: m.isStaff, createdAt: m.createdAt, author: m.isStaff ? { fullName: 'Support team' } : people.get(m.authorId) })) };
   }
 
   async requesterReply(tenantId: string, id: string, authorId: string, body: string) {
-    const t = await this.prisma.supportTicket.findFirst({ where: { id, tenantId } });
+    const t = await this.prisma.supportTicket.findFirst({ where: { id, tenantId, scope: 'PLATFORM' } });
     if (!t) throw AppException.notFound('Ticket not found');
     await this.prisma.$transaction([
       this.prisma.supportMessage.create({ data: { ticketId: id, authorId, body } }),
@@ -62,6 +62,7 @@ export class SupportService {
   // ── support staff side ─────────────────────────────────────
   async listForStaff(staffId: string, q: TicketListQuery) {
     const where: Prisma.SupportTicketWhereInput = {
+      scope: 'PLATFORM',
       ...(q.status ? { status: q.status as never } : { status: { notIn: ['CLOSED'] } }),
       ...(q.priority ? { priority: q.priority as never } : {}),
       ...(q.view === 'mine' ? { assigneeId: staffId } : q.view === 'unassigned' ? { assigneeId: null } : {}),
@@ -87,7 +88,7 @@ export class SupportService {
   }
 
   async getForStaff(id: string) {
-    const t = await this.prisma.supportTicket.findUnique({ where: { id }, include: { messages: { orderBy: { createdAt: 'asc' } } } });
+    const t = await this.prisma.supportTicket.findFirst({ where: { id, scope: 'PLATFORM' }, include: { messages: { orderBy: { createdAt: 'asc' } } } });
     if (!t) throw AppException.notFound('Ticket not found');
     const people = await this.people([t.requesterId, ...(t.assigneeId ? [t.assigneeId] : []), ...t.messages.map((m) => m.authorId)]);
     const tenant = t.tenantId ? await this.prisma.tenant.findUnique({ where: { id: t.tenantId }, select: { id: true, name: true, slug: true, status: true } }) : null;
@@ -101,7 +102,7 @@ export class SupportService {
   }
 
   async staffReply(id: string, staffId: string, dto: TicketReplyDto, origin: string) {
-    const t = await this.prisma.supportTicket.findUnique({ where: { id } });
+    const t = await this.prisma.supportTicket.findFirst({ where: { id, scope: 'PLATFORM' } });
     if (!t) throw AppException.notFound('Ticket not found');
     await this.prisma.$transaction([
       this.prisma.supportMessage.create({ data: { ticketId: id, authorId: staffId, body: dto.body, isStaff: true, isInternalNote: Boolean(dto.internal) } }),
@@ -129,7 +130,7 @@ export class SupportService {
   }
 
   async update(id: string, dto: TicketUpdateDto) {
-    const t = await this.prisma.supportTicket.findUnique({ where: { id } });
+    const t = await this.prisma.supportTicket.findFirst({ where: { id, scope: 'PLATFORM' } });
     if (!t) throw AppException.notFound('Ticket not found');
     if (dto.assigneeId) {
       const ok = await this.prisma.userRole.findFirst({ where: { userId: dto.assigneeId, role: { key: { in: ['SUPPORT_ADMIN', 'SUPER_ADMIN'] } } } });
@@ -157,9 +158,9 @@ export class SupportService {
 
   async report() {
     const [byStatus, byPriority, resolved] = await Promise.all([
-      this.prisma.supportTicket.groupBy({ by: ['status'], _count: { _all: true } }),
-      this.prisma.supportTicket.groupBy({ by: ['priority'], where: { status: { notIn: ['RESOLVED', 'CLOSED'] } }, _count: { _all: true } }),
-      this.prisma.supportTicket.findMany({ where: { firstResponseAt: { not: null } }, select: { createdAt: true, firstResponseAt: true, resolvedAt: true }, take: 1000, orderBy: { createdAt: 'desc' } }),
+      this.prisma.supportTicket.groupBy({ by: ['status'], where: { scope: 'PLATFORM' }, _count: { _all: true } }),
+      this.prisma.supportTicket.groupBy({ by: ['priority'], where: { scope: 'PLATFORM', status: { notIn: ['RESOLVED', 'CLOSED'] } }, _count: { _all: true } }),
+      this.prisma.supportTicket.findMany({ where: { scope: 'PLATFORM', firstResponseAt: { not: null } }, select: { createdAt: true, firstResponseAt: true, resolvedAt: true }, take: 1000, orderBy: { createdAt: 'desc' } }),
     ]);
     const hours = (a: Date, b: Date) => (b.getTime() - a.getTime()) / 3600_000;
     const avg = (xs: number[]) => (xs.length ? Math.round((xs.reduce((s, x) => s + x, 0) / xs.length) * 10) / 10 : null);

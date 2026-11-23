@@ -70,6 +70,7 @@ describe('Custom team roles (e2e)', () => {
     const tlMember = staff.members.find((m: any) => m.user.fullName === 'Tara Lead');
     await authed(app, tl).patch(`/api/v1/creator/staff/${tlMember.id}`).send({ roleKey: 'ADMIN' }).expect(403); // no self-promotion
     await authed(app, tl).patch(`/api/v1/creator/staff/${edMember.id}`).send({ roleKey: viewer.key }).expect(403); // cannot demote someone holding more
+    await authed(app, tl).delete(`/api/v1/creator/staff/${edMember.id}`).expect(403); // ...or remove them
 
     // Roles in use cannot be deleted; move the member first.
     await authed(app, cs).delete(`/api/v1/creator/roles/${editor.id}`).expect(409);

@@ -29,6 +29,20 @@ model PlatformSetting {
   @@index([group])
 }
 
+/// Super Admin wording for a built-in transactional email. Without a row the built-in wording is used.
+/// `body` is plain text with {{variable}} placeholders; blank lines separate paragraphs.
+model EmailTemplateOverride {
+  id          String   @id @default(cuid()) @db.Char(25)
+  key         String   @unique @db.VarChar(64)
+  subject     String   @db.VarChar(200)
+  heading     String   @db.VarChar(200)
+  body        String   @db.Text
+  ctaLabel    String?  @db.VarChar(60)
+  updatedById String   @db.Char(25)
+  createdAt   DateTime @default(now()) @db.DateTime(3)
+  updatedAt   DateTime @updatedAt @db.DateTime(3)
+}
+
 /// Append-only audit trail for security and business events.
 /// No foreign keys on purpose: audit rows must survive deletion/anonymisation of actors and targets.
 model AuditLog {
@@ -570,10 +584,16 @@ enum TicketPriority {
   URGENT
 }
 
-/// Creator → platform support tickets (Phase 3). Student → academy tickets reuse this model with scope ACADEMY later.
+enum TicketScope {
+  PLATFORM
+  ACADEMY
+}
+
+/// PLATFORM: creator → platform support. ACADEMY: student → their academy's team (tenantId is the academy).
 model SupportTicket {
   id              String           @id @default(cuid()) @db.Char(25)
   number          Int              @unique @default(autoincrement())
+  scope           TicketScope      @default(PLATFORM)
   tenantId        String?          @db.Char(25)
   requesterId     String           @db.Char(25)
   assigneeId      String?          @db.Char(25)
@@ -591,6 +611,8 @@ model SupportTicket {
   @@index([status, priority, lastActivityAt])
   @@index([tenantId, createdAt])
   @@index([assigneeId, status])
+  @@index([scope, tenantId, status, lastActivityAt])
+  @@index([scope, tenantId, requesterId])
 }
 
 model SupportMessage {
@@ -631,24 +653,35 @@ model Academy {
 }
 
 model TenantBusinessProfile {
-  id               String   @id @default(cuid()) @db.Char(25)
-  tenantId         String   @unique @db.Char(25)
-  legalName        String?  @db.VarChar(200)
-  addressLine1     String?  @db.VarChar(200)
-  addressLine2     String?  @db.VarChar(200)
-  city             String?  @db.VarChar(100)
-  state            String?  @db.VarChar(100)
-  postalCode       String?  @db.VarChar(20)
-  country          String?  @db.Char(2)
-  gstRegistered    Boolean  @default(false)
-  gstin            String?  @db.VarChar(15)
-  pan              String?  @db.VarChar(10)
-  invoicePrefix    String   @default("INV") @db.VarChar(12)
-  taxRate          Decimal  @default(18) @db.Decimal(5, 2)
-  pricesIncludeTax Boolean  @default(true)
-  createdAt        DateTime @default(now()) @db.DateTime(3)
-  updatedAt        DateTime @updatedAt @db.DateTime(3)
-  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id                 String   @id @default(cuid()) @db.Char(25)
+  tenantId           String   @unique @db.Char(25)
+  legalName          String?  @db.VarChar(200)
+  addressLine1       String?  @db.VarChar(200)
+  addressLine2       String?  @db.VarChar(200)
+  city               String?  @db.VarChar(100)
+  state              String?  @db.VarChar(100)
+  postalCode         String?  @db.VarChar(20)
+  country            String?  @db.Char(2)
+  gstRegistered      Boolean  @default(false)
+  gstin              String?  @db.VarChar(15)
+  pan                String?  @db.VarChar(10)
+  invoicePrefix      String   @default("INV") @db.VarChar(12)
+  taxRate            Decimal  @default(18) @db.Decimal(5, 2)
+  pricesIncludeTax   Boolean  @default(true)
+  /// Shown on every invoice (e.g. registered office, SAC code, LUT number).
+  taxDetails         String?  @db.VarChar(2000)
+  /// Holds a valid LUT: sales to buyers outside India are zero-rated (0% IGST).
+  exportsUnderLut    Boolean  @default(false)
+  /// Issue a GST invoice for every paid order.
+  invoicesEnabled    Boolean  @default(true)
+  /// First serial number of each financial year's invoices.
+  invoiceStartNumber Int      @default(1)
+  invoiceNote        String?  @db.VarChar(2000)
+  /// Ask buyers for their GSTIN at checkout so they can claim input tax credit.
+  gstInputCredit     Boolean  @default(true)
+  createdAt          DateTime @default(now()) @db.DateTime(3)
+  updatedAt          DateTime @updatedAt @db.DateTime(3)
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, id])
 }
@@ -1606,68 +1639,179 @@ enum OrderStatus {
 }
 
 model Order {
-  id               String              @id @default(cuid()) @db.Char(25)
-  tenantId         String              @db.Char(25)
-  number           String              @db.VarChar(32)
-  userId           String              @db.Char(25)
-  status           OrderStatus         @default(PENDING)
-  currency         String              @db.Char(3)
-  subtotalAmount   Decimal             @db.Decimal(19, 4)
-  discountAmount   Decimal             @default(0) @db.Decimal(19, 4)
-  taxAmount        Decimal             @default(0) @db.Decimal(19, 4)
-  totalAmount      Decimal             @db.Decimal(19, 4)
-  refundedAmount   Decimal             @default(0) @db.Decimal(19, 4)
-  taxRate          Decimal?            @db.Decimal(5, 2)
-  taxInclusive     Boolean             @default(true)
-  couponId         String?             @db.Char(25)
-  couponCode       String?             @db.VarChar(40)
-  provider         PaymentProviderKey?
-  gatewayAccountId String?             @db.Char(25)
-  billing          Json
-  idempotencyKey   String?             @db.VarChar(64)
-  affiliateId      String?             @db.Char(25)
+  id                   String              @id @default(cuid()) @db.Char(25)
+  tenantId             String              @db.Char(25)
+  number               String              @db.VarChar(32)
+  userId               String              @db.Char(25)
+  status               OrderStatus         @default(PENDING)
+  currency             String              @db.Char(3)
+  subtotalAmount       Decimal             @db.Decimal(19, 4)
+  discountAmount       Decimal             @default(0) @db.Decimal(19, 4)
+  taxAmount            Decimal             @default(0) @db.Decimal(19, 4)
+  totalAmount          Decimal             @db.Decimal(19, 4)
+  refundedAmount       Decimal             @default(0) @db.Decimal(19, 4)
+  taxRate              Decimal?            @db.Decimal(5, 2)
+  taxInclusive         Boolean             @default(true)
+  couponId             String?             @db.Char(25)
+  couponCode           String?             @db.VarChar(40)
+  provider             PaymentProviderKey?
+  /// How it was paid: RAZORPAY, or an offline mode recorded by the academy (CASH, BANK_TRANSFER, UPI, CHEQUE, OTHER).
+  paymentMode          String?             @db.VarChar(20)
+  /// Fee the buyer paid to cover the gateway charge (items with "Charge transaction fee" on). Included in totalAmount.
+  transactionFeeAmount Decimal             @default(0) @db.Decimal(19, 4)
+  /// Transaction ID / reference for an offline payment.
+  externalReference    String?             @db.VarChar(191)
+  /// Staff member who recorded an offline payment.
+  recordedById         String?             @db.Char(25)
+  gatewayAccountId     String?             @db.Char(25)
+  billing              Json
+  idempotencyKey       String?             @db.VarChar(64)
+  affiliateId          String?             @db.Char(25)
   /// First-touch marketing attribution captured at checkout: { visitorId, source, medium, campaign, referrerHost, landingPath }.
-  attribution      Json?
-  paidAt           DateTime?           @db.DateTime(3)
-  failureReason    String?             @db.VarChar(500)
-  expiresAt        DateTime            @db.DateTime(3)
-  createdAt        DateTime            @default(now()) @db.DateTime(3)
-  updatedAt        DateTime            @updatedAt @db.DateTime(3)
-  items            OrderItem[]
-  payments         Payment[]
-  refunds          Refund[]
+  attribution          Json?
+  /// Bought through a shareable payment link.
+  paymentLinkId        String?             @db.Char(25)
+  /// Abandoned-checkout reminders sent so far (99 = no reminder needed: bought later or superseded).
+  recoveryStage        Int                 @default(0)
+  recoveryLastAt       DateTime?           @db.DateTime(3)
+  /// A later paid order by the same buyer for the same items, after a reminder.
+  recoveredAt          DateTime?           @db.DateTime(3)
+  recoveredByOrderId   String?             @db.Char(25)
+  paidAt               DateTime?           @db.DateTime(3)
+  failureReason        String?             @db.VarChar(500)
+  expiresAt            DateTime            @db.DateTime(3)
+  createdAt            DateTime            @default(now()) @db.DateTime(3)
+  updatedAt            DateTime            @updatedAt @db.DateTime(3)
+  items                OrderItem[]
+  payments             Payment[]
+  refunds              Refund[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, number])
   @@unique([tenantId, userId, idempotencyKey])
   @@index([tenantId, status, createdAt])
   @@index([tenantId, userId, createdAt])
+  @@index([tenantId, paymentLinkId])
   @@index([status, updatedAt])
+  @@index([status, createdAt])
 }
 
 model OrderItem {
-  id               String   @id @default(cuid()) @db.Char(25)
-  tenantId         String   @db.Char(25)
-  orderId          String   @db.Char(25)
-  courseId         String?  @db.Char(25)
-  membershipPlanId String?  @db.Char(25)
-  bundleId         String?  @db.Char(25)
+  id                String   @id @default(cuid()) @db.Char(25)
+  tenantId          String   @db.Char(25)
+  orderId           String   @db.Char(25)
+  courseId          String?  @db.Char(25)
+  membershipPlanId  String?  @db.Char(25)
+  bundleId          String?  @db.Char(25)
   /// Paid webinar ticket.
-  liveClassId      String?  @db.Char(25)
+  liveClassId       String?  @db.Char(25)
   /// Digital product (download).
-  digitalProductId String?  @db.Char(25)
+  digitalProductId  String?  @db.Char(25)
+  /// 1:1 coaching program.
+  coachingProgramId String?  @db.Char(25)
   /// Courses this line grants, fixed at purchase (a bundle's courses; the course itself otherwise).
-  grantCourseIds   Json?
-  title            String   @db.VarChar(200)
-  unitAmount       Decimal  @db.Decimal(19, 4)
-  discountAmount   Decimal  @default(0) @db.Decimal(19, 4)
-  totalAmount      Decimal  @db.Decimal(19, 4)
-  createdAt        DateTime @default(now()) @db.DateTime(3)
-  order            Order    @relation(fields: [tenantId, orderId], references: [tenantId, id], onDelete: Cascade)
+  grantCourseIds    Json?
+  title             String   @db.VarChar(200)
+  unitAmount        Decimal  @db.Decimal(19, 4)
+  discountAmount    Decimal  @default(0) @db.Decimal(19, 4)
+  totalAmount       Decimal  @db.Decimal(19, 4)
+  /// Sold at a special price through an order bump or post-purchase upsell (SalesOffer).
+  offerId           String?  @db.Char(25)
+  /// BUMP | UPSELL | LINK — how this line was added.
+  source            String?  @db.VarChar(16)
+  createdAt         DateTime @default(now()) @db.DateTime(3)
+  order             Order    @relation(fields: [tenantId, orderId], references: [tenantId, id], onDelete: Cascade)
 
   @@unique([tenantId, id])
   @@index([tenantId, courseId])
   @@index([tenantId, bundleId])
+  @@index([tenantId, offerId])
+}
+
+enum SalesOfferType {
+  /// Ticked on the checkout page and paid in the same order.
+  BUMP
+  /// Offered on the order page right after payment, at a special price for a limited time.
+  UPSELL
+}
+
+enum SalesOfferStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+/// An order bump or post-purchase upsell: one course, bundle or digital product at a special price.
+model SalesOffer {
+  id            String               @id @default(cuid()) @db.Char(25)
+  tenantId      String               @db.Char(25)
+  type          SalesOfferType
+  status        SalesOfferStatus     @default(ACTIVE)
+  /// Internal name shown to the academy team.
+  name          String               @db.VarChar(120)
+  /// Shown to the buyer.
+  headline      String               @db.VarChar(160)
+  description   String?              @db.VarChar(1000)
+  /// course | bundle | product
+  itemKind      String               @db.VarChar(16)
+  itemId        String               @db.Char(25)
+  priceAmount   Decimal              @db.Decimal(19, 4)
+  currency      String               @db.Char(3)
+  /// Purchases that show the offer, as "course:<id>", "bundle:<id>", "product:<id>", "webinar:<id>", "membership:<id>"; null = any purchase.
+  triggers      Json?
+  /// Upsells: minutes after payment during which the special price can be taken.
+  windowMinutes Int                  @default(30)
+  sortOrder     Int                  @default(0)
+  createdById   String               @db.Char(25)
+  createdAt     DateTime             @default(now()) @db.DateTime(3)
+  updatedAt     DateTime             @updatedAt @db.DateTime(3)
+  responses     SalesOfferResponse[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, type, status])
+}
+
+/// A buyer's answer to an upsell after a given order (DECLINED, or ACCEPTED once paid).
+model SalesOfferResponse {
+  id            String     @id @default(cuid()) @db.Char(25)
+  tenantId      String     @db.Char(25)
+  offerId       String     @db.Char(25)
+  sourceOrderId String     @db.Char(25)
+  userId        String     @db.Char(25)
+  decision      String     @db.VarChar(16)
+  createdAt     DateTime   @default(now()) @db.DateTime(3)
+  offer         SalesOffer @relation(fields: [tenantId, offerId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, offerId, sourceOrderId])
+}
+
+/// A shareable link that opens checkout for one item, optionally at a custom price.
+model PaymentLink {
+  id           String    @id @default(cuid()) @db.Char(25)
+  tenantId     String    @db.Char(25)
+  code         String    @db.VarChar(16)
+  title        String    @db.VarChar(120)
+  /// course | bundle | product | webinar | membership
+  itemKind     String    @db.VarChar(16)
+  itemId       String    @db.Char(25)
+  /// Custom price; null = the item's own price.
+  priceAmount  Decimal?  @db.Decimal(19, 4)
+  currency     String    @db.Char(3)
+  /// Applied automatically when the link is opened.
+  couponCode   String?   @db.VarChar(40)
+  allowCoupons Boolean   @default(false)
+  maxUses      Int?
+  expiresAt    DateTime? @db.DateTime(3)
+  isActive     Boolean   @default(true)
+  /// Shown to the buyer on the link page.
+  note         String?   @db.VarChar(500)
+  createdById  String    @db.Char(25)
+  createdAt    DateTime  @default(now()) @db.DateTime(3)
+  updatedAt    DateTime  @updatedAt @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, code])
 }
 
 enum ReviewStatus {
@@ -2848,19 +2992,36 @@ model CommunityReport {
 
 /// Paid access to a set of courses (and member communities) for a period; renewed by paying again.
 model MembershipPlan {
-  id          String          @id @default(cuid()) @db.Char(25)
-  tenantId    String          @db.Char(25)
-  name        String          @db.VarChar(120)
-  description String?         @db.VarChar(1000)
-  priceAmount Decimal         @db.Decimal(19, 4)
-  currency    String          @db.Char(3)
-  interval    BillingInterval
-  courseIds   Json
-  status      String          @default("ACTIVE") @db.VarChar(16)
-  createdById String          @db.Char(25)
-  createdAt   DateTime        @default(now()) @db.DateTime(3)
-  updatedAt   DateTime        @updatedAt @db.DateTime(3)
-  memberships Membership[]
+  id                 String          @id @default(cuid()) @db.Char(25)
+  tenantId           String          @db.Char(25)
+  name               String          @db.VarChar(120)
+  description        String?         @db.VarChar(1000)
+  /// What the buyer pays per period; 0 while a draft has no price yet.
+  priceAmount        Decimal         @db.Decimal(19, 4)
+  /// Original price shown struck through.
+  compareAtAmount    Decimal?        @db.Decimal(19, 4)
+  currency           String          @db.Char(3)
+  interval           BillingInterval
+  courseIds          Json
+  /// Pricing plan label shown on the buy button card.
+  planName           String?         @db.VarChar(100)
+  coverFileId        String?         @db.Char(25)
+  /// [{ question, answer }]
+  faqs               Json?
+  /// Label on the buy button (default: Get Access Now).
+  buttonText         String?         @db.VarChar(40)
+  /// Unlimited plan duration: one payment, access never ends (no renewals).
+  lifetime           Boolean         @default(false)
+  /// true = GST is added on top of the price, false = included, null = the academy's setting.
+  taxExclusive       Boolean?
+  /// Buyer pays the Razorpay charge as a transaction fee.
+  passTransactionFee Boolean         @default(false)
+  /// DRAFT (being built), ACTIVE (on sale) or ARCHIVED.
+  status             String          @default("ACTIVE") @db.VarChar(16)
+  createdById        String          @db.Char(25)
+  createdAt          DateTime        @default(now()) @db.DateTime(3)
+  updatedAt          DateTime        @updatedAt @db.DateTime(3)
+  memberships        Membership[]
 
   @@unique([tenantId, id])
   @@index([tenantId, status])
@@ -2923,4 +3084,183 @@ model AiRequest {
   @@unique([tenantId, id])
   @@index([tenantId, createdAt])
   @@index([tenantId, userId, feature, createdAt])
+}
+
+// ── 1:1 coaching ─────────────────────────────────────────────
+
+enum CoachingBookingStatus {
+  BOOKED
+  CANCELLED
+  COMPLETED
+}
+
+/// A sellable 1:1 coaching program: a set of sessions a buyer books with the program's coaches.
+model CoachingProgram {
+  id                 String       @id @default(cuid()) @db.Char(25)
+  tenantId           String       @db.Char(25)
+  title              String       @db.VarChar(100)
+  slug               String       @db.VarChar(120)
+  /// Rich-text (TipTap) document.
+  description        Json?
+  coverFileId        String?      @db.Char(25)
+  /// [{ question, answer }]
+  faqs               Json
+  planName           String?      @db.VarChar(100)
+  /// What the buyer pays; 0 = free.
+  priceAmount        Decimal      @db.Decimal(19, 4)
+  /// Original price shown struck through.
+  compareAtAmount    Decimal?     @db.Decimal(19, 4)
+  currency           String       @db.Char(3)
+  /// Buyer pays the Razorpay charge as a transaction fee.
+  passTransactionFee Boolean      @default(false)
+  status             BundleStatus @default(DRAFT)
+  publishedAt        DateTime?    @db.DateTime(3)
+  createdById        String       @db.Char(25)
+  createdAt          DateTime     @default(now()) @db.DateTime(3)
+  updatedAt          DateTime     @updatedAt @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, slug])
+  @@index([tenantId, status])
+}
+
+/// A staff member who coaches a program. Bookings are spread by weight (2 = twice as often as 1).
+model CoachingCoach {
+  id        String @id @default(cuid()) @db.Char(25)
+  tenantId  String @db.Char(25)
+  programId String @db.Char(25)
+  userId    String @db.Char(25)
+  weight    Int    @default(1)
+
+  @@unique([tenantId, id])
+  @@unique([programId, userId])
+  @@index([tenantId, userId])
+}
+
+/// One session of a program (booked once per buyer).
+model CoachingSession {
+  id            String  @id @default(cuid()) @db.Char(25)
+  tenantId      String  @db.Char(25)
+  programId     String  @db.Char(25)
+  position      Int
+  title         String  @db.VarChar(100)
+  durationMin   Int
+  /// Rich-text (TipTap) document.
+  agenda        Json
+  notes         String? @db.VarChar(1000)
+  /// FileAsset ids (purpose LESSON_FILE) shared with the buyer once booked.
+  attachmentIds Json
+
+  @@unique([tenantId, id])
+  @@index([tenantId, programId, position])
+}
+
+/// A coach's booking settings in this academy.
+model CoachProfile {
+  id                    String   @id @default(cuid()) @db.Char(25)
+  tenantId              String   @db.Char(25)
+  userId                String   @db.Char(25)
+  timezone              String   @db.VarChar(64)
+  /// Personal meeting room (Zoom/Meet link) used for bookings.
+  meetingUrl            String?  @db.VarChar(500)
+  minNoticeHours        Int      @default(12)
+  bufferMin             Int      @default(0)
+  /// Shown to learners instead of the account name when set.
+  displayName           String?  @db.VarChar(100)
+  bio                   String?  @db.VarChar(400)
+  photoFileId           String?  @db.Char(25)
+  /// Connected Google Calendar: busy times block slots; bookings become events with a Meet link.
+  googleEmail           String?  @db.VarChar(191)
+  googleRefreshTokenEnc String?  @db.Text
+  googleError           String?  @db.VarChar(500)
+  createdAt             DateTime @default(now()) @db.DateTime(3)
+  updatedAt             DateTime @updatedAt @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, userId])
+}
+
+/// Weekly working hours, in the coach's timezone. weekday 0 = Sunday.
+model CoachAvailability {
+  id          String @id @default(cuid()) @db.Char(25)
+  tenantId    String @db.Char(25)
+  userId      String @db.Char(25)
+  weekday     Int
+  startMinute Int
+  endMinute   Int
+
+  @@unique([tenantId, id])
+  @@index([tenantId, userId])
+}
+
+/// A buyer's access to a program.
+model CoachingAccess {
+  id        String    @id @default(cuid()) @db.Char(25)
+  tenantId  String    @db.Char(25)
+  programId String    @db.Char(25)
+  userId    String    @db.Char(25)
+  source    String    @db.VarChar(16)
+  orderId   String?   @db.Char(25)
+  revokedAt DateTime? @db.DateTime(3)
+  createdAt DateTime  @default(now()) @db.DateTime(3)
+  updatedAt DateTime  @updatedAt @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, programId, userId])
+  @@index([tenantId, userId])
+}
+
+model CoachingBooking {
+  id            String                @id @default(cuid()) @db.Char(25)
+  tenantId      String                @db.Char(25)
+  programId     String                @db.Char(25)
+  sessionId     String                @db.Char(25)
+  accessId      String                @db.Char(25)
+  userId        String                @db.Char(25)
+  coachId       String                @db.Char(25)
+  startsAt      DateTime              @db.DateTime(3)
+  endsAt        DateTime              @db.DateTime(3)
+  status        CoachingBookingStatus @default(BOOKED)
+  meetingUrl    String?               @db.VarChar(500)
+  /// Event on the coach's Google Calendar.
+  googleEventId String?               @db.VarChar(255)
+  cancelledAt   DateTime?             @db.DateTime(3)
+  cancelledBy   String?               @db.VarChar(16)
+  createdAt     DateTime              @default(now()) @db.DateTime(3)
+  updatedAt     DateTime              @updatedAt @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, coachId, startsAt])
+  @@index([tenantId, programId, status])
+  @@index([tenantId, userId])
+  @@index([accessId, sessionId])
+}
+
+/// A CSV report someone downloaded (Reports → Downloads keeps a copy to download again).
+model ReportExport {
+  id          String   @id @default(cuid()) @db.Char(25)
+  tenantId    String   @db.Char(25)
+  /// SALES, GST, STUDENTS or ENROLLMENTS
+  kind        String   @db.VarChar(16)
+  fileName    String   @db.VarChar(200)
+  sizeBytes   Int
+  content     String   @db.MediumText
+  createdById String   @db.Char(25)
+  createdAt   DateTime @default(now()) @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, createdAt])
+}
+
+/// Internal note on an order (Transactions → details → Comments). Never shown to the buyer.
+model OrderComment {
+  id        String   @id @default(cuid()) @db.Char(25)
+  tenantId  String   @db.Char(25)
+  orderId   String   @db.Char(25)
+  authorId  String   @db.Char(25)
+  body      String   @db.VarChar(2000)
+  createdAt DateTime @default(now()) @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, orderId, createdAt])
 }

@@ -44,7 +44,7 @@ it('student sees history, receives a reply through the long poll, and sends a me
   expect(input).toHaveValue('');
 });
 
-it('staff inbox lists conversations, opens one, replies and closes it', async () => {
+it('staff inbox searches, opens a conversation with its contact header, replies and closes it', async () => {
   creatorChatApi.list.mockResolvedValue({ items: [{ id: 'c1', status: 'OPEN', unread: 2, lastMessagePreview: 'Need help with payment', lastMessageAt: '2026-11-06T10:00:00Z', customer: { name: 'Riya Student', email: 'riya@example.com' } }], total: 1, page: 1, pages: 1, unreadConversations: 1 });
   creatorChatApi.thread.mockReturnValue(thread);
   thread.load.mockResolvedValue({ conversation: { id: 'c1', status: 'OPEN' }, messages: [{ id: 'm1', side: 'customer', body: 'My payment failed', senderName: 'Riya Student', createdAt: '2026-11-06T10:00:00Z' }], hasMore: false });
@@ -52,20 +52,25 @@ it('staff inbox lists conversations, opens one, replies and closes it', async ()
   thread.send.mockResolvedValue({ id: 'm2', side: 'agent', body: 'Please try again now.', senderName: 'Owner', createdAt: '2026-11-06T10:01:00Z' });
   thread.setStatus.mockResolvedValue({ status: 'CLOSED' });
   const router = wrap(<CreatorChatInboxPage />);
-  expect(await screen.findByText('Unread (1)')).toBeInTheDocument();
-  expect(creatorChatApi.list).toHaveBeenCalledWith({ status: 'OPEN' });
+  await waitFor(() => expect(screen.getByRole('heading', { name: /Inbox/ })).toHaveTextContent('Inbox1'));
+  expect(creatorChatApi.list).toHaveBeenCalledWith({});
+  await userEvent.type(screen.getByPlaceholderText('Search by name or email'), 'riya');
+  await waitFor(() => expect(creatorChatApi.list).toHaveBeenLastCalledWith({ q: 'riya' }));
   await userEvent.click(within(screen.getByRole('list', { name: 'Conversations' })).getByRole('button', { name: /Riya Student/ }));
   expect(router.state.location.search).toContain('c=c1');
   expect(await screen.findByText('My payment failed')).toBeInTheDocument();
   expect(creatorChatApi.thread).toHaveBeenCalledWith('c1');
+  expect(screen.getByText('riya@example.com')).toBeInTheDocument(); // contact header
   await waitFor(() => expect(thread.read).toHaveBeenCalled());
 
   await userEvent.type(screen.getByLabelText('Message'), 'Please try again now.');
   await userEvent.click(screen.getByRole('button', { name: 'Send' }));
   expect(await screen.findByText('Please try again now.')).toBeInTheDocument();
 
-  await userEvent.click(screen.getByRole('button', { name: 'Close conversation' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Conversation actions' }));
+  await userEvent.click(screen.getByRole('menuitem', { name: 'Close conversation' }));
   await waitFor(() => expect(thread.setStatus).toHaveBeenCalledWith('CLOSED'));
-  expect(await screen.findByRole('button', { name: 'Reopen' })).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Conversation actions' }));
+  expect(await screen.findByRole('menuitem', { name: 'Reopen conversation' })).toBeInTheDocument();
   expect(screen.getByText(/This conversation is closed/)).toBeInTheDocument();
 });

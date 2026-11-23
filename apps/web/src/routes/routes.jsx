@@ -13,7 +13,6 @@ const PlatformLandingPage = lazyNamed(() => import('../pages/public/PlatformLand
 const AcademyLandingPage = lazyNamed(() => import('../pages/public/AcademyLandingPage.jsx'), 'AcademyLandingPage');
 const AcademySitePage = lazyNamed(() => import('../pages/public/AcademySitePage.jsx'), 'AcademySitePage');
 const LoginPage = lazyNamed(() => import('../pages/auth/LoginPage.jsx'), 'LoginPage');
-const SignupPage = lazyNamed(() => import('../pages/auth/SignupPage.jsx'), 'SignupPage');
 const StudentRegisterPage = lazyNamed(() => import('../pages/auth/StudentRegisterPage.jsx'), 'StudentRegisterPage');
 const ForgotPasswordPage = lazyNamed(() => import('../pages/auth/ForgotPasswordPage.jsx'), 'ForgotPasswordPage');
 const ResetPasswordPage = lazyNamed(() => import('../pages/auth/ResetPasswordPage.jsx'), 'ResetPasswordPage');
@@ -32,7 +31,6 @@ const LayoutPreviewPage = lazyNamed(() => import('../pages/preview/LayoutPreview
 const AdminDashboardPage = lazyNamed(() => import('../pages/admin/AdminDashboardPage.jsx'), 'AdminDashboardPage');
 const TenantsPage = lazyNamed(() => import('../pages/admin/TenantsPage.jsx'), 'TenantsPage');
 const TenantDetailPage = lazyNamed(() => import('../pages/admin/TenantDetailPage.jsx'), 'TenantDetailPage');
-const AdminDomainsPage = lazyNamed(() => import('../pages/admin/AdminDomainsPage.jsx'), 'AdminDomainsPage');
 const CreatorsPage = lazyNamed(() => import('../pages/admin/CreatorsPage.jsx'), 'CreatorsPage');
 const PlansPage = lazyNamed(() => import('../pages/admin/PlansPage.jsx'), 'PlansPage');
 const PlanEditorPage = lazyNamed(() => import('../pages/admin/PlanEditorPage.jsx'), 'PlanEditorPage');
@@ -43,9 +41,6 @@ const AdminsPage = lazyNamed(() => import('../pages/admin/AdminsPage.jsx'), 'Adm
 const AuditLogsPage = lazyNamed(() => import('../pages/admin/AuditLogsPage.jsx'), 'AuditLogsPage');
 const CategoriesPage = lazyNamed(() => import('../pages/admin/ContentPages.jsx'), 'CategoriesPage');
 const AnnouncementsPage = lazyNamed(() => import('../pages/admin/ContentPages.jsx'), 'AnnouncementsPage');
-const PlatformAnalyticsPage = lazyNamed(() => import('../pages/admin/PlatformAnalyticsPage.jsx'), 'PlatformAnalyticsPage');
-const PlatformIntegrationsPage = lazyNamed(() => import('../pages/admin/PlatformIntegrationsPage.jsx'), 'PlatformIntegrationsPage');
-const StudentSupportPage = lazyNamed(() => import('../pages/student/StudentSupportPage.jsx'), 'StudentSupportPage');
 const SupportInboxPage = lazyNamed(() => import('../pages/support/SupportInboxPage.jsx'), 'SupportInboxPage');
 const StaffTicketPage = lazyNamed(() => import('../pages/support/StaffTicketPage.jsx'), 'StaffTicketPage');
 const SupportReportPage = lazyNamed(() => import('../pages/support/SupportReportPage.jsx'), 'SupportReportPage');
@@ -76,9 +71,21 @@ const OrderDetailPage = lazyNamed(() => import('../pages/creator/OrderDetailPage
 const ProductsPage = lazyNamed(() => import('../pages/creator/ProductsPage.jsx'), 'ProductsPage');
 const ProductPage = lazyNamed(() => import('../pages/public/ProductPage.jsx'), 'ProductPage');
 const DownloadsPage = lazyNamed(() => import('../pages/student/DownloadsPage.jsx'), 'DownloadsPage');
+const SettlementsPage = lazyNamed(() => import('../pages/creator/SettlementsPage.jsx'), 'SettlementsPage');
+const ReportsPage = lazyNamed(() => import('../pages/creator/ReportsPage.jsx'), 'ReportsPage');
+const AcademySecurityPage = lazyNamed(() => import('../pages/creator/settings/SecurityPage.jsx'), 'SecurityPage');
+const TaxInvoicingPage = lazyNamed(() => import('../pages/creator/settings/TaxInvoicingPage.jsx'), 'TaxInvoicingPage');
+const CoachingPage = lazyNamed(() => import('../pages/creator/CoachingPage.jsx'), 'CoachingPage');
+const CoachingCreatePage = lazyNamed(() => import('../pages/creator/CoachingCreatePage.jsx'), 'CoachingCreatePage');
+const CoachingProgramPage = lazyNamed(() => import('../pages/public/CoachingProgramPage.jsx'), 'CoachingProgramPage');
+const MyCoachingPage = lazyNamed(() => import('../pages/student/MyCoachingPage.jsx'), 'MyCoachingPage');
 const StudentChatPage = lazyNamed(() => import('../pages/chat/ChatPages.jsx'), 'StudentChatPage');
 const CreatorSupportChatPage = lazyNamed(() => import('../pages/chat/ChatPages.jsx'), 'CreatorSupportChatPage');
 const CreatorChatInboxPage = lazyNamed(() => import('../pages/chat/ChatPages.jsx'), 'CreatorChatInboxPage');
+const StudentSupportPage = lazyNamed(() => import('../pages/support/HelpdeskPages.jsx'), 'StudentSupportPage');
+const StudentTicketPage = lazyNamed(() => import('../pages/support/HelpdeskPages.jsx'), 'StudentTicketPage');
+const CreatorHelpdeskPage = lazyNamed(() => import('../pages/support/HelpdeskPages.jsx'), 'CreatorHelpdeskPage');
+const CreatorHelpdeskTicketPage = lazyNamed(() => import('../pages/support/HelpdeskPages.jsx'), 'CreatorHelpdeskTicketPage');
 const PlatformChatInboxPage = lazyNamed(() => import('../pages/chat/ChatPages.jsx'), 'PlatformChatInboxPage');
 const LiveIntegrationsPage = lazyNamed(() => import('../pages/creator/LiveIntegrationsPage.jsx'), 'LiveIntegrationsPage');
 const QuestionBankPage = lazyNamed(() => import('../pages/creator/QuestionBankPage.jsx'), 'QuestionBankPage');
@@ -110,11 +117,23 @@ const AnalyticsPage = lazyNamed(() => import('../pages/creator/AnalyticsPage.jsx
 const AiStudioPage = lazyNamed(() => import('../pages/creator/AiStudioPage.jsx'), 'AiStudioPage');
 const CreatorMembershipsPage = lazyNamed(() => import('../pages/community/MembershipsPages.jsx'), 'CreatorMembershipsPage');
 const PublicMembershipsPage = lazyNamed(() => import('../pages/community/MembershipsPages.jsx'), 'PublicMembershipsPage');
+const MembershipBuilderPage = lazyNamed(() => import('../pages/community/MembershipBuilderPage.jsx'), 'MembershipBuilderPage');
 const SubscriptionsAdminPage = lazyNamed(() => import('../pages/admin/SubscriptionsAdminPage.jsx'), 'SubscriptionsAdminPage');
 const PlatformTransactionsPage = lazyNamed(() => import('../pages/finance/FinanceDashboardPage.jsx'), 'PlatformTransactionsPage');
+const TaxReportPage = lazyNamed(() => import('../pages/finance/TaxReportPage.jsx'), 'TaxReportPage');
 const BillingPage = lazyNamed(() => import('../pages/creator/BillingPage.jsx'), 'BillingPage');
 const CreatorSupportPage = lazyNamed(() => import('../pages/creator/CreatorSupportPage.jsx'), 'CreatorSupportPage');
 const CreatorTicketPage = lazyNamed(() => import('../pages/creator/CreatorSupportPage.jsx'), 'CreatorTicketPage');
+const IntegrationsPage = lazyNamed(() => import('../pages/admin/PlatformToolsPages.jsx'), 'IntegrationsPage');
+const DomainsAdminPage = lazyNamed(() => import('../pages/admin/PlatformToolsPages.jsx'), 'DomainsAdminPage');
+const PlatformAnalyticsPage = lazyNamed(() => import('../pages/admin/PlatformToolsPages.jsx'), 'PlatformAnalyticsPage');
+const EmailTemplatesPage = lazyNamed(() => import('../pages/admin/PlatformToolsPages.jsx'), 'EmailTemplatesPage');
+const EmailTemplateEditorPage = lazyNamed(() => import('../pages/admin/PlatformToolsPages.jsx'), 'EmailTemplateEditorPage');
+const UpsellsPage = lazyNamed(() => import('../pages/creator/SalesFunnelPages.jsx'), 'UpsellsPage');
+const PaymentLinksPage = lazyNamed(() => import('../pages/creator/SalesFunnelPages.jsx'), 'PaymentLinksPage');
+const CartRecoveryPage = lazyNamed(() => import('../pages/creator/SalesFunnelPages.jsx'), 'CartRecoveryPage');
+const TrackingPage = lazyNamed(() => import('../pages/creator/SalesFunnelPages.jsx'), 'TrackingPage');
+const PaymentLinkPage = lazyNamed(() => import('../pages/public/PaymentLinkPage.jsx'), 'PaymentLinkPage');
 
 const page = (Component, props) => (
   <Suspense fallback={<div className="grid min-h-[40vh] place-items-center"><Spinner /></div>}>
@@ -143,6 +162,7 @@ const sharedAuthRoutes = [
 export function buildRoutes(surface = getSurface()) {
   const platform = [
     { path: '/', element: page(PlatformLandingPage) },
+    { path: '/pricing', element: page(PlatformLandingPage, { section: 'pricing' }) },
     { element: <GuestOnly />, children: [{ path: '/login', element: page(LoginPage) }, { path: '/signup', element: <Navigate to="/login" replace /> }] },
     ...sharedAuthRoutes,
     { path: '/invite', element: page(InvitePage) },
@@ -157,7 +177,6 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/super-admin/welcome', element: page(SuperAdminHomePage) },
             { path: '/super-admin/tenants', element: page(TenantsPage) },
             { path: '/super-admin/tenants/:id', element: page(TenantDetailPage) },
-            { path: '/super-admin/domains', element: page(AdminDomainsPage) },
             { path: '/super-admin/creators', element: page(CreatorsPage) },
             { path: '/super-admin/plans', element: page(PlansPage) },
             { path: '/super-admin/subscriptions', element: page(SubscriptionsAdminPage) },
@@ -170,9 +189,12 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/super-admin/audit-logs', element: page(AuditLogsPage) },
             { path: '/super-admin/categories', element: page(CategoriesPage) },
             { path: '/super-admin/announcements', element: page(AnnouncementsPage) },
-            { path: '/super-admin/analytics', element: page(PlatformAnalyticsPage) },
-            { path: '/super-admin/integrations', element: page(PlatformIntegrationsPage) },
             { path: '/super-admin/status', element: page(SystemStatusPage) },
+            { path: '/super-admin/integrations', element: page(IntegrationsPage) },
+            { path: '/super-admin/domains', element: page(DomainsAdminPage) },
+            { path: '/super-admin/analytics', element: page(PlatformAnalyticsPage) },
+            { path: '/super-admin/templates', element: page(EmailTemplatesPage) },
+            { path: '/super-admin/templates/:key', element: page(EmailTemplateEditorPage) },
             { path: '/super-admin/design-system', element: page(DesignSystemPage) },
             { path: '/super-admin/account/security', element: page(SecurityPage, { breadcrumbs: [{ label: 'System' }] }) },
             { path: '/super-admin/account/notifications', element: page(NotificationSettingsPage, { breadcrumbs: [{ label: 'Account' }] }) },
@@ -182,11 +204,7 @@ export function buildRoutes(surface = getSurface()) {
         ...Object.entries(PREVIEW_LAYOUTS).map(([key, Layout]) => ({ path: `/preview/${key}`, element: <Layout />, children: [{ index: true, element: page(LayoutPreviewPage) }] })),
         {
           element: <FinanceLayout />,
-          children: [
-            { path: '/finance', element: page(FinanceDashboardPage) },
-            { path: '/finance/transactions', element: page(PlatformTransactionsPage) },
-            { path: '/finance/billing', element: page(SubscriptionsAdminPage) },
-          ],
+          children: [{ path: '/finance', element: page(FinanceDashboardPage) }, { path: '/finance/transactions', element: page(PlatformTransactionsPage) }, { path: '/finance/billing', element: page(SubscriptionsAdminPage) }, { path: '/finance/invoices', element: page(SubscriptionsAdminPage, { initialTab: 'invoices' }) }, { path: '/finance/tax', element: page(TaxReportPage) }],
         },
         {
           element: <SupportLayout />,
@@ -217,11 +235,20 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/creator/videos', element: page(VideosPage) },
             { path: '/creator/payments', element: page(PaymentsPage) },
             { path: '/creator/coupons', element: page(CouponsPage) },
+            { path: '/creator/upsells', element: page(UpsellsPage) },
+            { path: '/creator/payment-links', element: page(PaymentLinksPage) },
+            { path: '/creator/cart-recovery', element: page(CartRecoveryPage) },
+            { path: '/creator/tracking', element: page(TrackingPage) },
             { path: '/creator/bundles', element: page(BundlesPage) },
             { path: '/creator/reviews', element: page(ReviewsPage) },
             { path: '/creator/question-bank', element: page(QuestionBankPage) },
             { path: '/creator/integrations', element: page(LiveIntegrationsPage) },
             { path: '/creator/products', element: page(ProductsPage) },
+            { path: '/creator/coaching', element: page(CoachingPage) },
+            { path: '/creator/settings/tax-invoicing', element: page(TaxInvoicingPage) },
+            { path: '/creator/settings/security', element: page(AcademySecurityPage) },
+            { path: '/creator/coaching/new', element: page(CoachingCreatePage) },
+            { path: '/creator/coaching/:id/edit', element: page(CoachingCreatePage) },
             { path: '/creator/orders', element: page(OrdersPage) },
             { path: '/creator/orders/:id', element: page(OrderDetailPage) },
             { path: '/creator/transactions', element: page(TransactionsPage) },
@@ -235,7 +262,11 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/creator/communities/:id', element: page(CommunityFeedPage, { staff: true }) },
             { path: '/creator/communities/:id/posts/:postId', element: page(CommunityPostPage, { staff: true }) },
             { path: '/creator/memberships', element: page(CreatorMembershipsPage) },
+            { path: '/creator/memberships/new', element: page(MembershipBuilderPage) },
+            { path: '/creator/memberships/:id/edit', element: page(MembershipBuilderPage) },
             { path: '/creator/analytics', element: page(AnalyticsPage) },
+            { path: '/creator/reports', element: page(ReportsPage) },
+            { path: '/creator/settlements', element: page(SettlementsPage) },
             { path: '/creator/ai', element: page(AiStudioPage) },
             { path: '/creator/discussions', element: page(DiscussionsPage) },
             { path: '/creator/certificates', element: page(CertificatesAdminPage) },
@@ -246,6 +277,8 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/creator/support', element: page(CreatorSupportPage) },
             { path: '/creator/support-chat', element: page(CreatorSupportChatPage) },
             { path: '/creator/chat', element: page(CreatorChatInboxPage) },
+            { path: '/creator/helpdesk', element: page(CreatorHelpdeskPage) },
+            { path: '/creator/helpdesk/:id', element: page(CreatorHelpdeskTicketPage) },
             { path: '/creator/support/:id', element: page(CreatorTicketPage) },
             { path: '/creator/account/security', element: page(SecurityPage, { breadcrumbs: [{ label: 'Workspace' }] }) },
             { path: '/creator/account/notifications', element: page(NotificationSettingsPage, { breadcrumbs: [{ label: 'Account' }] }) },
@@ -264,9 +297,11 @@ export function buildRoutes(surface = getSurface()) {
     { path: '/courses/:slug', element: page(CourseLandingPage) },
     { path: '/bundles/:slug', element: page(BundlePage) },
     { path: '/products/:slug', element: page(ProductPage) },
+    { path: '/coaching/:slug', element: page(CoachingProgramPage) },
     { path: '/memberships', element: page(PublicMembershipsPage) },
     { path: '/webinars/:slug', element: page(WebinarPage) },
     { path: '/live/ticket/:code', element: page(TicketPage) },
+    { path: '/pay/:code', element: page(PaymentLinkPage) },
     { element: <GuestOnly />, children: [{ path: '/login', element: page(LoginPage) }, { path: '/register', element: page(StudentRegisterPage) }] },
     ...sharedAuthRoutes,
     {
@@ -281,11 +316,13 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/learn/certificates', element: page(StudentCertificatesPage) },
             { path: '/learn/orders', element: page(StudentOrdersPage) },
             { path: '/learn/downloads', element: page(DownloadsPage) },
+            { path: '/learn/coaching', element: page(MyCoachingPage) },
             { path: '/learn/chat', element: page(StudentChatPage) },
+            { path: '/learn/support', element: page(StudentSupportPage) },
+            { path: '/learn/support/:id', element: page(StudentTicketPage) },
             { path: '/learn/orders/:id', element: page(OrderStatusPage) },
             { path: '/learn/live', element: page(StudentLivePage) },
             { path: '/learn/affiliate', element: page(StudentAffiliatePage) },
-            { path: '/learn/support', element: page(StudentSupportPage) },
             { path: '/learn/communities', element: page(StudentCommunitiesPage) },
             { path: '/learn/communities/:id', element: page(CommunityFeedPage) },
             { path: '/learn/communities/:id/posts/:postId', element: page(CommunityPostPage) },
@@ -297,7 +334,10 @@ export function buildRoutes(surface = getSurface()) {
         { path: '/checkout/bundle/:bundleSlug', element: page(CheckoutPage) },
         { path: '/checkout/webinar/:webinarSlug', element: page(CheckoutPage) },
         { path: '/checkout/product/:productSlug', element: page(CheckoutPage) },
+        { path: '/checkout/coaching/:coachingSlug', element: page(CheckoutPage) },
         { path: '/cart/checkout', element: page(CheckoutPage) },
+        { path: '/checkout/link/:linkCode', element: page(CheckoutPage) },
+        { path: '/checkout/offer/:offerId', element: page(CheckoutPage) },
         { path: '/cart', element: page(CartPage) },
         { path: '/learn/live/:id', element: page(StudentRoomPage) },
       ],

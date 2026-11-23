@@ -44,6 +44,8 @@ describe('Live chat (e2e)', () => {
     expect(inbox.items[0]).toMatchObject({ status: 'OPEN', unread: 1, lastMessagePreview: 'How do I get my certificate?', customer: { name: 'Riya Student' } });
     const convId = inbox.items[0].id;
     expect((await authed(app, cs).get('/api/v1/creator/chat/conversations?unread=1')).body.data.total).toBe(1);
+    expect((await authed(app, cs).get('/api/v1/creator/chat/conversations?q=riya')).body.data.total).toBe(1);
+    expect((await authed(app, cs).get('/api/v1/creator/chat/conversations?q=nobody-here')).body.data.total).toBe(0);
 
     // Long poll: the student waits; the staff reply wakes it well before the 25 s timeout.
     const started = Date.now();
@@ -111,6 +113,7 @@ describe('Live chat (e2e)', () => {
     const list = (await authed(app, support.session).get('/api/v1/platform/support-chat/conversations').expect(200)).body.data;
     const row = list.items.find((i: any) => i.customer.slug === c.tenant.slug);
     expect(row).toMatchObject({ unread: 1, lastMessagePreview: 'My payouts are not showing.' });
+    expect((await authed(app, support.session).get(`/api/v1/platform/support-chat/conversations?q=${c.tenant.slug}`)).body.data.items.map((i: any) => i.id)).toEqual([row.id]);
 
     const waiting = authed(app, cs).get(`/api/v1/creator/support-chat/messages?after=${m.id}&wait=1`).then((r) => r);
     await new Promise((r) => setTimeout(r, 300));

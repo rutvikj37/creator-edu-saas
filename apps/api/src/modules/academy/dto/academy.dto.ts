@@ -44,6 +44,12 @@ export class UpdateBusinessDto {
   @ApiPropertyOptional() @IsOptional() @Matches(/^[A-Z0-9-]{1,12}$/, { message: 'Up to 12 letters, digits or hyphens' }) invoicePrefix?: string;
   @ApiPropertyOptional({ description: 'GST slab applied to course sales when GST-registered' }) @IsOptional() @IsIn([0, 5, 12, 18, 28], { message: 'Choose a GST rate: 0, 5, 12, 18 or 28' }) taxRate?: number;
   @ApiPropertyOptional({ description: 'Course prices already include GST' }) @IsOptional() @IsBoolean() pricesIncludeTax?: boolean;
+  @ApiPropertyOptional({ description: 'Printed on invoices' }) @IsOptional() @IsString() @MaxLength(2000) taxDetails?: string | null;
+  @ApiPropertyOptional({ description: 'Zero-rated exports under a valid LUT' }) @IsOptional() @IsBoolean() exportsUnderLut?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() invoicesEnabled?: boolean;
+  @ApiPropertyOptional({ description: 'First serial number of each financial year' }) @IsOptional() @IsInt() @Min(1) @Max(99_999_999) invoiceStartNumber?: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(2000) invoiceNote?: string | null;
+  @ApiPropertyOptional({ description: 'Ask buyers for a GSTIN at checkout' }) @IsOptional() @IsBoolean() gstInputCredit?: boolean;
 }
 
 export class OnboardingStepDto {
