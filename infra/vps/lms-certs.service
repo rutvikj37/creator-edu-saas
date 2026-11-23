@@ -1,0 +1,7 @@
+[Unit]
+Description=TechX LMS - HTTPS certificates for academy addresses
+After=network-online.target mysql.service nginx.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/lms-auto-certs

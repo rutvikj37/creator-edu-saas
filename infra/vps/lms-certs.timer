@@ -1,0 +1,9 @@
+[Unit]
+Description=TechX LMS - check academy certificates every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+
+[Install]
+WantedBy=timers.target
