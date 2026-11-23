@@ -29,10 +29,20 @@ export function clearSessionCookies(res: Response, secure: boolean) {
 }
 
 export function readRefreshToken(req: Request, secure: boolean): string | undefined {
-  return req.cookies?.[cookieNames(secure).refresh];
+  const fromCookie = req.cookies?.[cookieNames(secure).refresh];
+  if (fromCookie) return fromCookie;
+  const header = req.get('x-refresh-token');
+  if (header) return header;
+  const authHeader = req.get('authorization');
+  if (authHeader?.startsWith('Bearer-Refresh ')) return authHeader.slice('Bearer-Refresh '.length);
+  return undefined;
 }
 
 export function assertCsrf(req: Request, secure: boolean) {
+  // If the request provides an explicit custom header for the refresh token, it is CSRF immune via CORS preflight
+  if (req.get('x-refresh-token') || req.get('authorization')?.startsWith('Bearer-Refresh ')) {
+    return;
+  }
   const cookie = req.cookies?.[cookieNames(secure).csrf];
   const header = req.get('x-csrf-token');
   if (!cookie || !header || !safeEqual(cookie, header)) {

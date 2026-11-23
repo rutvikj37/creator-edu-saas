@@ -74,7 +74,7 @@ export class AuthController {
 
   private respond(res: Response, s: Pick<IssuedSession, 'accessToken' | 'refreshToken' | 'expiresIn' | 'refreshExpiresAt'>, extra: object = {}) {
     setSessionCookies(res, s.refreshToken, s.refreshExpiresAt, this.secureCookies);
-    return { accessToken: s.accessToken, expiresIn: s.expiresIn, ...extra };
+    return { accessToken: s.accessToken, expiresIn: s.expiresIn, refreshToken: s.refreshToken, ...extra };
   }
 
   // ── registration & login ───────────────────────────────────────────

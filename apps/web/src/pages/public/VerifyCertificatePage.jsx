@@ -12,15 +12,16 @@ import { formatDate } from '../../utils/format.js';
 export function VerifyCertificatePage() {
   const { number } = useParams();
   const navigate = useNavigate();
-  const [input, setInput] = useState(number ?? '');
-  const q = useQuery({ queryKey: ['verify', number], queryFn: () => catalogApi.verifyCertificate(number), enabled: Boolean(number), retry: false });
+  const cleanNumber = number ? decodeURIComponent(number).trim().toUpperCase() : '';
+  const [input, setInput] = useState(cleanNumber);
+  const q = useQuery({ queryKey: ['verify', cleanNumber], queryFn: () => catalogApi.verifyCertificate(cleanNumber), enabled: Boolean(cleanNumber), retry: false });
   return (
     <AuthLayout title="Verify a certificate" subtitle="Check that a certificate is genuine.">
-      <form className="mb-5 flex gap-2" onSubmit={(e) => { e.preventDefault(); if (input.trim()) navigate(`/verify/${input.trim().toUpperCase()}`); }}>
-        <Input aria-label="Certificate number" placeholder="CE-2026-XXXXXXXX" value={input} onChange={(e) => setInput(e.target.value)} />
+      <form className="mb-5 flex gap-2" onSubmit={(e) => { e.preventDefault(); if (input.trim()) navigate(`/verify/${encodeURIComponent(input.trim().toUpperCase())}`); }}>
+        <Input aria-label="Certificate number" placeholder="CE-2026-XXXXXXXX" value={input} onChange={(e) => setInput(e.target.value.toUpperCase())} />
         <Button type="submit">Verify</Button>
       </form>
-      {number && (q.isLoading ? <Skeleton className="h-24" /> : q.isError ? <Alert tone="error" title="Not found">No certificate exists with number {number}.</Alert> : q.data.valid ? (
+      {cleanNumber && (q.isLoading ? <Skeleton className="h-24" /> : q.isError ? <Alert tone="error" title="Not found">No certificate exists with number {cleanNumber}.</Alert> : q.data.valid ? (
         <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950">
           <p className="flex items-center gap-2 font-semibold text-green-800 dark:text-green-200"><BadgeCheck className="size-5" />Valid certificate</p>
           <dl className="mt-3 space-y-1 text-sm"><div><dt className="inline text-muted">Awarded to </dt><dd className="inline font-medium">{q.data.recipientName}</dd></div><div><dt className="inline text-muted">For </dt><dd className="inline font-medium">{q.data.courseTitle}</dd></div><div><dt className="inline text-muted">By </dt><dd className="inline font-medium">{q.data.academyName}</dd></div><div><dt className="inline text-muted">Issued </dt><dd className="inline">{formatDate(q.data.issuedAt)}</dd></div></dl>

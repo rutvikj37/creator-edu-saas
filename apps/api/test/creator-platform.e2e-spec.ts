@@ -3,6 +3,7 @@ import request from 'supertest';
 import { PrismaService } from '../src/core/prisma/prisma.service.js';
 import { EntitlementsService } from '../src/modules/subscriptions/entitlements.service.js';
 import { HostResolverService } from '../src/core/tenancy/host-resolver.service.js';
+import { AuditService } from '../src/core/audit/audit.service.js';
 import {
   api, authed, codeFromEmail, createTestApp, lastEmail, login, parseSession, PDF, PLATFORM, PNG, registerCreator, resetDatabase, tenantHost, tokenFromEmail, uniqueEmail, uploadFile,
 } from './helpers.js';
@@ -162,7 +163,7 @@ describe('Creator platform (e2e)', () => {
       expect(sched.body.data.status).toBe('SCHEDULED');
       await prisma.course.update({ where: { id: course.id }, data: { publishAt: new Date(Date.now() - 1000) } });
       const { MaintenanceProcessor } = await import('../src/modules/maintenance/maintenance.processor.js');
-      const result = await new MaintenanceProcessor(prisma).process({ name: 'publish-scheduled-courses' } as never);
+      const result = await new MaintenanceProcessor(prisma, app.get(HostResolverService), app.get(AuditService)).process({ name: 'publish-scheduled-courses' } as never);
       expect(result).toEqual({ published: 1 });
       expect((await prisma.course.findUniqueOrThrow({ where: { id: course.id } })).status).toBe('PUBLISHED');
     });

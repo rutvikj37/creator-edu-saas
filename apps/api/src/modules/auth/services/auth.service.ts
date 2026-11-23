@@ -36,24 +36,9 @@ export class AuthService {
     private readonly events: AppEvents,
   ) {}
 
-  /** Creator sign-up: platform user + tenant (ONBOARDING) + owner membership + subdomain, atomically. */
-  async registerCreator(dto: RegisterCreatorDto, meta: ClientMeta) {
-    const existing = await this.prisma.user.findUnique({ where: { realmKey_email: { realmKey: 'platform', email: dto.email } } });
-    if (existing) throw AppException.conflict('An account with this email already exists. Sign in instead.');
-    const passwordHash = await this.passwords.hash(dto.password);
-
-    const { user, tenant } = await this.prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: { realm: 'PLATFORM', realmKey: 'platform', email: dto.email, phone: dto.phone, passwordHash, fullName: dto.fullName, country: dto.country, passwordChangedAt: new Date() },
-      });
-      const tenant = await this.tenants.createForOwner(tx, user, dto.businessName);
-      await this.audit.record({ action: 'tenant.create', tenantId: tenant.id, actorUserId: user.id, actorRealm: 'PLATFORM', targetType: 'Tenant', targetId: tenant.id, after: { slug: tenant.slug, name: tenant.name }, ip: meta.ip, userAgent: meta.userAgent }, tx);
-      return { user, tenant };
-    });
-
-    const session = await this.sessions.issue(user, { tenantId: tenant.id, mfaSetupRequired: false }, meta);
-    await this.recordLogin(user.id, 'platform', dto.email, true, null, 'register', meta);
-    return { user, tenant, session };
+  /** Creator sign-up: disabled for public users; only Super Admin creates agencies from panel. */
+  async registerCreator(_dto: RegisterCreatorDto, _meta: ClientMeta): Promise<{ user: any; tenant: any; session: any }> {
+    throw AppException.forbidden('Public registration is closed. Agencies are created directly by platform administrators.');
   }
 
   /** Student sign-up on an academy host. The academy must be live. */

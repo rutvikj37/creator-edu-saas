@@ -32,6 +32,8 @@ const LayoutPreviewPage = lazyNamed(() => import('../pages/preview/LayoutPreview
 const AdminDashboardPage = lazyNamed(() => import('../pages/admin/AdminDashboardPage.jsx'), 'AdminDashboardPage');
 const TenantsPage = lazyNamed(() => import('../pages/admin/TenantsPage.jsx'), 'TenantsPage');
 const TenantDetailPage = lazyNamed(() => import('../pages/admin/TenantDetailPage.jsx'), 'TenantDetailPage');
+const AdminDomainsPage = lazyNamed(() => import('../pages/admin/AdminDomainsPage.jsx'), 'AdminDomainsPage');
+const CreatorsPage = lazyNamed(() => import('../pages/admin/CreatorsPage.jsx'), 'CreatorsPage');
 const PlansPage = lazyNamed(() => import('../pages/admin/PlansPage.jsx'), 'PlansPage');
 const PlanEditorPage = lazyNamed(() => import('../pages/admin/PlanEditorPage.jsx'), 'PlanEditorPage');
 const SettingsPage = lazyNamed(() => import('../pages/admin/SettingsPage.jsx'), 'SettingsPage');
@@ -41,6 +43,9 @@ const AdminsPage = lazyNamed(() => import('../pages/admin/AdminsPage.jsx'), 'Adm
 const AuditLogsPage = lazyNamed(() => import('../pages/admin/AuditLogsPage.jsx'), 'AuditLogsPage');
 const CategoriesPage = lazyNamed(() => import('../pages/admin/ContentPages.jsx'), 'CategoriesPage');
 const AnnouncementsPage = lazyNamed(() => import('../pages/admin/ContentPages.jsx'), 'AnnouncementsPage');
+const PlatformAnalyticsPage = lazyNamed(() => import('../pages/admin/PlatformAnalyticsPage.jsx'), 'PlatformAnalyticsPage');
+const PlatformIntegrationsPage = lazyNamed(() => import('../pages/admin/PlatformIntegrationsPage.jsx'), 'PlatformIntegrationsPage');
+const StudentSupportPage = lazyNamed(() => import('../pages/student/StudentSupportPage.jsx'), 'StudentSupportPage');
 const SupportInboxPage = lazyNamed(() => import('../pages/support/SupportInboxPage.jsx'), 'SupportInboxPage');
 const StaffTicketPage = lazyNamed(() => import('../pages/support/StaffTicketPage.jsx'), 'StaffTicketPage');
 const SupportReportPage = lazyNamed(() => import('../pages/support/SupportReportPage.jsx'), 'SupportReportPage');
@@ -138,7 +143,7 @@ const sharedAuthRoutes = [
 export function buildRoutes(surface = getSurface()) {
   const platform = [
     { path: '/', element: page(PlatformLandingPage) },
-    { element: <GuestOnly />, children: [{ path: '/login', element: page(LoginPage) }, { path: '/signup', element: page(SignupPage) }] },
+    { element: <GuestOnly />, children: [{ path: '/login', element: page(LoginPage) }, { path: '/signup', element: <Navigate to="/login" replace /> }] },
     ...sharedAuthRoutes,
     { path: '/invite', element: page(InvitePage) },
     { element: <RequireAuth allowMfaSetup />, children: [{ path: '/setup-2fa', element: page(MfaSetupPage) }] },
@@ -152,6 +157,8 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/super-admin/welcome', element: page(SuperAdminHomePage) },
             { path: '/super-admin/tenants', element: page(TenantsPage) },
             { path: '/super-admin/tenants/:id', element: page(TenantDetailPage) },
+            { path: '/super-admin/domains', element: page(AdminDomainsPage) },
+            { path: '/super-admin/creators', element: page(CreatorsPage) },
             { path: '/super-admin/plans', element: page(PlansPage) },
             { path: '/super-admin/subscriptions', element: page(SubscriptionsAdminPage) },
             { path: '/super-admin/plans/new', element: page(PlanEditorPage) },
@@ -163,6 +170,8 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/super-admin/audit-logs', element: page(AuditLogsPage) },
             { path: '/super-admin/categories', element: page(CategoriesPage) },
             { path: '/super-admin/announcements', element: page(AnnouncementsPage) },
+            { path: '/super-admin/analytics', element: page(PlatformAnalyticsPage) },
+            { path: '/super-admin/integrations', element: page(PlatformIntegrationsPage) },
             { path: '/super-admin/status', element: page(SystemStatusPage) },
             { path: '/super-admin/design-system', element: page(DesignSystemPage) },
             { path: '/super-admin/account/security', element: page(SecurityPage, { breadcrumbs: [{ label: 'System' }] }) },
@@ -173,7 +182,11 @@ export function buildRoutes(surface = getSurface()) {
         ...Object.entries(PREVIEW_LAYOUTS).map(([key, Layout]) => ({ path: `/preview/${key}`, element: <Layout />, children: [{ index: true, element: page(LayoutPreviewPage) }] })),
         {
           element: <FinanceLayout />,
-          children: [{ path: '/finance', element: page(FinanceDashboardPage) }, { path: '/finance/transactions', element: page(PlatformTransactionsPage) }, { path: '/finance/billing', element: page(SubscriptionsAdminPage) }],
+          children: [
+            { path: '/finance', element: page(FinanceDashboardPage) },
+            { path: '/finance/transactions', element: page(PlatformTransactionsPage) },
+            { path: '/finance/billing', element: page(SubscriptionsAdminPage) },
+          ],
         },
         {
           element: <SupportLayout />,
@@ -272,6 +285,7 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/learn/orders/:id', element: page(OrderStatusPage) },
             { path: '/learn/live', element: page(StudentLivePage) },
             { path: '/learn/affiliate', element: page(StudentAffiliatePage) },
+            { path: '/learn/support', element: page(StudentSupportPage) },
             { path: '/learn/communities', element: page(StudentCommunitiesPage) },
             { path: '/learn/communities/:id', element: page(CommunityFeedPage) },
             { path: '/learn/communities/:id/posts/:postId', element: page(CommunityPostPage) },

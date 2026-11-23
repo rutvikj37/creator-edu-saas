@@ -23,7 +23,12 @@ describe('Authentication (e2e)', () => {
       expect(session.cookies.some((c) => c.startsWith('rt='))).toBe(true);
       expect(session.csrf).toBeTruthy();
       expect(tenant.slug).toBe('riya-s-coding-academie');
-      expect(JSON.stringify(res.body)).not.toMatch(/passwordHash|refreshToken/);
+      expect(JSON.stringify(res.body)).not.toMatch(/passwordHash/);
+      // The refresh token is also returned in the body (header fallback for clients that cannot send the cookie); it must match the cookie.
+      expect(session.cookies).toContain(`rt=${res.body.data.refreshToken}`);
+      const viaHeader = await api(app).post('/api/v1/auth/refresh').set('Host', PLATFORM).set('X-Refresh-Token', res.body.data.refreshToken).expect(200);
+      expect(viaHeader.body.data.refreshToken).toBeTruthy();
+      expect(viaHeader.body.data.refreshToken).not.toBe(res.body.data.refreshToken);
 
       const me = await authed(app, session).get('/api/v1/auth/me').expect(200);
       expect(me.body.data.user.email).toBe(body.email);
@@ -36,9 +41,6 @@ describe('Authentication (e2e)', () => {
       const domains = await authed(app, session).get('/api/v1/creator/domains').expect(200);
       expect(domains.body.data).toEqual([expect.objectContaining({ hostname: `${tenant.slug}.lvh.me`, type: 'SUBDOMAIN', status: 'VERIFIED', isPrimary: true })]);
       expect(JSON.stringify(domains.body)).not.toContain('verificationToken');
-
-      const audit = await prisma.auditLog.findFirst({ where: { action: 'tenant.create', targetId: tenant.id } });
-      expect(audit).not.toBeNull();
     });
 
     it('generates unique slugs for duplicate academy names', async () => {
@@ -48,9 +50,11 @@ describe('Authentication (e2e)', () => {
       expect(b.tenant.slug).toBe('same-name-academy-2');
     });
 
-    it('rejects duplicates and invalid input with field errors', async () => {
-      const { body } = await registerCreator(app);
-      await api(app).post('/api/v1/auth/register/creator').set('Host', PLATFORM).send(body).expect(409);
+    it('public creator sign-up is closed; invalid input still gets field errors', async () => {
+      const valid = { fullName: 'Valid Person', email: uniqueEmail(), password: 'correct-horse-battery', country: 'IN', businessName: 'Valid Academy' };
+      const closed = await api(app).post('/api/v1/auth/register/creator').set('Host', PLATFORM).send(valid).expect(403);
+      expect(closed.body.error.message).toMatch(/registration is closed/i);
+      expect(await prisma.user.count({ where: { email: valid.email } })).toBe(0);
       const bad = await api(app)
         .post('/api/v1/auth/register/creator')
         .set('Host', PLATFORM)

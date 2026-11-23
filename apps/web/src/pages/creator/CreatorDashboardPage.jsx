@@ -20,7 +20,7 @@ export const SETUP_STEPS = {
   start_community: { title: 'Start a community', body: 'Give students a place to talk, ask questions and stay engaged.', cta: 'Create a community', to: '/creator/communities', perm: 'community.manage', icon: MessagesSquare },
 };
 
-const ACTION_LABEL = { 'course.create': 'created a course', 'course.publish': 'published a course', 'course.update': 'updated a course', 'academy.update': 'updated the academy', 'academy.publish': 'published the academy', 'staff.invite': 'invited a team member', 'staff.join': 'joined the team', 'tenant.create': 'created the academy', 'domain.add': 'added a domain', 'student.create': 'added a student', 'student.import': 'imported students', 'enrollment.grant': 'enrolled a student' };
+const ACTION_LABEL = { 'course.create': 'created a course', 'course.publish': 'published a course', 'course.update': 'updated a course', 'academy.update': 'updated the academy', 'academy.publish': 'published the academy', 'staff.invite': 'invited a team member', 'staff.join': 'joined the team', 'tenant.create': 'created the academy', 'tenant.create_by_admin': 'set up the academy', 'domain.add': 'added a domain', 'student.create': 'added a student', 'student.import': 'imported students', 'enrollment.grant': 'enrolled a student' };
 const bytes = (n) => (n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(1)} GB` : `${Math.round(n / 1024 ** 2)} MB`);
 
 function Usage({ label, used, limit, format = (n) => n }) {

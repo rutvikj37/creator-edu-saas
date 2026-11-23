@@ -27,7 +27,7 @@ export function Dropdown({ trigger, children, align = 'right', className, panelC
           role="menu"
           onClick={(e) => e.target.closest('[data-menu-close]') && setOpen(false)}
           className={cn(
-            'absolute z-40 mt-2 min-w-48 rounded-lg border border-line bg-surface p-1 shadow-md',
+            'absolute z-50 mt-1 min-w-48 rounded-lg border border-line bg-surface p-1 shadow-lg ring-1 ring-black/5',
             align === 'right' ? 'right-0' : 'left-0',
             panelClassName,
           )}

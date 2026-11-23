@@ -13,15 +13,44 @@ export const authApi = {
   providers: () => http.get('/auth/providers').then(d),
   registerCreator: (body) => http.post('/auth/register/creator', body).then(d),
   registerStudent: (body) => http.post('/auth/register/student', body).then(d),
-  login: (body) => http.post('/auth/login', body).then(d),
-  loginMfa: (body) => http.post('/auth/login/2fa', body).then(d),
+  login: (body) => http.post('/auth/login', body).then(d).then((res) => {
+    if (res?.refreshToken && typeof window !== 'undefined') {
+      window.sessionStorage?.setItem('ce_rt_fallback', res.refreshToken);
+    }
+    return res;
+  }),
+  loginMfa: (body) => http.post('/auth/login/2fa', body).then(d).then((res) => {
+    if (res?.refreshToken && typeof window !== 'undefined') {
+      window.sessionStorage?.setItem('ce_rt_fallback', res.refreshToken);
+    }
+    return res;
+  }),
   refresh: () => {
     const csrf = readCsrfCookie();
-    if (!csrf) return Promise.reject(Object.assign(new Error('No session'), { status: 401, code: 'UNAUTHENTICATED' }));
-    return http.post('/auth/refresh', null, { headers: { 'X-CSRF-Token': csrf }, skipAuthRefresh: true }).then(d);
+    const fallbackRt = typeof window !== 'undefined' ? window.sessionStorage?.getItem('ce_rt_fallback') : null;
+    if (!csrf && !fallbackRt) return Promise.reject(Object.assign(new Error('No session'), { status: 401, code: 'UNAUTHENTICATED' }));
+    const headers = {};
+    if (csrf) headers['X-CSRF-Token'] = csrf;
+    if (fallbackRt) headers['X-Refresh-Token'] = fallbackRt;
+    return http.post('/auth/refresh', null, { headers, skipAuthRefresh: true }).then(d).then((res) => {
+      if (res?.refreshToken && typeof window !== 'undefined') {
+        window.sessionStorage?.setItem('ce_rt_fallback', res.refreshToken);
+      }
+      return res;
+    });
   },
-  logout: () => http.post('/auth/logout').then(d),
-  logoutAll: () => http.post('/auth/logout-all').then(d),
+  logout: () => {
+    if (typeof window !== 'undefined') {
+      window.sessionStorage?.removeItem('ce_rt_fallback');
+    }
+    return http.post('/auth/logout').then(d);
+  },
+  logoutAll: () => {
+    if (typeof window !== 'undefined') {
+      window.sessionStorage?.removeItem('ce_rt_fallback');
+    }
+    return http.post('/auth/logout-all').then(d);
+  },
   me: () => http.get('/auth/me').then(d),
   switchTenant: (tenantId) => http.post('/auth/switch-tenant', { tenantId }).then(d),
   sessions: () => http.get('/auth/sessions').then(d),

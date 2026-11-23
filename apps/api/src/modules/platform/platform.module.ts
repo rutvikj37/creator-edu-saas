@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module.js';
+import { TenantsModule } from '../tenants/tenants.module.js';
 import { PlatformTenantsController } from './platform-tenants.controller.js';
 import { PlatformTenantsService } from './platform-tenants.service.js';
 import { PlansController } from './plans.controller.js';
@@ -15,7 +16,7 @@ import { BillingController } from './billing.controller.js';
 import { FinanceController } from './finance.controller.js';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, TenantsModule],
   controllers: [
     PlatformTenantsController, PlansController, SettingsController, AdminsController, AuditController, DashboardController,
     ContentController, CreatorSupportController, PlatformSupportController, BillingController, FinanceController,

@@ -77,10 +77,29 @@ export function uniqueEmail(prefix = 'user') {
   return `${prefix}.${Date.now()}.${counter}@example.test`;
 }
 
+/**
+ * Provisions a creator (platform user + academy) the way a Super Admin would, then signs them in.
+ * Public creator sign-up is closed, so tests create the account directly instead of via the API.
+ */
 export async function registerCreator(app: NestExpressApplication, overrides: Partial<Record<string, string>> = {}) {
-  const body = { fullName: 'Asha Creator', email: uniqueEmail('creator'), password: 'correct-horse-battery', country: 'IN', businessName: `Academy ${++counter}`, ...overrides };
-  const res = await api(app).post('/api/v1/auth/register/creator').set('Host', PLATFORM).send(body).expect(201);
-  return { body, res, session: parseSession(res, PLATFORM), tenant: res.body.data.tenant as { id: string; slug: string; name: string } };
+  const body: Record<string, string> & { phone?: string } = { fullName: 'Asha Creator', email: uniqueEmail('creator'), password: 'correct-horse-battery', country: 'IN', businessName: `Academy ${++counter}`, ...overrides };
+  const prisma = app.get(PrismaService);
+  const { PasswordService } = await import('../src/modules/auth/services/password.service.js');
+  const { TenantsService } = await import('../src/modules/tenants/tenants.service.js');
+  const passwordHash = await app.get(PasswordService).hash(body.password);
+  const tenant = await prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: { realm: 'PLATFORM', realmKey: 'platform', email: body.email, phone: body.phone, passwordHash, fullName: body.fullName, country: body.country, passwordChangedAt: new Date() },
+    });
+    const t = await app.get(TenantsService).createForOwner(tx as never, user, body.businessName);
+    await tx.auditLog.create({ data: { action: 'tenant.create', tenantId: t.id, actorUserId: user.id, actorRealm: 'PLATFORM', targetType: 'Tenant', targetId: t.id } });
+    return t;
+  });
+  const res = await api(app).post('/api/v1/auth/login').set('Host', PLATFORM).send({ email: body.email, password: body.password }).expect(200);
+  const session = parseSession(res, PLATFORM);
+  // Sign-up used to send the verification email; keep that so verification flows can be exercised.
+  await authed(app, session).post('/api/v1/auth/email/resend').expect(200);
+  return { body, res, session, tenant: { id: tenant.id, slug: tenant.slug, name: tenant.name } };
 }
 
 export async function login(app: NestExpressApplication, host: string, email: string, password: string) {

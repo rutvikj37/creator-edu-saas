@@ -20,7 +20,7 @@ export function DataTable({ columns, rows, rowKey = 'id', loading, error, onRetr
 
   return (
     <div>
-      <div className="hidden overflow-x-auto md:block">
+      <div className="hidden overflow-x-auto md:block min-h-[300px]">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-line text-[11px] font-semibold tracking-wider text-muted uppercase">
             <tr>

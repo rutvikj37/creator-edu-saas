@@ -8,7 +8,11 @@ const root = (import.meta.env.VITE_PLATFORM_ROOT_DOMAIN || 'lvh.me').toLowerCase
 export const PLATFORM_ROOT = root;
 const PLATFORM_HOSTS = new Set([root, `www.${root}`, `app.${root}`, `admin.${root}`, 'localhost', '127.0.0.1']);
 
-export function getSurface(hostname = window.location.hostname) {
+export function getSurface(hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost') {
+  if (typeof window !== 'undefined') {
+    const override = new URLSearchParams(window.location.search).get('surface');
+    if (override === 'academy' || override === 'platform') return override;
+  }
   return PLATFORM_HOSTS.has(hostname.toLowerCase()) ? 'platform' : 'academy';
 }
 

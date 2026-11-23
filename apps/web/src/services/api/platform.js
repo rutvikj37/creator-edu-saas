@@ -8,7 +8,11 @@ const qs = (params = {}) =>
 export const platformApi = {
   dashboard: (params) => http.get('/platform/dashboard', { params: qs(params) }).then(d),
   tenants: (params) => http.get('/platform/tenants', { params: qs(params) }).then(page),
+  creators: (params) => http.get('/platform/tenants/creators', { params: qs(params) }).then(page),
+  createTenant: (body) => http.post('/platform/tenants', body).then(d),
+  domains: (params) => http.get('/platform/tenants/domains', { params: qs(params) }).then(page),
   tenant: (id) => http.get(`/platform/tenants/${id}`).then(d),
+  updateTenant: (id, body) => http.patch(`/platform/tenants/${id}`, body).then(d),
   activateTenant: (id) => http.post(`/platform/tenants/${id}/activate`).then(d),
   suspendTenant: (id, reason) => http.post(`/platform/tenants/${id}/suspend`, { reason }).then(d),
   assignPlan: (id, body) => http.post(`/platform/tenants/${id}/subscription`, body).then(d),
@@ -56,3 +60,4 @@ export const creatorApi = {
 export const commonApi = {
   activeAnnouncements: () => http.get('/announcements/active').then(d),
 };
+

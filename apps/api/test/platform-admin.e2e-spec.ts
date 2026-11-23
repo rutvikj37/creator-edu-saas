@@ -57,6 +57,57 @@ describe('Platform administration (e2e)', () => {
     expect(JSON.stringify(detail.body)).not.toMatch(/passwordHash|verificationToken/);
   });
 
+  it('super admin provisions an agency; the owner signs in with the emailed temporary password', async () => {
+    const email = uniqueEmail('agency');
+    await authed(app, root).post('/api/v1/platform/tenants').send({ name: 'X', ownerName: 'Neha Owner', email }).expect(422);
+    const created = await authed(app, root)
+      .post('/api/v1/platform/tenants')
+      .send({ name: 'Bright <b>Minds</b>', ownerName: 'Neha Owner', email, subdomain: 'bright-minds', paymentType: 'TRIAL', trialDays: 30 })
+      .expect(201);
+    const { tenant, owner } = created.body.data;
+    expect(tenant).toMatchObject({ slug: 'bright-minds', status: 'ACTIVE' });
+    expect(owner).toMatchObject({ email, isNewUser: true, tempPassword: expect.any(String) });
+
+    const mail = await lastEmail(app, email);
+    expect(mail?.tag).toBe('admin-agency-created');
+    expect(mail!.html).toContain('http://bright-minds.lvh.me:5173');
+    expect(mail!.html).toContain('Bright &lt;b&gt;Minds&lt;/b&gt;');
+    expect(mail!.html).toContain(owner.tempPassword);
+
+    const { session } = await login(app, PLATFORM, email, owner.tempPassword);
+    const billing = await authed(app, session).get('/api/v1/creator/billing').expect(200);
+    expect(billing.body.data.subscription.status).toBe('TRIALING');
+    expect(new Date(billing.body.data.subscription.trialEndsAt).getTime()).toBeGreaterThan(Date.now() + 29 * 86_400_000);
+    expect(await prisma.auditLog.count({ where: { action: 'tenant.create_by_admin', targetId: tenant.id } })).toBe(1);
+    const stored = await prisma.auditLog.findFirstOrThrow({ where: { action: 'tenant.create_by_admin', targetId: tenant.id } });
+    expect(JSON.stringify(stored)).not.toContain(owner.tempPassword);
+
+    // Edit: slug is normalized, reserved/taken slugs refused, the subdomain follows the slug.
+    await authed(app, root).patch(`/api/v1/platform/tenants/${tenant.id}`).send({ slug: 'admin' }).expect(422);
+    const edited = await authed(app, root).patch(`/api/v1/platform/tenants/${tenant.id}`).send({ slug: 'Bright Minds Two', ownerName: 'Neha K' }).expect(200);
+    expect(edited.body.data.slug).toBe('bright-minds-two');
+    expect(edited.body.data.domains[0].hostname).toBe('bright-minds-two.lvh.me');
+
+    const domains = await authed(app, root).get('/api/v1/platform/tenants/domains?q=bright-minds-two').expect(200);
+    expect(domains.body.data).toEqual([expect.objectContaining({ hostname: 'bright-minds-two.lvh.me', type: 'SUBDOMAIN', tenant: expect.objectContaining({ id: tenant.id }) })]);
+    const creators = await authed(app, root).get(`/api/v1/platform/tenants/creators?q=${encodeURIComponent(email)}`).expect(200);
+    expect(creators.body.data).toEqual([expect.objectContaining({ email, fullName: 'Neha K', academies: [expect.objectContaining({ id: tenant.id })] })]);
+
+    const c = await registerCreator(app);
+    await authed(app, c.session).post('/api/v1/platform/tenants').send({ name: 'Nope', ownerName: 'Nope', email: uniqueEmail() }).expect(403);
+  });
+
+  it('purges tenants whose deletion window has passed', async () => {
+    const c = await registerCreator(app);
+    await authed(app, root).delete(`/api/v1/platform/tenants/${c.tenant.id}`).send({ confirmSlug: c.tenant.slug }).expect(200);
+    await prisma.tenant.update({ where: { id: c.tenant.id }, data: { deletionScheduledAt: new Date(Date.now() - 1000) } });
+    const res = await authed(app, root).post('/api/v1/platform/tenants/purge-expired').expect(200);
+    expect(res.body.data).toEqual({ purgedCount: 1, tenants: [c.tenant.slug] });
+    expect((await prisma.tenant.findUniqueOrThrow({ where: { id: c.tenant.id } })).status).toBe('DELETED');
+    expect(await prisma.tenantDomain.count({ where: { tenantId: c.tenant.id } })).toBe(0);
+    await api(app).get('/api/v1/public/site').set('Host', tenantHost(c.tenant.slug)).expect(404);
+  });
+
   it('suspension makes the workspace read-only and closes the academy; activation restores it', async () => {
     const c = await registerCreator(app);
     await prisma.tenantLimitOverride.create({ data: { tenantId: c.tenant.id, featureKey: 'domains.custom', enabled: true, limitValue: 3n } });
@@ -155,7 +206,7 @@ describe('Platform administration (e2e)', () => {
     expect(d.tenants.total).toBe(await prisma.tenant.count({ where: { status: { not: 'DELETED' } } }));
     expect(d.students).toBe(await prisma.user.count({ where: { realm: 'TENANT' } }));
     expect(d.series.tenantRegistrations).toHaveLength(30);
-    expect(d.series.tenantRegistrations.reduce((s: number, x: any) => s + x.count, 0)).toBe(d.tenants.total);
+    expect(d.series.tenantRegistrations.reduce((s: number, x: any) => s + x.count, 0)).toBe(await prisma.tenant.count()); // registrations include since-deleted tenants
     expect(d.subscriptions.mrr).toEqual(expect.arrayContaining([{ currency: 'INR', amount: 2999 }]));
     expect(d.commerce).toMatchObject({ available: true, paidOrders: 0, gmv: [] });
   });

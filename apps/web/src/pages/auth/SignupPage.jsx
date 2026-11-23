@@ -43,8 +43,13 @@ export function SignupPage() {
       await auth.establish(result);
       navigate('/creator', { replace: true });
     } catch (e) {
-      if (e.code === 'CONFLICT') setError(e.message);
-      else applyApiErrors(e, setFieldError, FIELDS);
+      if (e.code === 'CONFLICT') {
+        setError(e.message);
+      } else if (e.code === 'FORBIDDEN') {
+        setError(e.message || 'Agency creation is by platform invitation only. Please contact your platform administrator.');
+      } else {
+        applyApiErrors(e, setFieldError, FIELDS);
+      }
     }
   });
 
@@ -54,19 +59,30 @@ export function SignupPage() {
       subtitle="Start selling courses in minutes. You can change everything later."
       footer={<>Already have an account? <Link to="/login" className="font-medium text-primary-600 hover:underline">Sign in</Link></>}
     >
-      <form onSubmit={onSubmit} noValidate className="space-y-4">
-        {error && <Alert tone="error">{error}</Alert>}
-        <Input label="Full name" autoComplete="name" required {...register('fullName')} error={errors.fullName?.message} />
-        <Input label="Work email" type="email" autoComplete="email" required {...register('email')} error={errors.email?.message} />
-        <Input label="Academy or business name" required hint="Used for your academy address, e.g. your-name.platform.com" {...register('businessName')} error={errors.businessName?.message} />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Select label="Country" required options={countries} {...register('country')} error={errors.country?.message} />
-          <Input label="Mobile (optional)" type="tel" autoComplete="tel" placeholder="+91…" {...register('phone')} error={errors.phone?.message} />
-        </div>
-        <PasswordInput label="Password" autoComplete="new-password" required hint="At least 10 characters. A short phrase works well." {...register('password')} error={errors.password?.message} />
-        <Button type="submit" className="w-full" loading={isSubmitting}>Create account</Button>
-        <p className="text-center text-xs text-muted">By continuing you agree to the Terms of Service and Privacy Policy.</p>
-      </form>
+      <div className="space-y-4">
+        <Alert tone="warning" title="Invitation Only">
+          Agency creation is restricted to platform administrators. If you already have an account, please sign in.
+        </Alert>
+
+        <form onSubmit={onSubmit} noValidate className="space-y-4">
+          {error && <Alert tone="error">{error}</Alert>}
+          <Input label="Full name" autoComplete="name" required {...register('fullName')} error={errors.fullName?.message} />
+          <Input label="Work email" type="email" autoComplete="email" required {...register('email')} error={errors.email?.message} />
+          <Input label="Academy or business name" required hint="Used for your academy address, e.g. your-name.platform.com" {...register('businessName')} error={errors.businessName?.message} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Select label="Country" required options={countries} {...register('country')} error={errors.country?.message} />
+            <Input label="Mobile (optional)" type="tel" autoComplete="tel" placeholder="+91…" {...register('phone')} error={errors.phone?.message} />
+          </div>
+          <PasswordInput label="Password" autoComplete="new-password" required hint="At least 10 characters. A short phrase works well." {...register('password')} error={errors.password?.message} />
+          <Button type="submit" className="w-full" loading={isSubmitting}>Create account</Button>
+          <div className="text-center">
+            <Link to="/login" className="inline-block text-sm text-primary-600 hover:underline">
+              ← Return to sign in
+            </Link>
+          </div>
+          <p className="text-center text-xs text-muted">By continuing you agree to the Terms of Service and Privacy Policy.</p>
+        </form>
+      </div>
     </AuthLayout>
   );
 }

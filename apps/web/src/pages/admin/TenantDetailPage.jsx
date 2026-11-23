@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Ban, CheckCircle2, CreditCard, RotateCcw, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { Ban, CheckCircle2, CreditCard, Pencil, RotateCcw, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
 import { Alert } from '../../components/auth/Alert.jsx';
 import {
@@ -10,6 +10,7 @@ import {
 import { platformApi } from '../../services/api/platform.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { formatDate, formatMoney } from '../../utils/format.js';
+import { EditAgencyModal } from './EditAgencyModal.jsx';
 
 function Row({ label, children }) {
   return (
@@ -115,6 +116,7 @@ export function TenantDetailPage() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['platform', 'tenant', id], queryFn: () => platformApi.tenant(id) });
   const [tab, setTab] = useState('overview');
+  const [editOpen, setEditOpen] = useState(false);
   const [suspendOpen, setSuspendOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [planOpen, setPlanOpen] = useState(false);
@@ -144,6 +146,7 @@ export function TenantDetailPage() {
               auth.can('platform.tenants.delete') && <Button leftIcon={RotateCcw} loading={restore.isPending} onClick={() => restore.mutate()}>Restore</Button>
             ) : (
               <>
+                <Button variant="secondary" leftIcon={Pencil} onClick={() => setEditOpen(true)}>Edit</Button>
                 <Button variant="secondary" leftIcon={CreditCard} onClick={() => setPlanOpen(true)}>Change plan</Button>
                 {t.status === 'SUSPENDED' || t.status === 'ONBOARDING' ? (
                   <Button variant="secondary" leftIcon={CheckCircle2} loading={activate.isPending} onClick={() => activate.mutate()}>Activate</Button>
@@ -273,6 +276,7 @@ export function TenantDetailPage() {
         footer={<><Button variant="secondary" onClick={() => setSuspendOpen(false)}>Cancel</Button><Button variant="danger" disabled={reason.trim().length < 3} loading={suspend.isPending} onClick={() => suspend.mutate(undefined, { onSuccess: () => { setSuspendOpen(false); setReason(''); } })}>Suspend</Button></>}>
         <Textarea label="Reason (shown to the creator)" required value={reason} onChange={(e) => setReason(e.target.value)} rows={3} />
       </Modal>
+      <EditAgencyModal open={editOpen} onClose={() => setEditOpen(false)} tenant={t} onSuccess={refresh} />
       <ChangePlanModal tenant={t} open={planOpen} onClose={() => setPlanOpen(false)} />
       <ConfirmDialog open={deleteOpen} onClose={() => setDeleteOpen(false)} title={`Delete ${t.name}?`} confirmText={t.slug} confirmLabel="Schedule deletion"
         description="The academy goes offline now and is permanently removed after 30 days unless restored." loading={remove.isPending}

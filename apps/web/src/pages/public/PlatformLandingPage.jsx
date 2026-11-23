@@ -32,10 +32,7 @@ export function PlatformLandingPage() {
           {signedIn ? (
             <Link to={landingPath(auth.me, auth.surface)} className="inline-flex h-9 items-center rounded-md bg-primary-600 px-4 text-sm font-medium text-on-primary hover:bg-primary-700">Go to dashboard</Link>
           ) : (
-            <>
-              <Link to="/login" className="inline-flex h-9 items-center rounded-md px-3 text-sm font-medium text-fg-2 hover:bg-surface-2">Sign in</Link>
-              <Link to="/signup" className="inline-flex h-9 items-center rounded-md bg-primary-600 px-4 text-sm font-medium text-on-primary hover:bg-primary-700">Start free</Link>
-            </>
+            <Link to="/login" className="inline-flex h-9 items-center rounded-md bg-primary-600 px-4 text-sm font-medium text-on-primary hover:bg-primary-700">Sign in</Link>
           )}
         </nav>
       </header>
@@ -43,7 +40,7 @@ export function PlatformLandingPage() {
         <h1 className="mx-auto max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl">Launch your online academy</h1>
         <p className="mx-auto mt-4 max-w-xl text-base text-muted sm:text-lg">{info.data?.branding?.tagline ?? 'Create courses, teach live and get paid — all under your own brand.'}</p>
         <div className="mt-8 flex justify-center gap-3">
-          <Link to="/signup" className="inline-flex h-11 items-center gap-2 rounded-md bg-primary-600 px-5 text-base font-medium text-on-primary hover:bg-primary-700">Create your academy <ArrowRight className="size-4" /></Link>
+          <Link to="/login" className="inline-flex h-11 items-center gap-2 rounded-md bg-primary-600 px-5 text-base font-medium text-on-primary hover:bg-primary-700">Sign in to your portal <ArrowRight className="size-4" /></Link>
         </div>
       </section>
       <section className="mx-auto grid max-w-6xl gap-4 px-4 pb-20 sm:grid-cols-2 lg:grid-cols-3">

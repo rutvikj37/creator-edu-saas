@@ -13,6 +13,46 @@ export class TenantListQuery extends PaginationQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @Length(25, 25) planId?: string;
 }
 
+export class TenantDomainsQuery extends PaginationQueryDto {
+  @ApiPropertyOptional() @IsOptional() @IsIn(['SUBDOMAIN', 'CUSTOM']) type?: string;
+  @ApiPropertyOptional() @IsOptional() @IsIn(['PENDING', 'VERIFIED', 'FAILED']) status?: string;
+}
+
+export class CreateTenantDto {
+  @ApiProperty() @Transform(trim) @IsString() @Length(2, 120) name: string;
+  @ApiProperty() @Transform(trim) @IsString() @Length(2, 120) ownerName: string;
+  @ApiProperty() @Transform(trim) @IsEmail() email: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() phone?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() country?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() subdomain?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() customDomain?: string;
+  @ApiPropertyOptional({ enum: ['PAID', 'TRIAL', 'LATER'] }) @IsOptional() @IsIn(['PAID', 'TRIAL', 'LATER']) paymentType?: 'PAID' | 'TRIAL' | 'LATER';
+  @ApiPropertyOptional() @IsOptional() @IsString() planId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() planPriceId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() amount?: number;
+  @ApiPropertyOptional({ description: 'Number of trial days for free trial' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(3650)
+  trialDays?: number;
+  @ApiPropertyOptional({ description: 'Number of access months for paid activation' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(120)
+  billingMonths?: number;
+}
+
+export class UpdateTenantDto {
+  @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @Length(2, 120) name?: string;
+  @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @Length(2, 63) slug?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() country?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() timezone?: string;
+  @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @Length(2, 120) ownerName?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() ownerPhone?: string;
+}
+
 export class SuspendDto {
   @ApiProperty() @Transform(trim) @IsString() @Length(3, 255) reason: string;
 }

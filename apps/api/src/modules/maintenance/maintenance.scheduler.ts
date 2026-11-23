@@ -15,5 +15,6 @@ export class MaintenanceScheduler implements OnApplicationBootstrap {
       { name: MAINTENANCE_JOBS.PURGE_EXPIRED_IDEMPOTENCY_KEYS },
     );
     await this.queue.upsertJobScheduler(MAINTENANCE_JOBS.PUBLISH_SCHEDULED_COURSES, { every: 60_000 }, { name: MAINTENANCE_JOBS.PUBLISH_SCHEDULED_COURSES });
+    await this.queue.upsertJobScheduler(MAINTENANCE_JOBS.PURGE_EXPIRED_TENANTS, { pattern: '41 3 * * *' }, { name: MAINTENANCE_JOBS.PURGE_EXPIRED_TENANTS });
   }
 }

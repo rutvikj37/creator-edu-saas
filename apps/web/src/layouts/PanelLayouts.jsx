@@ -73,15 +73,38 @@ export function SuperAdminLayout(props) {
   const subtitle = roles.includes('SUPER_ADMIN') ? 'Super Admin' : 'Platform Admin';
   return <DashboardShell nav={filterNav(NAV.superAdmin, auth.can)} brand={usePlatformBrand(subtitle, 'super-admin')} {...account} {...props} />;
 }
+function StandaloneFinanceLayout(props) {
+  const auth = useAuth();
+  const account = useShellAccount('/super-admin/account/security');
+  const brand = usePlatformBrand('Finance', 'finance');
+  return <DashboardShell nav={filterNav(NAV.finance, auth.can)} brand={brand} {...account} {...props} />;
+}
+
 export function FinanceLayout(props) {
   const auth = useAuth();
-  const account = useShellAccount('/super-admin/account/security');
-  return <DashboardShell nav={filterNav(NAV.finance, auth.can)} brand={usePlatformBrand('Finance', 'finance')} {...account} {...props} />;
+  const roles = auth.me?.platformRoles ?? [];
+  const isSuperOrPlatformAdmin = roles.includes('SUPER_ADMIN') || roles.includes('PLATFORM_ADMIN');
+  if (isSuperOrPlatformAdmin) {
+    return <SuperAdminLayout {...props} />;
+  }
+  return <StandaloneFinanceLayout {...props} />;
 }
-export function SupportLayout(props) {
+
+function StandaloneSupportLayout(props) {
   const auth = useAuth();
   const account = useShellAccount('/super-admin/account/security');
-  return <DashboardShell nav={filterNav(NAV.support, auth.can)} brand={usePlatformBrand('Support', 'support')} {...account} {...props} />;
+  const brand = usePlatformBrand('Support', 'support');
+  return <DashboardShell nav={filterNav(NAV.support, auth.can)} brand={brand} {...account} {...props} />;
+}
+
+export function SupportLayout(props) {
+  const auth = useAuth();
+  const roles = auth.me?.platformRoles ?? [];
+  const isSuperOrPlatformAdmin = roles.includes('SUPER_ADMIN') || roles.includes('PLATFORM_ADMIN');
+  if (isSuperOrPlatformAdmin) {
+    return <SuperAdminLayout {...props} />;
+  }
+  return <StandaloneSupportLayout {...props} />;
 }
 export function CreatorLayout({ preview = false, ...props }) {
   const auth = useAuth();

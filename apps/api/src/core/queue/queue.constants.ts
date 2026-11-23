@@ -21,4 +21,5 @@ export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
 export const MAINTENANCE_JOBS = {
   PURGE_EXPIRED_IDEMPOTENCY_KEYS: 'purge-expired-idempotency-keys',
   PUBLISH_SCHEDULED_COURSES: 'publish-scheduled-courses',
+  PURGE_EXPIRED_TENANTS: 'purge-expired-tenants',
 } as const;

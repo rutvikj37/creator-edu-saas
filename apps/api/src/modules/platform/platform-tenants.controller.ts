@@ -1,10 +1,11 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PERMISSIONS } from '@ce/shared';
 import { ClientMetaParam, CurrentAuth, RequirePermissions, RequireRealm } from '../../common/decorators/auth.decorators.js';
 import type { AuthContext } from '../../core/tenancy/request-context.js';
 import type { ClientMeta } from '../auth/services/session.service.js';
-import { AssignPlanDto, DeleteTenantDto, LimitOverridesDto, SuspendDto, TenantListQuery } from './dto/platform.dto.js';
+import { PaginationQueryDto } from '../../common/dto/pagination.dto.js';
+import { AssignPlanDto, CreateTenantDto, DeleteTenantDto, LimitOverridesDto, SuspendDto, TenantDomainsQuery, TenantListQuery, UpdateTenantDto } from './dto/platform.dto.js';
 import { PlatformTenantsService } from './platform-tenants.service.js';
 
 @ApiTags('Platform · Tenants')
@@ -25,10 +26,40 @@ export class PlatformTenantsController {
     return this.tenants.list(q);
   }
 
+  @Post()
+  @HttpCode(201)
+  @RequirePermissions(PERMISSIONS.PLATFORM_TENANTS_MANAGE)
+  @ApiOperation({ summary: 'Create a new tenant / agency (super admin provision)' })
+  create(@Body() dto: CreateTenantDto, @CurrentAuth() auth: AuthContext, @ClientMetaParam() meta: ClientMeta) {
+    return this.tenants.createTenant(dto, this.actor(auth, meta));
+  }
+
+  @Get('domains')
+  @RequirePermissions(PERMISSIONS.PLATFORM_TENANTS_READ)
+  @ApiOperation({ summary: 'List all tenant domains across the platform' })
+  listDomains(@Query() q: TenantDomainsQuery) {
+    return this.tenants.listDomains(q);
+  }
+
+  @Get('creators')
+  @RequirePermissions(PERMISSIONS.PLATFORM_TENANTS_READ)
+  @ApiOperation({ summary: 'List all academy creators across the platform' })
+  listCreators(@Query() q: PaginationQueryDto) {
+    return this.tenants.listCreators(q);
+  }
+
   @Get(':id')
   @RequirePermissions(PERMISSIONS.PLATFORM_TENANTS_READ)
   detail(@Param('id') id: string) {
     return this.tenants.detail(id);
+  }
+
+  @Patch(':id')
+  @HttpCode(200)
+  @RequirePermissions(PERMISSIONS.PLATFORM_TENANTS_MANAGE)
+  @ApiOperation({ summary: 'Update tenant/agency details' })
+  update(@Param('id') id: string, @Body() dto: UpdateTenantDto, @CurrentAuth() auth: AuthContext, @ClientMetaParam() meta: ClientMeta) {
+    return this.tenants.updateTenant(id, dto, this.actor(auth, meta));
   }
 
   @Post(':id/activate')
@@ -65,6 +96,14 @@ export class PlatformTenantsController {
   @ApiOperation({ summary: 'Schedule deletion (restorable during the retention period)' })
   remove(@Param('id') id: string, @Body() dto: DeleteTenantDto, @CurrentAuth() auth: AuthContext, @ClientMetaParam() meta: ClientMeta) {
     return this.tenants.scheduleDeletion(id, dto.confirmSlug, this.actor(auth, meta));
+  }
+
+  @Post('purge-expired')
+  @HttpCode(200)
+  @RequirePermissions(PERMISSIONS.PLATFORM_TENANTS_DELETE)
+  @ApiOperation({ summary: 'Purge tenants whose scheduled deletion retention period has passed' })
+  purgeExpired(@CurrentAuth() auth: AuthContext, @ClientMetaParam() meta: ClientMeta) {
+    return this.tenants.purgeExpiredTenants(this.actor(auth, meta));
   }
 
   @Post(':id/restore')

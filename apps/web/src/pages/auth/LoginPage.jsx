@@ -83,14 +83,6 @@ export function LoginPage() {
     <AuthLayout
       title="Sign in"
       subtitle={auth.surface === 'academy' ? 'Welcome back. Sign in to continue learning.' : 'Welcome back. Sign in to manage your academy.'}
-      footer={
-        <>
-          New here?{' '}
-          <Link to={auth.surface === 'academy' ? '/register' : '/signup'} className="font-medium text-primary-600 hover:underline">
-            Create an account
-          </Link>
-        </>
-      }
     >
       <GoogleButton />
       <form onSubmit={onCredentials} noValidate className="space-y-4">
