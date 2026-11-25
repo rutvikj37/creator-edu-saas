@@ -11,6 +11,8 @@ export function landingPath(me, surface) {
   if (roles.includes('SUPER_ADMIN') || roles.includes('PLATFORM_ADMIN')) return '/super-admin';
   if (roles.includes('FINANCE_ADMIN')) return '/finance';
   if (roles.includes('SUPPORT_ADMIN')) return '/support';
+  // Dedicated Super Admin host: no agency panel here — stay on security.
+  if (surface === 'admin') return '/account/security';
   return me.activeTenantId ? '/creator' : '/account/security';
 }
 

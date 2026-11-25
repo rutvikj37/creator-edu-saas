@@ -7,7 +7,8 @@ import { LoginPage } from './LoginPage.jsx';
 import { authApi } from '../../services/api/auth.js';
 
 const establish = vi.fn(async () => ({ platformRoles: [], activeTenantId: 't1', mfaSetupRequired: false }));
-vi.mock('../../context/AuthContext.jsx', () => ({ useAuth: () => ({ surface: 'platform', establish }) }));
+const authState = { surface: 'platform', establish };
+vi.mock('../../context/AuthContext.jsx', () => ({ useAuth: () => authState }));
 vi.mock('../../services/api/auth.js', () => ({
   authApi: { login: vi.fn(), loginMfa: vi.fn(), providers: vi.fn(async () => ({ google: false })) },
   academyApi: { site: vi.fn() },
@@ -21,7 +22,23 @@ function setup(path = '/login') {
 }
 
 describe('LoginPage', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authState.surface = 'platform';
+    authState.establish = establish;
+  });
+
+  it('hides forgot-password on the Super Admin host', () => {
+    authState.surface = 'admin';
+    setup();
+    expect(screen.getByRole('heading', { name: 'Super Admin' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Forgot password?' })).not.toBeInTheDocument();
+  });
+
+  it('shows forgot-password on the agency host', () => {
+    setup();
+    expect(screen.getByRole('link', { name: 'Forgot password?' })).toBeInTheDocument();
+  });
 
   it('validates input before calling the API', async () => {
     setup();

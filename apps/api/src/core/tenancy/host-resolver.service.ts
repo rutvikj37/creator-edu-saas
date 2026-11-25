@@ -32,6 +32,7 @@ export class HostResolverService {
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {
     this.root = config.get('PLATFORM_ROOT_DOMAIN').toLowerCase();
+    const adminHost = (config.get('ADMIN_HOST') || '').toLowerCase();
     this.platformHosts = new Set([
       config.get('APP_HOST').toLowerCase(),
       this.root,
@@ -40,6 +41,7 @@ export class HostResolverService {
       `admin.${this.root}`,
       'localhost',
       '127.0.0.1',
+      ...(adminHost ? [adminHost] : []),
     ]);
   }
 

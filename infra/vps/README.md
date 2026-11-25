@@ -1,8 +1,14 @@
 # TechX LMS on the VPS
 
-Live at **https://lmsadmin.techxsolutions.io** (Super Admin) and **https://lms.techxsolutions.io**
-(agency panel). Academies get `https://<slug>.lms.techxsolutions.io` (wildcard DNS `*.lms` → server);
-`lms-auto-certs` issues each academy address its own Let's Encrypt certificate within a minute.
+Live at **https://lmsadmin.techxsolutions.io** (Super Admin — opens login directly, no forgot-password)
+and **https://lms.techxsolutions.io** (agency / client panel). Academies get
+`https://<slug>.lms.techxsolutions.io` (wildcard DNS `*.lms` → server); `lms-auto-certs` issues each
+academy address its own Let's Encrypt certificate within a minute.
+
+Set in `/opt/lms/shared/.env` (and rebuild the web app after changing `VITE_*`):
+`PLATFORM_ROOT_DOMAIN=lms.techxsolutions.io`, `APP_HOST=lms.techxsolutions.io`,
+`ADMIN_HOST=lmsadmin.techxsolutions.io`, matching `VITE_PLATFORM_ROOT_DOMAIN` / `VITE_APP_HOST` /
+`VITE_ADMIN_HOST`.
 
 | Piece | Where |
 |---|---|

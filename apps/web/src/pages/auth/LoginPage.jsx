@@ -29,12 +29,38 @@ function safeNext(next) {
   return next && next.startsWith('/') && !next.startsWith('//') ? next : null;
 }
 
+function copyFor(surface) {
+  if (surface === 'admin') {
+    return {
+      title: 'Super Admin',
+      subtitle: 'Sign in to the platform console.',
+      showForgot: false,
+      showGoogle: false,
+    };
+  }
+  if (surface === 'academy') {
+    return {
+      title: 'Sign in',
+      subtitle: 'Welcome back. Sign in to continue learning.',
+      showForgot: true,
+      showGoogle: true,
+    };
+  }
+  return {
+    title: 'Sign in',
+    subtitle: 'Welcome back. Sign in to manage your academy.',
+    showForgot: true,
+    showGoogle: true,
+  };
+}
+
 export function LoginPage() {
   const auth = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [mfaToken, setMfaToken] = useState(null);
   const [error, setError] = useState(URL_ERRORS[params.get('error')] ?? null);
+  const copy = copyFor(auth.surface);
 
   const creds = useForm({ resolver: zodResolver(credentialsSchema), defaultValues: { email: '', password: '' } });
   const code = useForm({ resolver: zodResolver(codeSchema), defaultValues: { code: '' } });
@@ -80,19 +106,18 @@ export function LoginPage() {
   }
 
   return (
-    <AuthLayout
-      title="Sign in"
-      subtitle={auth.surface === 'academy' ? 'Welcome back. Sign in to continue learning.' : 'Welcome back. Sign in to manage your academy.'}
-    >
-      <GoogleButton />
+    <AuthLayout title={copy.title} subtitle={copy.subtitle}>
+      {copy.showGoogle && <GoogleButton />}
       <form onSubmit={onCredentials} noValidate className="space-y-4">
         {error && <Alert tone="error">{error}</Alert>}
         <Input label="Email" type="email" autoComplete="email" leftIcon={Mail} autoFocus {...creds.register('email')} error={creds.formState.errors.email?.message} />
         <div>
           <PasswordInput {...creds.register('password')} error={creds.formState.errors.password?.message} />
-          <div className="mt-1.5 text-right">
-            <Link to="/forgot-password" className="text-xs font-medium text-primary-600 hover:underline">Forgot password?</Link>
-          </div>
+          {copy.showForgot && (
+            <div className="mt-1.5 text-right">
+              <Link to="/forgot-password" className="text-xs font-medium text-primary-600 hover:underline">Forgot password?</Link>
+            </div>
+          )}
         </div>
         <Button type="submit" className="w-full" loading={creds.formState.isSubmitting}>Sign in</Button>
       </form>

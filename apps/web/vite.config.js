@@ -17,6 +17,8 @@ export default defineConfig(({ mode }) => {
   // Only VITE_* variables are exposed to the browser bundle; secrets never belong here.
   const env = loadEnv(mode, '../../', 'VITE_');
   const root = env.VITE_PLATFORM_ROOT_DOMAIN || 'lvh.me';
+  const extraHosts = [env.VITE_APP_HOST, env.VITE_ADMIN_HOST].filter(Boolean);
+  const allowedHosts = [`.${root}`, 'localhost', ...extraHosts];
   const proxy = { '/api': { target: env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:4000', changeOrigin: false, xfwd: true } };
   return {
     envDir: '../../',
@@ -24,15 +26,15 @@ export default defineConfig(({ mode }) => {
     server: {
       host: true,
       port: 5173,
-      // Allow tenant subdomains (academy1.lvh.me) and the platform host in development.
-      allowedHosts: [`.${root}`, 'localhost'],
+      // Allow tenant subdomains (academy1.lvh.me) and platform / admin hosts in development.
+      allowedHosts,
       // Same-origin API: the browser calls /api on the academy/platform host itself, so the
       // API resolves the tenant from the Host header and cookies stay scoped to that host.
       proxy,
     },
     preview: {
       host: true,
-      allowedHosts: [`.${root}`, 'localhost'],
+      allowedHosts,
       proxy,
       headers: productionHeaders(process.env),
     },

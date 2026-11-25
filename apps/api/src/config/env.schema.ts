@@ -15,6 +15,8 @@ export const envSchema = z.object({
   APP_NAME: z.string().min(1).default('Creator Education'),
   PLATFORM_ROOT_DOMAIN: z.string().min(1),
   APP_HOST: z.string().min(1),
+  /** Dedicated Super Admin host outside the root (e.g. lmsadmin.techxsolutions.io). Optional; admin.<root> is always treated as platform. */
+  ADMIN_HOST: z.preprocess((v) => (v === '' ? undefined : v), z.string().min(1).optional()),
   API_PORT: z.coerce.number().int().positive().default(4000),
   API_PUBLIC_URL: z.url(),
   WEB_PUBLIC_URL: z.url(),

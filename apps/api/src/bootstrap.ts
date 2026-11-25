@@ -25,11 +25,20 @@ export function configureApp(app: NestExpressApplication): INestApplication {
   app.useBodyParser('json', { type: ['application/json', 'application/*+json'] });
   app.useGlobalPipes(createValidationPipe());
 
-  // Phase 1: platform app origin only. Phase 2 extends this with verified tenant domains.
+  // Platform / admin hosts + any subdomain of the root (academy sites). Custom domains are same-origin via nginx.
   const root = config.get('PLATFORM_ROOT_DOMAIN').replace(/\./g, '\\.');
-  const allowed = new RegExp(`^https?://([a-z0-9-]+\\.)*${root}(:\\d+)?$`, 'i');
+  const underRoot = new RegExp(`^https?://([a-z0-9-]+\\.)*${root}(:\\d+)?$`, 'i');
+  const extraHosts = [config.get('APP_HOST'), config.get('ADMIN_HOST')].filter(Boolean).map((h) => h.toLowerCase());
+  const isAllowedOrigin = (origin: string) => {
+    if (underRoot.test(origin)) return true;
+    try {
+      return extraHosts.includes(new URL(origin).hostname.toLowerCase());
+    } catch {
+      return false;
+    }
+  };
   app.enableCors({
-    origin: (origin, cb) => cb(null, !origin || allowed.test(origin)),
+    origin: (origin, cb) => cb(null, !origin || isAllowedOrigin(origin)),
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'Idempotency-Key', 'X-Request-Id'],
     exposedHeaders: ['X-Request-Id', 'RateLimit-Limit', 'RateLimit-Remaining', 'RateLimit-Reset'],

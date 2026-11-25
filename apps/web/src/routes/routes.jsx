@@ -151,7 +151,6 @@ const PREVIEW_LAYOUTS = {
 };
 
 const sharedAuthRoutes = [
-  { path: '/forgot-password', element: page(ForgotPasswordPage) },
   { path: '/reset-password', element: page(ResetPasswordPage) },
   { path: '/verify-email', element: page(VerifyEmailPage) },
   { path: '/auth/callback', element: page(AuthCallbackPage) },
@@ -159,64 +158,82 @@ const sharedAuthRoutes = [
   { path: '/verify/:number', element: page(VerifyCertificatePage) },
 ];
 
+const clientAuthRoutes = [
+  { path: '/forgot-password', element: page(ForgotPasswordPage) },
+  ...sharedAuthRoutes,
+];
+
+const adminPanelRoutes = {
+  element: <RequireAuth admin />,
+  children: [
+    {
+      element: <SuperAdminLayout />,
+      children: [
+        { path: '/super-admin', element: page(AdminDashboardPage) },
+        { path: '/super-admin/welcome', element: page(SuperAdminHomePage) },
+        { path: '/super-admin/tenants', element: page(TenantsPage) },
+        { path: '/super-admin/tenants/:id', element: page(TenantDetailPage) },
+        { path: '/super-admin/creators', element: page(CreatorsPage) },
+        { path: '/super-admin/plans', element: page(PlansPage) },
+        { path: '/super-admin/subscriptions', element: page(SubscriptionsAdminPage) },
+        { path: '/super-admin/plans/new', element: page(PlanEditorPage) },
+        { path: '/super-admin/plans/:id', element: page(PlanEditorPage) },
+        { path: '/super-admin/settings', element: page(SettingsPage) },
+        { path: '/super-admin/backups', element: page(BackupsPage) },
+        { path: '/super-admin/video-usage', element: page(VideoUsagePage) },
+        { path: '/super-admin/admins', element: page(AdminsPage) },
+        { path: '/super-admin/audit-logs', element: page(AuditLogsPage) },
+        { path: '/super-admin/categories', element: page(CategoriesPage) },
+        { path: '/super-admin/announcements', element: page(AnnouncementsPage) },
+        { path: '/super-admin/status', element: page(SystemStatusPage) },
+        { path: '/super-admin/integrations', element: page(IntegrationsPage) },
+        { path: '/super-admin/domains', element: page(DomainsAdminPage) },
+        { path: '/super-admin/analytics', element: page(PlatformAnalyticsPage) },
+        { path: '/super-admin/templates', element: page(EmailTemplatesPage) },
+        { path: '/super-admin/templates/:key', element: page(EmailTemplateEditorPage) },
+        { path: '/super-admin/design-system', element: page(DesignSystemPage) },
+        { path: '/super-admin/account/security', element: page(SecurityPage, { breadcrumbs: [{ label: 'System' }] }) },
+        { path: '/super-admin/account/notifications', element: page(NotificationSettingsPage, { breadcrumbs: [{ label: 'Account' }] }) },
+        ...Object.entries(PREVIEW_LAYOUTS).map(([key]) => ({ path: `/super-admin/preview/${key}`, element: <Navigate to={`/preview/${key}`} replace /> })),
+      ],
+    },
+    ...Object.entries(PREVIEW_LAYOUTS).map(([key, Layout]) => ({ path: `/preview/${key}`, element: <Layout />, children: [{ index: true, element: page(LayoutPreviewPage) }] })),
+    {
+      element: <FinanceLayout />,
+      children: [{ path: '/finance', element: page(FinanceDashboardPage) }, { path: '/finance/transactions', element: page(PlatformTransactionsPage) }, { path: '/finance/billing', element: page(SubscriptionsAdminPage) }, { path: '/finance/invoices', element: page(SubscriptionsAdminPage, { initialTab: 'invoices' }) }, { path: '/finance/tax', element: page(TaxReportPage) }],
+    },
+    {
+      element: <SupportLayout />,
+      children: [
+        { path: '/support', element: page(SupportInboxPage) },
+        { path: '/support/tickets/:id', element: page(StaffTicketPage) },
+        { path: '/support/reports', element: page(SupportReportPage) },
+        { path: '/support/chat', element: page(PlatformChatInboxPage) },
+      ],
+    },
+  ],
+};
+
 export function buildRoutes(surface = getSurface()) {
+  /** Dedicated Super Admin host: login first, no forgot-password, no agency/marketing UI. */
+  const admin = [
+    { path: '/', element: <Navigate to="/login" replace /> },
+    { element: <GuestOnly />, children: [{ path: '/login', element: page(LoginPage) }] },
+    { path: '/forgot-password', element: <Navigate to="/login" replace /> },
+    ...sharedAuthRoutes,
+    { element: <RequireAuth allowMfaSetup />, children: [{ path: '/setup-2fa', element: page(MfaSetupPage) }] },
+    adminPanelRoutes,
+    { element: <RequireAuth />, children: [{ path: '/account/security', element: <NoWorkspacePage /> }] },
+  ];
+
   const platform = [
     { path: '/', element: page(PlatformLandingPage) },
     { path: '/pricing', element: page(PlatformLandingPage, { section: 'pricing' }) },
     { element: <GuestOnly />, children: [{ path: '/login', element: page(LoginPage) }, { path: '/signup', element: <Navigate to="/login" replace /> }] },
-    ...sharedAuthRoutes,
+    ...clientAuthRoutes,
     { path: '/invite', element: page(InvitePage) },
     { element: <RequireAuth allowMfaSetup />, children: [{ path: '/setup-2fa', element: page(MfaSetupPage) }] },
-    {
-      element: <RequireAuth admin />,
-      children: [
-        {
-          element: <SuperAdminLayout />,
-          children: [
-            { path: '/super-admin', element: page(AdminDashboardPage) },
-            { path: '/super-admin/welcome', element: page(SuperAdminHomePage) },
-            { path: '/super-admin/tenants', element: page(TenantsPage) },
-            { path: '/super-admin/tenants/:id', element: page(TenantDetailPage) },
-            { path: '/super-admin/creators', element: page(CreatorsPage) },
-            { path: '/super-admin/plans', element: page(PlansPage) },
-            { path: '/super-admin/subscriptions', element: page(SubscriptionsAdminPage) },
-            { path: '/super-admin/plans/new', element: page(PlanEditorPage) },
-            { path: '/super-admin/plans/:id', element: page(PlanEditorPage) },
-            { path: '/super-admin/settings', element: page(SettingsPage) },
-            { path: '/super-admin/backups', element: page(BackupsPage) },
-            { path: '/super-admin/video-usage', element: page(VideoUsagePage) },
-            { path: '/super-admin/admins', element: page(AdminsPage) },
-            { path: '/super-admin/audit-logs', element: page(AuditLogsPage) },
-            { path: '/super-admin/categories', element: page(CategoriesPage) },
-            { path: '/super-admin/announcements', element: page(AnnouncementsPage) },
-            { path: '/super-admin/status', element: page(SystemStatusPage) },
-            { path: '/super-admin/integrations', element: page(IntegrationsPage) },
-            { path: '/super-admin/domains', element: page(DomainsAdminPage) },
-            { path: '/super-admin/analytics', element: page(PlatformAnalyticsPage) },
-            { path: '/super-admin/templates', element: page(EmailTemplatesPage) },
-            { path: '/super-admin/templates/:key', element: page(EmailTemplateEditorPage) },
-            { path: '/super-admin/design-system', element: page(DesignSystemPage) },
-            { path: '/super-admin/account/security', element: page(SecurityPage, { breadcrumbs: [{ label: 'System' }] }) },
-            { path: '/super-admin/account/notifications', element: page(NotificationSettingsPage, { breadcrumbs: [{ label: 'Account' }] }) },
-            ...Object.entries(PREVIEW_LAYOUTS).map(([key]) => ({ path: `/super-admin/preview/${key}`, element: <Navigate to={`/preview/${key}`} replace /> })),
-          ],
-        },
-        ...Object.entries(PREVIEW_LAYOUTS).map(([key, Layout]) => ({ path: `/preview/${key}`, element: <Layout />, children: [{ index: true, element: page(LayoutPreviewPage) }] })),
-        {
-          element: <FinanceLayout />,
-          children: [{ path: '/finance', element: page(FinanceDashboardPage) }, { path: '/finance/transactions', element: page(PlatformTransactionsPage) }, { path: '/finance/billing', element: page(SubscriptionsAdminPage) }, { path: '/finance/invoices', element: page(SubscriptionsAdminPage, { initialTab: 'invoices' }) }, { path: '/finance/tax', element: page(TaxReportPage) }],
-        },
-        {
-          element: <SupportLayout />,
-          children: [
-            { path: '/support', element: page(SupportInboxPage) },
-            { path: '/support/tickets/:id', element: page(StaffTicketPage) },
-            { path: '/support/reports', element: page(SupportReportPage) },
-            { path: '/support/chat', element: page(PlatformChatInboxPage) },
-          ],
-        },
-      ],
-    },
+    adminPanelRoutes,
     {
       element: <RequireAuth workspace />,
       children: [
@@ -303,7 +320,7 @@ export function buildRoutes(surface = getSurface()) {
     { path: '/live/ticket/:code', element: page(TicketPage) },
     { path: '/pay/:code', element: page(PaymentLinkPage) },
     { element: <GuestOnly />, children: [{ path: '/login', element: page(LoginPage) }, { path: '/register', element: page(StudentRegisterPage) }] },
-    ...sharedAuthRoutes,
+    ...clientAuthRoutes,
     {
       element: <RequireAuth />,
       children: [
@@ -344,8 +361,9 @@ export function buildRoutes(surface = getSurface()) {
     },
   ];
 
+  const children = surface === 'academy' ? academy : surface === 'admin' ? admin : platform;
   return [
-    { errorElement: <RouteError />, element: <SurfaceOnly surface={surface} />, children: surface === 'academy' ? academy : platform },
+    { errorElement: <RouteError />, element: <SurfaceOnly surface={surface} />, children },
     { path: '*', element: <NotFoundPage /> },
   ];
 }
