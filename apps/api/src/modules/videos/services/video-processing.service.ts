@@ -88,10 +88,12 @@ export class VideoProcessingService {
     // Upload initiated for a specific VIDEO lesson: attach once encoding finishes.
     if ((updated?.status ?? video.status) === 'READY' && video.lessonId) {
       const duration = updated?.durationSeconds ?? remote.durationSeconds ?? video.durationSeconds;
-      await this.db.courseLesson.updateMany({
-        where: { id: video.lessonId, type: 'VIDEO' },
-        data: { videoAssetId: video.id, ...(duration ? { durationSeconds: duration } : {}) },
-      });
+      const data = { videoAssetId: video.id, ...(duration ? { durationSeconds: duration } : {}) };
+      // A video lesson can't be ready without a video, so its first video also makes it ready for
+      // students (as attaching in the editor does). Otherwise a creator who closed the page during
+      // processing finds the video attached but the course still blocked on "no published lesson".
+      await this.db.courseLesson.updateMany({ where: { id: video.lessonId, type: 'VIDEO', videoAssetId: null }, data: { ...data, isPublished: true } });
+      await this.db.courseLesson.updateMany({ where: { id: video.lessonId, type: 'VIDEO', videoAssetId: { not: video.id } }, data });
     }
     // The original is at the provider once it reports anything past CREATED: start the backup.
     if (remote.state !== 'CREATED' && remote.state !== 'FAILED') await this.enqueueBackup(video.tenantId, video.id);

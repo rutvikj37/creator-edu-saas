@@ -22,11 +22,25 @@ const ACCEPT = {
 };
 
 /** Uploads a video from the lesson drawer and attaches it when ready. */
-function InlineVideoUpload({ courseId, lessonId, disabled, onAttached }) {
+const IN_FLIGHT = ['UPLOADED', 'PROCESSING'];
+
+function InlineVideoUpload({ courseId, lessonId, disabled, onAttached, pending }) {
   const inputRef = useRef(null);
   const [phase, setPhase] = useState(null); // uploading | processing | null
   const [progress, setProgress] = useState(0);
+  const alive = useRef(true);
+  const watching = useRef(null);
   const config = useQuery({ queryKey: ['videos', 'config'], queryFn: videosApi.config, staleTime: 60_000, retry: false });
+
+  useEffect(() => () => { alive.current = false; }, []);
+
+  // Closing the tab stops a browser upload; processing afterwards runs on the server and is safe.
+  useEffect(() => {
+    if (phase !== 'uploading') return undefined;
+    const warn = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [phase]);
 
   const attach = async (videoId) => {
     await videosApi.edit(videoId, { courseId, lessonId });
@@ -34,17 +48,29 @@ function InlineVideoUpload({ courseId, lessonId, disabled, onAttached }) {
     toast.success('Video attached to this lesson');
   };
 
+  /** Polls until READY while this editor is open; the server attaches it anyway if the page closes. */
   const waitReady = async (videoId) => {
-    for (let i = 0; i < 60; i++) {
-      const s = await videosApi.status(videoId).catch(() => null);
-      if (s?.status === 'READY') { await attach(videoId); setPhase(null); return; }
-      if (s?.status === 'FAILED') throw new Error(s.errorMessage || 'Video processing failed');
-      setPhase('processing');
-      await new Promise((r) => setTimeout(r, 3000));
+    if (watching.current === videoId) return;
+    watching.current = videoId;
+    setPhase('processing');
+    try {
+      while (alive.current) {
+        const s = await videosApi.status(videoId).catch(() => null);
+        if (!alive.current) return;
+        if (s?.status === 'READY') { await attach(videoId); setPhase(null); return; }
+        if (s?.status === 'FAILED') throw new Error(s.errorMessage || 'Video processing failed');
+        await new Promise((r) => setTimeout(r, 4000));
+      }
+    } finally {
+      watching.current = null;
     }
-    toast.success('Upload received — processing in the background. Refresh the library if it does not appear.');
-    setPhase(null);
   };
+
+  // Reopened while a video for this lesson is still processing: pick it back up.
+  useEffect(() => {
+    if (pending?.id && !phase) waitReady(pending.id).catch((e) => { toast.error(e.message); if (alive.current) setPhase(null); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending?.id]);
 
   const onFile = async (file) => {
     if (!file || disabled) return;
@@ -87,7 +113,13 @@ function InlineVideoUpload({ courseId, lessonId, disabled, onAttached }) {
   return (
     <div className="space-y-2 rounded-lg border border-dashed border-line-strong bg-surface-2/40 p-3">
       <p className="text-sm font-medium text-fg">Upload a new video</p>
-      <p className="text-xs text-muted">Stays on this lesson — no need to leave for the asset library.</p>
+      <p className="text-xs text-muted">
+        {phase === 'uploading'
+          ? 'Keep this page open until the upload finishes.'
+          : phase === 'processing'
+            ? 'Processing usually takes 1–3 minutes. You can close this page: the video attaches to this lesson automatically when it’s ready.'
+            : 'Stays on this lesson — no need to leave for the asset library.'}
+      </p>
       <input
         ref={inputRef}
         type="file"
@@ -185,6 +217,7 @@ export function LessonEditor({ courseId, lesson, onClose, onSaved, readOnly }) {
                 courseId={courseId}
                 lessonId={lesson.id}
                 disabled={readOnly}
+                pending={draft.videoAssetId ? null : (videos.data ?? []).find((v) => v.lessonId === lesson.id && IN_FLIGHT.includes(v.status))}
                 onAttached={(videoId) => {
                   setDraft((d) => ({ ...d, videoAssetId: videoId, isPublished: true }));
                   qc.invalidateQueries({ queryKey: ['videos'] });
