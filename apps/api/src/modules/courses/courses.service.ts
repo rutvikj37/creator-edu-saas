@@ -182,7 +182,15 @@ export class CoursesService {
     const assignmentIds = new Set(assignments.filter((a) => a.instructions).map((a) => a.lessonId));
     const problems: FieldError[] = [];
     if (!c.isFree && (c.priceAmount === null || Number(c.priceAmount) <= 0)) problems.push({ field: 'priceAmount', message: 'Set a price or mark the course as free' });
-    if (!lessons.length) problems.push({ field: 'curriculum', message: 'Add at least one published lesson' });
+    if (!lessons.length) {
+      // Say which lesson needs what, instead of a bare "no published lesson" the creator can't act on.
+      const drafts = await this.db.courseLesson.findMany({ where: { courseId: id, isPublished: false }, orderBy: { position: 'asc' }, take: 5, select: { id: true, title: true, type: true, videoAssetId: true } });
+      if (!drafts.length) problems.push({ field: 'curriculum', message: 'Add at least one lesson to the curriculum' });
+      for (const l of drafts) {
+        const fix = l.type === 'VIDEO' && !l.videoAssetId ? 'attach a video from your library, then save the lesson' : 'open it, turn on Ready for students, then save';
+        problems.push({ field: `lesson:${l.id}`, message: `“${l.title}”: ${fix}` });
+      }
+    }
     for (const l of lessons) {
       const missing =
         (l.type === 'TEXT' && !l.content) ||
