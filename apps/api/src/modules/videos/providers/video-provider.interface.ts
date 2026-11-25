@@ -32,12 +32,18 @@ export interface UploadAuthorization {
   expiresAt: Date;
 }
 
-/** Short-lived playback configuration for an authorised viewer. Token protection, not DRM. */
+/**
+ * Short-lived playback configuration for an authorised viewer.
+ * - `token` — Bunny embed token auth only (access control).
+ * - `mediacage_basic` — MediaCage Basic clear-key encryption on the embed (free DRM tier).
+ */
 export interface PlaybackAuthorization {
   kind: 'iframe';
   url: string;
   expiresAt: Date;
-  protection: 'token';
+  protection: 'token' | 'mediacage_basic';
+  /** Present when MediaCage Basic/Enterprise is active on the library. */
+  drmTier?: 'basic' | 'enterprise' | null;
 }
 
 export interface ProviderUsage {
@@ -60,7 +66,9 @@ export interface VideoProvider {
   getVideo(providerVideoId: string): Promise<ProviderVideo>;
   deleteVideo(providerVideoId: string): Promise<void>;
   reprocess(providerVideoId: string): Promise<void>;
-  authorizePlayback(providerVideoId: string, ttlSeconds: number): PlaybackAuthorization;
+  authorizePlayback(providerVideoId: string, ttlSeconds: number): Promise<PlaybackAuthorization>;
+  /** Ensures MediaCage Basic is on (when configured) and returns the library DRM status. */
+  mediaCageStatus(): Promise<{ wanted: boolean; enabled: boolean; version: number | null; configuredViaApi: boolean }>;
   /** Readable stream of the original upload, when the provider keeps originals. */
   downloadOriginal(providerVideoId: string): Promise<{ stream: Readable; size: number | null } | null>;
   /** Server-side upload of a file into an existing video entry (restore). */

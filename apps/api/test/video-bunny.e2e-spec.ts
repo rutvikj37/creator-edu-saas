@@ -66,7 +66,7 @@ describe('Bunny Stream videos: upload, processing, playback (e2e)', () => {
     videoId = res.videoId;
     const v = await prisma.videoAsset.findUniqueOrThrow({ where: { id: videoId } });
     guid = v.providerAssetId!;
-    expect(v).toMatchObject({ tenantId: A.tenant.id, provider: 'BUNNY', status: 'UPLOAD_AUTHORIZED', protection: 'TOKEN', courseId: course.id, lessonId: lesson.id, originalFilename: 'Lesson 1 — intro.mp4', mimeType: 'video/mp4' });
+    expect(v).toMatchObject({ tenantId: A.tenant.id, provider: 'BUNNY', status: 'UPLOAD_AUTHORIZED', protection: 'MEDIACAGE_BASIC', courseId: course.id, lessonId: lesson.id, originalFilename: 'Lesson 1 — intro.mp4', mimeType: 'video/mp4' });
     expect(Number(v.originalSize)).toBe(file.size);
     // Direct-upload credentials: signed, time-limited, bound to this video; never the API key.
     expect(res.upload).toMatchObject({ protocol: 'tus', headers: { VideoId: guid, LibraryId: String(LIB) }, metadata: { filetype: 'video/mp4', title: 'Intro' } });
@@ -223,14 +223,18 @@ describe('Bunny Stream videos: upload, processing, playback (e2e)', () => {
     expect(url.searchParams.get('token')).toBe(sha(`${process.env.BUNNY_STREAM_TOKEN_AUTH_KEY}${guid}${expires}`));
     expect(expires * 1000).toBeGreaterThan(Date.now());
     expect(expires * 1000).toBeLessThanOrEqual(Date.now() + 6 * 3600_000 + 5000);
-    expect(play).toMatchObject({ protection: 'token', drm: false, durationSeconds: 125, resumeAt: 0 });
+    expect(play).toMatchObject({ protection: 'mediacage_basic', drm: true, drmTier: 'basic', durationSeconds: 125, resumeAt: 0 });
+    expect(play.drmLabel).toMatch(/MediaCage Basic/);
     expect(play.player.url).not.toContain(process.env.BUNNY_STREAM_API_KEY);
+    expect(play.player.url).toContain('/embed/');
+    expect(sim.updates.some((u) => u.EnableDRM === true && u.DrmVersion === 2 && u.AllowEarlyPlay === false && u.ExposeOriginals === false)).toBe(true);
+    expect(sim.library.EnableDRM).toBe(true);
     const session = await prisma.videoPlaybackSession.findUniqueOrThrow({ where: { id: play.sessionId } });
     expect(session.sessionTokenHash).toBe(sha(url.searchParams.get('token')!));
     expect(session.expiresAt.getTime()).toBe(expires * 1000);
     // The lesson player route returns the same kind of authorisation.
     const viaLesson = (await authed(app, student1).post(`/api/v1/learn/lessons/${lesson.id}/video`).expect(200)).body.data;
-    expect(viaLesson).toMatchObject({ kind: 'iframe', protection: 'token' });
+    expect(viaLesson).toMatchObject({ kind: 'iframe', protection: 'mediacage_basic', drm: true });
     // Progress & completion through heartbeats.
     await authed(app, student1).put(`/api/v1/learn/video-sessions/${play.sessionId}/heartbeat`).send({ positionSeconds: 60 }).expect(200);
     expect((await authed(app, student1).put(`/api/v1/learn/video-sessions/${play.sessionId}/heartbeat`).send({ positionSeconds: 120 }).expect(200)).body.data.completed).toBe(true);

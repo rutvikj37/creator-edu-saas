@@ -1,6 +1,18 @@
 # Video Hosting & DRM
 
-Status: **Phase 6 shipped without DRM** (owner decision, 2026-11-05): videos are stored privately and played via signed, short-lived playback sessions (see DEVELOPMENT_PROGRESS → Phase 6). The provider/DRM design below is kept for a future phase and is **not implemented**. DRM is reported as active **only** when a DRM-capable provider is configured and a license playback test passes (`VideoProvider.status = VERIFIED`, `drmCapable = true`).
+Status: **MediaCage Basic (free) shipped 2026-11-25.** Bunny Stream libraries can enable clear-key MediaCage Basic DRM on the embed player (`BUNNY_STREAM_MEDIACAGE_BASIC=true`, default). Playback still uses short-lived embed tokens; with Basic on, Bunny encrypts the stream per session. This is **not** Widevine/FairPlay L1 (that is MediaCage Enterprise / VdoCipher — still future). Honest API fields: `drm: true`, `drmTier: 'basic'`, `protection: 'mediacage_basic'`.
+
+## MediaCage Basic (current)
+
+| Item | Detail |
+|---|---|
+| Cost | ₹0 / $0 (included with Bunny Stream) |
+| How | Library `EnableDRM=true`, `DrmVersion=0` (Basic) or `2` (Basic V2, default). Auto via Core API when `BUNNY_ACCOUNT_API_KEY` is set; otherwise enable in Bunny dashboard. |
+| Player | **Embed only** (`iframe.mediadelivery.net/embed/...`) — already our path |
+| Side effects | `AllowEarlyPlay` and `ExposeOriginals` must be false; MP4 fallback / early-play disabled |
+| Limits | Clear-key encryption; keys reach the client; screen capture still possible. Not a Learnyst L1 replacement. |
+
+Env: `BUNNY_STREAM_MEDIACAGE_BASIC`, `BUNNY_STREAM_DRM_VERSION` (0 or 2), plus existing Bunny token/auth keys.
 
 ## Honest capability matrix
 

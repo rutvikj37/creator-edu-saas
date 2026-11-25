@@ -81,8 +81,19 @@ export const envSchema = z.object({
   BUNNY_STREAM_WEBHOOK_SECRET: z.string().optional(),
   /** Library "Token authentication key" — signs player embed tokens. */
   BUNNY_STREAM_TOKEN_AUTH_KEY: z.string().optional(),
-  /** Optional account API key: reads library storage/traffic usage from the core API. */
+  /** Optional account API key: reads library storage/traffic usage from the core API; also enables MediaCage Basic via Update Video Library. */
   BUNNY_ACCOUNT_API_KEY: z.string().optional(),
+  /**
+   * When true (default), Bunny playback is treated as MediaCage Basic DRM (clear-key encryption on
+   * the embed). With BUNNY_ACCOUNT_API_KEY set, the library is auto-configured (EnableDRM + Basic V2).
+   * Without the account key, enable MediaCage Basic in the Bunny dashboard manually.
+   */
+  BUNNY_STREAM_MEDIACAGE_BASIC: bool.default(true),
+  /**
+   * Bunny DrmVersion when enabling MediaCage: 0 = Basic, 2 = Basic V2 (default). Enterprise (1) is
+   * a paid tier and must not be set here.
+   */
+  BUNNY_STREAM_DRM_VERSION: z.coerce.number().int().refine((n) => n === 0 || n === 2, { message: 'Must be 0 (Basic) or 2 (Basic V2)' }).default(2),
   BUNNY_STREAM_API_BASE_URL: z.string().url().default('https://video.bunnycdn.com'),
   BUNNY_CORE_API_BASE_URL: z.string().url().default('https://api.bunny.net'),
   BUNNY_STREAM_TUS_ENDPOINT: z.string().url().default('https://video.bunnycdn.com/tusupload'),

@@ -119,8 +119,11 @@ export class VideosService {
     if (v.provider === 'BUNNY') {
       if (v.status !== 'READY' || !v.providerAssetId) throw AppException.conflict('The video is not ready yet.');
       try {
-        const auth = this.provider.authorizePlayback(v.providerAssetId, 3600);
-        return { kind: 'iframe', url: auth.url, expiresAt: auth.expiresAt, durationSeconds: v.durationSeconds };
+        const auth = await this.provider.authorizePlayback(v.providerAssetId, 3600);
+        return {
+          kind: 'iframe', url: auth.url, expiresAt: auth.expiresAt, durationSeconds: v.durationSeconds,
+          protection: auth.protection, drm: auth.protection === 'mediacage_basic', drmTier: auth.drmTier ?? null,
+        };
       } catch (e) {
         throw providerError(e, 'Preview is not available right now');
       }

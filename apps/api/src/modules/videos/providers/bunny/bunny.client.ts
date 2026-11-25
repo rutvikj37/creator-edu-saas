@@ -129,6 +129,20 @@ export class BunnyClient {
     return this.request<BunnyLibrary>('GET', `${this.o.coreBaseUrl.replace(/\/$/, '')}/videolibrary/${this.o.libraryId}`, { key: this.o.accountApiKey });
   }
 
+  /**
+   * Update Video Library (Core API). Used to enable MediaCage Basic:
+   * `{ EnableDRM: true, DrmVersion: 0|2, AllowEarlyPlay: false, ExposeOriginals: false }`.
+   * Types for EnableDRM landed after some OpenAPI client cuts — body is intentionally loose.
+   */
+  updateLibrary(body: Record<string, unknown>) {
+    if (!this.o.accountApiKey) throw new BunnyApiError('BUNNY_ACCOUNT_API_KEY is required to update the video library', 0, false);
+    return this.request<BunnyLibrary>('POST', `${this.o.coreBaseUrl.replace(/\/$/, '')}/videolibrary/${this.o.libraryId}`, {
+      key: this.o.accountApiKey,
+      body,
+      retry: false,
+    });
+  }
+
   /** Server-side upload (Video_UploadVideo): streamed body, no retries (the body is consumed). */
   async uploadVideo(videoId: string, body: Readable, size: number) {
     const res = await this.fetch(this.lib(`/videos/${encodeURIComponent(videoId)}`), {

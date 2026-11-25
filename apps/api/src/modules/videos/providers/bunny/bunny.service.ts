@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import type { Readable } from 'node:stream';
 import { AppConfig } from '../../../../config/app-config.service.js';
 import type { PlaybackAuthorization, ProviderStatistics, ProviderUsage, ProviderVideo, ProviderVideoState, UploadAuthorization, VideoProvider } from '../video-provider.interface.js';
-import { BunnyApiError, BunnyClient, type BunnyVideo } from './bunny.client.js';
+import { BunnyApiError, BunnyClient, type BunnyLibrary, type BunnyVideo } from './bunny.client.js';
 
 /**
  * Bunny video status codes, from Bunny's official SDKs (`@bunny.net/stream-import` BunnyVideoStatus,
@@ -49,15 +49,34 @@ export function tusSignature(libraryId: number, apiKey: string, expires: number,
   return sha256hex(`${libraryId}${apiKey}${expires}${videoId}`);
 }
 
+export type MediaCageStatus = {
+  wanted: boolean;
+  enabled: boolean;
+  version: number | null;
+  configuredViaApi: boolean;
+};
+
 @Injectable()
 export class BunnyStreamProvider implements VideoProvider {
   readonly key = 'BUNNY' as const;
   private client: BunnyClient | null = null;
+  /** Cached after ensureMediaCageBasic — avoids Core API on every play. */
+  private mediaCageCache: MediaCageStatus | null = null;
+  private mediaCageEnsure: Promise<MediaCageStatus> | null = null;
 
   constructor(private readonly config: AppConfig) {}
 
   isConfigured() {
     return Boolean(this.config.get('BUNNY_STREAM_API_KEY') && this.config.get('BUNNY_STREAM_LIBRARY_ID'));
+  }
+
+  /** Env wants MediaCage Basic on (default true). */
+  wantsMediaCageBasic() {
+    return Boolean(this.config.get('BUNNY_STREAM_MEDIACAGE_BASIC'));
+  }
+
+  drmVersion() {
+    return Number(this.config.get('BUNNY_STREAM_DRM_VERSION') ?? 2);
   }
 
   get libraryId() {
@@ -80,6 +99,64 @@ export class BunnyStreamProvider implements VideoProvider {
   /** Test seam: route provider HTTP through a stand-in. */
   useClient(client: BunnyClient | null) {
     this.client = client;
+    this.mediaCageCache = null;
+    this.mediaCageEnsure = null;
+  }
+
+  /**
+   * Reads / enables MediaCage Basic on the Stream library.
+   * - With account API key: GET library → if DRM off and wanted, POST EnableDRM + DrmVersion (0|2),
+   *   AllowEarlyPlay=false, ExposeOriginals=false (required by Bunny when DRM is on).
+   * - Without account key: assume dashboard was configured when wanted=true (playback still embed-only).
+   */
+  async mediaCageStatus(): Promise<MediaCageStatus> {
+    return this.ensureMediaCageBasic();
+  }
+
+  async ensureMediaCageBasic(): Promise<MediaCageStatus> {
+    if (this.mediaCageCache) return this.mediaCageCache;
+    if (this.mediaCageEnsure) return this.mediaCageEnsure;
+    this.mediaCageEnsure = this.syncMediaCage().finally(() => { this.mediaCageEnsure = null; });
+    return this.mediaCageEnsure;
+  }
+
+  private async syncMediaCage(): Promise<MediaCageStatus> {
+    const wanted = this.wantsMediaCageBasic();
+    const version = this.drmVersion();
+    if (!wanted) {
+      return (this.mediaCageCache = { wanted: false, enabled: false, version: null, configuredViaApi: false });
+    }
+    if (!this.isConfigured()) {
+      return (this.mediaCageCache = { wanted: true, enabled: false, version: null, configuredViaApi: false });
+    }
+    const accountKey = this.config.get('BUNNY_ACCOUNT_API_KEY');
+    if (!accountKey) {
+      // Cannot call Core API — treat as enabled so the player reports MediaCage Basic honestly
+      // when the operator enabled it in the Bunny dashboard (required for free DRM).
+      return (this.mediaCageCache = { wanted: true, enabled: true, version, configuredViaApi: false });
+    }
+    try {
+      const lib = await this.api().library() as (BunnyLibrary & { EnableDRM?: boolean; DrmVersion?: number | null; AllowEarlyPlay?: boolean; ExposeOriginals?: boolean }) | null;
+      if (!lib) {
+        return (this.mediaCageCache = { wanted: true, enabled: true, version, configuredViaApi: false });
+      }
+      const already = Boolean(lib.EnableDRM) && (lib.DrmVersion === 0 || lib.DrmVersion === 2 || lib.DrmVersion == null);
+      if (!already || lib.AllowEarlyPlay || lib.ExposeOriginals) {
+        await this.api().updateLibrary({
+          EnableDRM: true,
+          DrmVersion: version,
+          AllowEarlyPlay: false,
+          ExposeOriginals: false,
+        });
+      }
+      return (this.mediaCageCache = { wanted: true, enabled: true, version, configuredViaApi: true });
+    } catch (e) {
+      // Fail open to "wanted but not confirmed" so playback still works with token auth.
+      if (e instanceof BunnyApiError) {
+        return (this.mediaCageCache = { wanted: true, enabled: false, version: null, configuredViaApi: false });
+      }
+      throw e;
+    }
   }
 
   async createGroup(name: string) {
@@ -147,16 +224,25 @@ export class BunnyStreamProvider implements VideoProvider {
     return { token: embedToken(key, providerVideoId, expires), expires };
   }
 
-  authorizePlayback(providerVideoId: string, ttlSeconds: number): PlaybackAuthorization {
+  async authorizePlayback(providerVideoId: string, ttlSeconds: number): Promise<PlaybackAuthorization> {
+    const drm = await this.ensureMediaCageBasic();
     const { token, expires } = this.tokenFor(providerVideoId, ttlSeconds);
     const base = this.config.get('BUNNY_STREAM_EMBED_BASE_URL').replace(/\/$/, '');
+    // MediaCage Basic requires Bunny Embed View only — never a direct playlist / third-party player URL.
     const url = new URL(`${base}/embed/${this.libraryId}/${encodeURIComponent(providerVideoId)}`);
     url.searchParams.set('token', token);
     url.searchParams.set('expires', String(expires));
     url.searchParams.set('autoplay', 'false');
     url.searchParams.set('preload', 'true');
     url.searchParams.set('responsive', 'true');
-    return { kind: 'iframe', url: url.toString(), expiresAt: new Date(expires * 1000), protection: 'token' };
+    const protection = drm.enabled ? 'mediacage_basic' : 'token';
+    return {
+      kind: 'iframe',
+      url: url.toString(),
+      expiresAt: new Date(expires * 1000),
+      protection,
+      drmTier: drm.enabled ? 'basic' : null,
+    };
   }
 
   /** Uses `originalUrl` from the official play-data API; requires "Keep original files" on the library. */

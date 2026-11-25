@@ -199,6 +199,7 @@ Bunny Stream as primary video host (direct TUS uploads, webhook + API-verified p
 **Verification**: API e2e 143 ✅ (new: sales funnels 6, platform tools 4; isolation covers all 16 `creator/sales` routes) · API unit 114 ✅ · web 165 ✅ · lint ✅ · production build ✅. Local note: the root `.env` has empty `LIVEKIT_*`/`ZOOM_*`/`PLUGNMEET_*` entries, which make the 8 live-class e2e tests fail locally (they pass without those empty lines). **Not verified**: real pixel/GA4 delivery, WhatsApp delivery, click-through in a browser with an admin session.
 
 ## Change log of this file
+- 2026-11-25 — Bunny MediaCage Basic DRM (free clear-key on embed; auto library EnableDRM when account API key set).
 - 2026-11-04 — Phase 0 documents drafted and approved.
 - 2026-11-04 — Phase 1 foundation completed.
 - 2026-11-04 — Phase 2 authentication & multi-tenancy completed.

@@ -34,11 +34,16 @@ Each ⚠️ item lives in one function/constant (`tusSignature`, `authorizePlayb
 2. **Security → Embed view token authentication: on.** Copy the **Token authentication key** →
    `BUNNY_STREAM_TOKEN_AUTH_KEY`. Without it, protected playback is refused (we never fall back to
    unprotected URLs).
-3. **Keep original files: on** (`KeepOriginalFiles`). Backups download the original from the
-   play-data `originalUrl`; without originals, backups fail with a clear message.
-4. **Webhook URL:** `https://<api-host>/api/v1/videos/webhooks/bunny?secret=<BUNNY_STREAM_WEBHOOK_SECRET>`.
-5. Optional: **Allowed referrers** = your academy domains (defence in depth for embeds).
-6. Optional: account API key → `BUNNY_ACCOUNT_API_KEY` for library storage/traffic totals.
+3. **MediaCage Basic DRM: on** (`EnableDRM`, version Basic or Basic V2). With
+   `BUNNY_ACCOUNT_API_KEY` set, the API enables this automatically on first playback (also forces
+   `AllowEarlyPlay=false` and `ExposeOriginals=false`). Without the account key, turn it on in the
+   Bunny dashboard. Playback must stay on the **Embed** player (we already do).
+4. **Keep original files: on** (`KeepOriginalFiles`). Backups download the original from the
+   play-data `originalUrl`; without originals, backups fail with a clear message. Do **not** expose
+   originals on the CDN while DRM is on.
+5. **Webhook URL:** `https://<api-host>/api/v1/videos/webhooks/bunny?secret=<BUNNY_STREAM_WEBHOOK_SECRET>`.
+6. Optional: **Allowed referrers** = your academy domains (defence in depth for embeds).
+7. Account API key → `BUNNY_ACCOUNT_API_KEY` for usage totals **and** MediaCage auto-configure.
 
 ## Environment
 
@@ -48,7 +53,9 @@ BUNNY_STREAM_LIBRARY_ID=
 BUNNY_STREAM_CDN_HOSTNAME=       # vz-xxxx.b-cdn.net
 BUNNY_STREAM_WEBHOOK_SECRET=     # ≥ 24 random chars
 BUNNY_STREAM_TOKEN_AUTH_KEY=
-BUNNY_ACCOUNT_API_KEY=           # optional
+BUNNY_ACCOUNT_API_KEY=           # recommended (usage + MediaCage auto-enable)
+BUNNY_STREAM_MEDIACAGE_BASIC=true
+BUNNY_STREAM_DRM_VERSION=2       # 0=Basic, 2=Basic V2; never 1 (Enterprise)
 VIDEO_MAX_UPLOAD_BYTES=21474836480
 VIDEO_PROCESSING_TIMEOUT_MINUTES=180
 ```

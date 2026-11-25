@@ -34,8 +34,9 @@ Student ──POST /videos/:id/playback-authorize──▶ NestJS (auth, academy
   Replacing Bunny = a new implementation + one binding.
 * `BackupProvider` (`backups/providers/backup-provider.interface.ts`) is bound to Google Drive in
   `google-drive.module.ts`.
-* `DrmPlaybackProvider` is a declared extension point for Widevine/FairPlay. **Not implemented** —
-  Bunny token authentication is access control, not DRM.
+* MediaCage Basic (free clear-key DRM on Bunny embed) is enabled via library `EnableDRM` when
+  `BUNNY_STREAM_MEDIACAGE_BASIC=true`. `DrmPlaybackProvider` remains the extension point for
+  Enterprise Widevine/FairPlay (paid).
 
 ## Modules
 

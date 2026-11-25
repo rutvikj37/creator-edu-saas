@@ -17,8 +17,9 @@ export class BunnySim {
   collections = new Map<string, string>();
   calls: string[] = [];
   failures: { match: RegExp; status: number; times: number }[] = [];
-  library = { storage: 0, traffic: 0 };
+  library = { storage: 0, traffic: 0, EnableDRM: false, DrmVersion: null as number | null, AllowEarlyPlay: false, ExposeOriginals: false };
   watch = new Map<string, number>();
+  updates: Record<string, unknown>[] = [];
   private n = 0;
 
   constructor(readonly apiKey: string, readonly libraryId: number, readonly accountKey: string) {}
@@ -80,7 +81,27 @@ export class BunnySim {
     }
     if (u.origin === this.core) {
       if (key !== this.accountKey) return this.json(401, null);
-      if (method === 'GET' && u.pathname === `/videolibrary/${this.libraryId}`) return this.json(200, { Id: this.libraryId, Name: 'Test', VideoCount: this.videos.size, StorageUsage: this.library.storage, TrafficUsage: this.library.traffic });
+      if (method === 'GET' && u.pathname === `/videolibrary/${this.libraryId}`) {
+        return this.json(200, {
+          Id: this.libraryId, Name: 'Test', VideoCount: this.videos.size,
+          StorageUsage: this.library.storage, TrafficUsage: this.library.traffic,
+          EnableDRM: this.library.EnableDRM, DrmVersion: this.library.DrmVersion,
+          AllowEarlyPlay: this.library.AllowEarlyPlay, ExposeOriginals: this.library.ExposeOriginals,
+        });
+      }
+      if (method === 'POST' && u.pathname === `/videolibrary/${this.libraryId}`) {
+        const body = typeof init.body === 'string' ? JSON.parse(init.body) : {};
+        this.updates.push(body);
+        if (body.EnableDRM !== undefined) this.library.EnableDRM = Boolean(body.EnableDRM);
+        if (body.DrmVersion !== undefined) this.library.DrmVersion = body.DrmVersion;
+        if (body.AllowEarlyPlay !== undefined) this.library.AllowEarlyPlay = Boolean(body.AllowEarlyPlay);
+        if (body.ExposeOriginals !== undefined) this.library.ExposeOriginals = Boolean(body.ExposeOriginals);
+        return this.json(200, {
+          Id: this.libraryId, Name: 'Test', EnableDRM: this.library.EnableDRM, DrmVersion: this.library.DrmVersion,
+          AllowEarlyPlay: this.library.AllowEarlyPlay, ExposeOriginals: this.library.ExposeOriginals,
+          StorageUsage: this.library.storage, TrafficUsage: this.library.traffic,
+        });
+      }
       return this.json(404, null);
     }
     if (u.pathname.startsWith('/original/')) {

@@ -25,6 +25,8 @@ process.env.BUNNY_STREAM_CDN_HOSTNAME = 'vz-test.b-cdn.net';
 process.env.BUNNY_STREAM_WEBHOOK_SECRET = 'test-webhook-secret-0123456789abcdef';
 process.env.BUNNY_STREAM_TOKEN_AUTH_KEY = 'test-token-auth-key';
 process.env.BUNNY_ACCOUNT_API_KEY = 'test-bunny-account-key';
+process.env.BUNNY_STREAM_MEDIACAGE_BASIC = 'true';
+process.env.BUNNY_STREAM_DRM_VERSION = '2';
 // Google Drive backups: test/drive-sim.ts serves the Drive API on a local port.
 process.env.GOOGLE_DRIVE_CLIENT_ID = 'test-drive-client.apps.googleusercontent.com';
 process.env.GOOGLE_DRIVE_CLIENT_SECRET = 'test-drive-client-secret';

@@ -34,11 +34,17 @@ playback is refused.
   per-token revocation. Our player stops at the next heartbeat, but someone who copied the embed URL
   could keep using it until expiry.
 
-## This is not DRM
+## MediaCage Basic vs token-only
 
-Token authentication controls **who gets a playable URL and for how long**. It does **not** encrypt
-content per device (Widevine/FairPlay). Screen capture and determined stream ripping remain possible.
-Bunny offers MediaCage DRM on some plans; `DrmPlaybackProvider` is the extension point for adding it.
+Token authentication controls **who gets a playable URL and for how long**.
+
+When `BUNNY_STREAM_MEDIACAGE_BASIC=true` (default), we also enable **MediaCage Basic** on the Bunny
+library (`EnableDRM` + `DrmVersion` 0 or 2). Bunny then encrypts the embed stream with per-session
+clear keys. The API returns `protection: 'mediacage_basic'`, `drm: true`, `drmTier: 'basic'`.
+
+This still does **not** match Widevine/FairPlay L1 (keys are clear; screen capture remains possible).
+Enterprise MediaCage / VdoCipher remain the path for hard DRM; `DrmPlaybackProvider` is the
+extension point for that paid tier.
 
 ## Other protections
 

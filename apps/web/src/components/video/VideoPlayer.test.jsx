@@ -51,4 +51,14 @@ describe('VideoPlayer', () => {
     render(<VideoPlayer lessonId="l4" />);
     expect(await screen.findByText('Too many devices are playing')).toBeInTheDocument();
   });
+
+  it('shows a MediaCage Basic badge on DRM embeds', async () => {
+    videosApi.start.mockResolvedValue({
+      sessionId: 's5', kind: 'iframe', url: 'https://iframe.mediadelivery.net/embed/1/vid',
+      resumeAt: 0, drm: true, drmTier: 'basic', drmLabel: 'MediaCage Basic (encrypted embed)',
+    });
+    render(<VideoPlayer lessonId="l5" />);
+    expect(await screen.findByTestId('lesson-video-embed')).toBeInTheDocument();
+    expect(screen.getByTestId('drm-badge')).toHaveTextContent(/MediaCage Basic/);
+  });
 });

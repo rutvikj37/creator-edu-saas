@@ -1291,6 +1291,8 @@ enum VideoProtection {
   SIGNED
   /// Provider token authentication (Bunny embed token). Not DRM.
   TOKEN
+  /// Bunny MediaCage Basic (clear-key encryption on embed). Free; weaker than Widevine/FairPlay L1.
+  MEDIACAGE_BASIC
 }
 
 enum VideoUploadStatus {

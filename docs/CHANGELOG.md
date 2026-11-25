@@ -2,6 +2,12 @@
 
 Format: Keep a Changelog. Versions follow SemVer once Phase 1 ships.
 
+## [0.21.0] — 2026-11-25 — Bunny MediaCage Basic DRM
+### Added
+- MediaCage Basic (free clear-key DRM) on Bunny Stream embeds: library auto-configure via Core API when `BUNNY_ACCOUNT_API_KEY` is set (`EnableDRM` + `DrmVersion` 0/2, early-play and exposed originals off).
+- Playback responses report `protection: 'mediacage_basic'`, `drm: true`, `drmTier: 'basic'`, and an honest `drmLabel` (not Widevine/FairPlay L1).
+- Student player badge for protected embeds; `VideoProtection.MEDIACAGE_BASIC`; env `BUNNY_STREAM_MEDIACAGE_BASIC` / `BUNNY_STREAM_DRM_VERSION`.
+
 ## [0.20.0] — 2026-11-09 — Sales funnels, ad tracking and Super Admin tools
 ### Added
 - Order bumps: one-click add-ons at a special price shown as checkboxes at checkout, optionally only with chosen items.

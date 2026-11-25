@@ -23,7 +23,8 @@ const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 /**
  * Playback authorisation for provider-hosted videos. Every grant re-checks the student, the
  * academy, the enrolment, the lesson's publication/locks and the video's ownership, then issues a
- * short-lived provider token. This is token authentication, not DRM (no Widevine/FairPlay).
+ * short-lived provider token. With MediaCage Basic enabled, Bunny encrypts the embed stream
+ * (clear-key); that is free DRM, not Widevine/FairPlay L1.
  */
 @Injectable()
 export class VideoPlaybackService {
@@ -58,7 +59,7 @@ export class VideoPlaybackService {
     const ttl = playbackTtlSeconds(video.durationSeconds ?? lesson.durationSeconds);
     let auth;
     try {
-      auth = this.provider.authorizePlayback(video.providerAssetId, ttl);
+      auth = await this.provider.authorizePlayback(video.providerAssetId, ttl);
     } catch (e) {
       throw providerError(e, 'Playback is not available right now');
     }
@@ -70,13 +71,22 @@ export class VideoPlaybackService {
         sessionTokenHash: sha(token), expiresAt: auth.expiresAt,
       } as never,
     });
+    // Keep asset.protection in sync with what we actually issued (TOKEN vs MEDIACAGE_BASIC).
+    const nextProtection = auth.protection === 'mediacage_basic' ? 'MEDIACAGE_BASIC' : 'TOKEN';
+    if (video.protection !== nextProtection) {
+      await this.db.videoAsset.update({ where: { id: video.id }, data: { protection: nextProtection } }).catch(() => undefined);
+    }
     const progress = enrollment ? await this.db.lessonProgress.findFirst({ where: { enrollmentId: enrollment.id, lessonId: lesson.id } }) : null;
-    this.log.log(`Playback granted: session ${session.id} video ${video.id} user ${userId} tenant ${this.ctx.tenantId}`);
+    this.log.log(`Playback granted: session ${session.id} video ${video.id} user ${userId} tenant ${this.ctx.tenantId} protection=${auth.protection}`);
+    const drm = auth.protection === 'mediacage_basic';
     return {
       sessionId: session.id,
       player: { kind: auth.kind, url: auth.url },
       protection: auth.protection,
-      drm: false,
+      drm,
+      drmTier: auth.drmTier ?? (drm ? 'basic' : null),
+      /** Honest label: Basic is clear-key encryption, not Widevine/FairPlay L1. */
+      drmLabel: drm ? 'MediaCage Basic (encrypted embed)' : null,
       expiresAt: auth.expiresAt,
       durationSeconds: video.durationSeconds ?? lesson.durationSeconds,
       resumeAt: progress?.completedAt ? 0 : (progress?.positionSeconds ?? 0),

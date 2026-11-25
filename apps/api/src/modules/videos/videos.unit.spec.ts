@@ -74,6 +74,17 @@ describe('BunnyClient', () => {
     await expect(c2.client.createVideo({ title: 'x' })).rejects.toBeInstanceOf(BunnyApiError);
     expect(c2.calls).toHaveLength(1);
   });
+  it('updates the video library for MediaCage Basic via the account key', async () => {
+    const calls: { url: string; init: RequestInit }[] = [];
+    const withKey = new BunnyClient({
+      apiKey: 'lib-key', libraryId: 7, streamBaseUrl: 'https://video.example', coreBaseUrl: 'https://core.example',
+      accountApiKey: 'acct', fetchImpl: async (u, init) => { calls.push({ url: String(u), init: init ?? {} }); return ok({ Id: 7, EnableDRM: true, DrmVersion: 2 }); }, sleep: async () => {},
+    });
+    await withKey.updateLibrary({ EnableDRM: true, DrmVersion: 2, AllowEarlyPlay: false, ExposeOriginals: false });
+    expect(calls[0]?.url).toBe('https://core.example/videolibrary/7');
+    expect(new Headers(calls[0]!.init.headers).get('AccessKey')).toBe('acct');
+    expect(JSON.parse(String(calls[0]!.init.body))).toMatchObject({ EnableDRM: true, DrmVersion: 2 });
+  });
   it('gives up after max retries and treats delete 404 as done', async () => {
     const { client } = make([new Response(null, { status: 500 }), new Response(null, { status: 500 }), new Response(null, { status: 500 }), new Response(null, { status: 500 })]);
     await expect(client.getVideo('g')).rejects.toMatchObject({ status: 500, retryable: true });

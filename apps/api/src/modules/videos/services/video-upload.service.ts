@@ -122,9 +122,11 @@ export class VideoUploadService {
     await this.assertTargets(userId, input.courseId, input.lessonId);
     const tenantId = this.ctx.requireTenantId();
 
+    const mediaCage = (await this.provider.mediaCageStatus()).wanted;
     const video = await this.db.videoAsset.create({
       data: {
-        title: input.title.trim().slice(0, 200), provider: 'BUNNY', status: 'CREATED', protection: 'TOKEN',
+        title: input.title.trim().slice(0, 200), provider: 'BUNNY', status: 'CREATED',
+        protection: mediaCage ? 'MEDIACAGE_BASIC' : 'TOKEN',
         courseId: input.courseId ?? null, lessonId: input.lessonId ?? null, originalFilename: filename,
         mimeType: input.mimeType.toLowerCase(), originalSize: BigInt(input.size), createdById: userId,
       } as never,

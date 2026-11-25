@@ -843,8 +843,8 @@ export class LiveService {
     const v = await this.db.videoAsset.findFirst({ where: { id: s.videoAssetId } });
     if (v?.provider === 'BUNNY') {
       if (v.status !== 'READY' || !v.providerAssetId) throw AppException.conflict('The recording is still being processed. Try again in a few minutes.');
-      const p = this.videos.authorizePlayback(v.providerAssetId, 4 * 3600);
-      return { kind: 'iframe' as const, url: p.url, title: v.title, durationSeconds: v.durationSeconds };
+      const p = await this.videos.authorizePlayback(v.providerAssetId, 4 * 3600);
+      return { kind: 'iframe' as const, url: p.url, title: v.title, durationSeconds: v.durationSeconds, protection: p.protection, drm: p.protection === 'mediacage_basic' };
     }
     const f = v?.sourceFileId && (await this.db.fileAsset.findFirst({ where: { id: v.sourceFileId } }));
     if (!f) throw AppException.notFound('No recording for this session');

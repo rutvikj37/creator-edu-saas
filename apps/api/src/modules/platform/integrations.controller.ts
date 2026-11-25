@@ -95,9 +95,15 @@ export class IntegrationsController {
         usage: `${gateways.reduce((n, g) => n + g._count._all, 0)} academies connected`,
       },
       {
-        key: 'bunny', name: 'Bunny Stream', category: 'Video & storage', configuredIn: 'environment', description: 'Video upload, encoding and secure playback.',
+        key: 'bunny', name: 'Bunny Stream', category: 'Video & storage', configuredIn: 'environment', description: 'Video upload, encoding and MediaCage Basic DRM (encrypted embed).',
         ...this.env(['BUNNY_STREAM_API_KEY', 'BUNNY_STREAM_LIBRARY_ID', 'BUNNY_STREAM_CDN_HOSTNAME']),
-        details: [{ label: 'Library', value: this.val('BUNNY_STREAM_LIBRARY_ID') }, { label: 'CDN host', value: this.val('BUNNY_STREAM_CDN_HOSTNAME') }, { label: 'Signed URLs', value: this.config.get('BUNNY_STREAM_TOKEN_AUTH_KEY') ? 'On' : 'Off' }, { label: 'Webhook secret', value: this.config.get('BUNNY_STREAM_WEBHOOK_SECRET') ? 'Set' : 'Not set' }],
+        details: [
+          { label: 'Library', value: this.val('BUNNY_STREAM_LIBRARY_ID') },
+          { label: 'CDN host', value: this.val('BUNNY_STREAM_CDN_HOSTNAME') },
+          { label: 'Token auth', value: this.config.get('BUNNY_STREAM_TOKEN_AUTH_KEY') ? 'On' : 'Off' },
+          { label: 'MediaCage Basic', value: this.config.get('BUNNY_STREAM_MEDIACAGE_BASIC') ? (this.config.get('BUNNY_ACCOUNT_API_KEY') ? 'On (auto-configure)' : 'On (enable in Bunny dashboard)') : 'Off' },
+          { label: 'Webhook secret', value: this.config.get('BUNNY_STREAM_WEBHOOK_SECRET') ? 'Set' : 'Not set' },
+        ],
       },
       {
         key: 'storage', name: 'File storage', category: 'Video & storage', configuredIn: 'environment', description: 'Uploaded files, images, certificates and invoices.',

@@ -80,7 +80,7 @@ export class VideoPlaybackController {
   constructor(private readonly playback: VideoPlaybackService) {}
 
   @Post(':id/playback-authorize') @HttpCode(200) @Throttle(playbackLimit)
-  @ApiOperation({ summary: 'Short-lived token-authenticated player URL for an entitled student (not DRM)' })
+  @ApiOperation({ summary: 'Short-lived Bunny embed URL for an entitled student (MediaCage Basic when enabled)' })
   authorize(@Param('id') id: string, @Body() dto: PlaybackAuthorizeDto, @CurrentAuth() a: AuthContext, @ClientMetaParam() meta: ClientMeta) {
     return this.playback.authorize(a.userId, dto.lessonId, id, meta);
   }

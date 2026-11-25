@@ -41,9 +41,9 @@ export function ProviderEmbed({ url, resumeAt, onTime, onState, title = 'Lesson 
 
 /**
  * Plays a lesson video through a server-issued playback session: a signed storage URL (native
- * <video>) or a token-authenticated Bunny Stream embed (adaptive HLS, fullscreen, speed controls).
+ * <video>) or a Bunny Stream embed (token auth + MediaCage Basic when enabled).
  * Sends position heartbeats (resume + auto-complete) and ends the session on unmount.
- * Not DRM — access is signed and short-lived, but a determined user can still capture the stream.
+ * MediaCage Basic encrypts the embed stream (clear-key); it is not Widevine/FairPlay L1.
  */
 export function VideoPlayer({ lessonId, onCompleted }) {
   const ref = useRef(null);
@@ -113,30 +113,44 @@ export function VideoPlayer({ lessonId, onCompleted }) {
 
   if (error) return <Alert tone="error" title="Video unavailable">{error}</Alert>;
   if (!play) return <Skeleton className="aspect-video w-full" />;
-  if (play.kind === 'iframe') return <div className="relative"><ProviderEmbed url={play.url} resumeAt={play.resumeAt} onTime={onTime} onState={onState} /><Watermark /></div>;
+  const badge = play.drm ? (
+    <p className="pointer-events-none absolute bottom-2 left-2 z-20 rounded bg-black/60 px-2 py-0.5 text-[10px] tracking-wide text-white/80 uppercase" data-testid="drm-badge">
+      {play.drmLabel ?? 'Protected playback'}
+    </p>
+  ) : null;
+  if (play.kind === 'iframe') {
+    return (
+      <div className="relative">
+        <ProviderEmbed url={play.url} resumeAt={play.resumeAt} onTime={onTime} onState={onState} />
+        <Watermark />
+        {badge}
+      </div>
+    );
+  }
   return (
     <div className="relative">
-    <video
-      ref={ref}
-      src={play.url}
-      controls
-      playsInline
-      preload="metadata"
-      controlsList="nodownload"
-      onContextMenu={(e) => e.preventDefault()}
-      onLoadedMetadata={(e) => {
-        const at = session.current?.resumeAt;
-        if (at && at < e.currentTarget.duration - 5) e.currentTarget.currentTime = at;
-      }}
-      onTimeUpdate={(e) => {
-        last.current = { position: e.currentTarget.currentTime, duration: e.currentTarget.duration };
-      }}
-      onPause={beat}
-      onEnded={beat}
-      className="aspect-video w-full rounded-lg bg-black"
-      data-testid="lesson-video"
-    />
-    <Watermark />
+      <video
+        ref={ref}
+        src={play.url}
+        controls
+        playsInline
+        preload="metadata"
+        controlsList="nodownload"
+        onContextMenu={(e) => e.preventDefault()}
+        onLoadedMetadata={(e) => {
+          const at = session.current?.resumeAt;
+          if (at && at < e.currentTarget.duration - 5) e.currentTarget.currentTime = at;
+        }}
+        onTimeUpdate={(e) => {
+          last.current = { position: e.currentTarget.currentTime, duration: e.currentTarget.duration };
+        }}
+        onPause={beat}
+        onEnded={beat}
+        className="aspect-video w-full rounded-lg bg-black"
+        data-testid="lesson-video"
+      />
+      <Watermark />
+      {badge}
     </div>
   );
 }
