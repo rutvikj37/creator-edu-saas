@@ -28,7 +28,9 @@ export function configureApp(app: NestExpressApplication): INestApplication {
   // Platform / admin hosts + any subdomain of the root (academy sites). Custom domains are same-origin via nginx.
   const root = config.get('PLATFORM_ROOT_DOMAIN').replace(/\./g, '\\.');
   const underRoot = new RegExp(`^https?://([a-z0-9-]+\\.)*${root}(:\\d+)?$`, 'i');
-  const extraHosts = [config.get('APP_HOST'), config.get('ADMIN_HOST')].filter(Boolean).map((h) => h.toLowerCase());
+  const extraHosts = [config.get('APP_HOST'), config.get('ADMIN_HOST')]
+    .filter((h): h is string => Boolean(h))
+    .map((h) => h.toLowerCase());
   const isAllowedOrigin = (origin: string) => {
     if (underRoot.test(origin)) return true;
     try {
