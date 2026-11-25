@@ -16,6 +16,8 @@ export function landingPath(me, surface) {
   }
   // Dedicated Super Admin host: no agency panel here — stay on security.
   if (surface === 'admin') return '/account/security';
+  // Learners always land in the student app, even when the session carries a tenant id.
+  if (me.realm === 'TENANT') return surface === 'academy' ? '/learn' : '/account/security';
   // Agency staff signing in on their academy domain (or platform host) land in the creator panel.
   if (me.realm === 'PLATFORM' && me.activeTenantId) return '/creator';
   if (surface === 'academy') return '/learn';
@@ -45,7 +47,9 @@ export function RequireAuth({ admin = false, workspace = false }) {
     return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />;
   }
   if (admin && !auth.isAdmin) return <Navigate to={landingPath(auth.me, auth.surface)} replace />;
-  if (workspace && !auth.me.activeTenantId) return <Navigate to={landingPath(auth.me, auth.surface)} replace />;
+  const hasWorkspace =
+    auth.me.realm === 'PLATFORM' && Boolean(auth.me.activeTenantId);
+  if (workspace && !hasWorkspace) return <Navigate to={landingPath(auth.me, auth.surface)} replace />;
   return <Outlet />;
 }
 

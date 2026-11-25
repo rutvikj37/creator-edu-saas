@@ -16,6 +16,7 @@ const routes = [
   { path: '/login', element: <p>login page</p> },
   { path: '/setup-2fa', element: <p>mfa setup</p> },
   { path: '/creator', element: <p>creator home</p> },
+  { path: '/learn', element: <p>learn home</p> },
   { element: <RequireAuth admin />, children: [{ path: '/super-admin', element: <p>admin area</p> }] },
   { element: <RequireAuth workspace />, children: [{ path: '/creator/domains', element: <p>domains</p> }] },
   { element: <GuestOnly />, children: [{ path: '/signup', element: <p>signup</p> }] },
@@ -43,8 +44,20 @@ describe('route guards', () => {
     expect(screen.getByText('admin area')).toBeInTheDocument();
   });
 
+  it('keeps tenant learners out of the creator workspace', () => {
+    authState.current = {
+      status: 'authenticated',
+      surface: 'academy',
+      isAdmin: false,
+      me: me({ realm: 'TENANT', activeTenantId: 't1' }),
+    };
+    renderAt('/creator/domains', routes);
+    expect(screen.getByText('learn home')).toBeInTheDocument();
+  });
+
   it('computes landing paths per surface and role', () => {
     expect(landingPath(me({ realm: 'TENANT', activeTenantId: null }), 'academy')).toBe('/learn');
+    expect(landingPath(me({ realm: 'TENANT', activeTenantId: 't1' }), 'academy')).toBe('/learn');
     expect(landingPath(me({ realm: 'PLATFORM', platformRoles: [] }), 'academy')).toBe('/creator');
     expect(landingPath(me({ platformRoles: ['FINANCE_ADMIN'] }), 'platform')).toBe('/finance');
     expect(landingPath(me({ platformRoles: ['SUPPORT_ADMIN'] }), 'platform')).toBe('/support');
