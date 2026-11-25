@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { vi } from 'vitest';
-import { AcademyCatalogLayout, RequireAuth, GuestOnly, landingPath, safeNextPath } from './guards.jsx';
+import { AcademyCatalogLayout, RequireAuth, GuestOnly, landingPath, postLoginPath, safeNextPath } from './guards.jsx';
 
 const authState = { current: null };
 vi.mock('../context/AuthContext.jsx', () => ({ useAuth: () => authState.current }));
@@ -99,5 +99,24 @@ describe('GuestOnly', () => {
     expect(safeNextPath('//evil.example')).toBeNull();
     expect(safeNextPath('https://evil.example')).toBeNull();
     expect(safeNextPath('/learn')).toBe('/learn');
+  });
+});
+
+describe('postLoginPath', () => {
+  const student = { realm: 'TENANT', platformRoles: [], activeTenantId: 't1' };
+  const agency = { realm: 'PLATFORM', platformRoles: [], activeTenantId: 't1' };
+  it('drops a student-only next left by a previous session for agency staff', () => {
+    expect(postLoginPath(agency, 'academy', '/learn/coaching')).toBe('/creator');
+  });
+  it('drops a creator next for a student', () => {
+    expect(postLoginPath(student, 'academy', '/creator/courses')).toBe('/learn');
+  });
+  it('keeps a next that fits the user', () => {
+    expect(postLoginPath(student, 'academy', '/learn/coaching')).toBe('/learn/coaching');
+    expect(postLoginPath(agency, 'academy', '/creator/courses?tab=x')).toBe('/creator/courses?tab=x');
+    expect(postLoginPath(agency, 'academy', '/courses/foo')).toBe('/courses/foo');
+  });
+  it('rejects open redirects', () => {
+    expect(postLoginPath(student, 'academy', '//evil.com')).toBe('/learn');
   });
 });

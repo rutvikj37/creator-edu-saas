@@ -60,13 +60,35 @@ export function safeNextPath(next) {
   return next && next.startsWith('/') && !next.startsWith('//') ? next : null;
 }
 
+const STUDENT_PREFIXES = ['/learn', '/checkout', '/cart'];
+const WORKSPACE_PREFIXES = ['/creator'];
+const STAFF_PREFIXES = ['/super-admin', '/finance', '/support'];
+const under = (path, prefixes) => prefixes.some((p) => path === p || path.startsWith(`${p}/`) || path.startsWith(`${p}?`));
+
+/**
+ * Post-sign-in destination: honour `next` only when it belongs to the signed-in
+ * user's realm. A `next` left behind by a previous session (e.g. a student signs
+ * out on /learn/coaching, then agency staff sign in) would otherwise open a page
+ * whose API rejects this user with 403.
+ */
+export function postLoginPath(me, surface, next) {
+  const path = safeNextPath(next);
+  const home = landingPath(me, surface);
+  if (!path || !me) return home;
+  const isStudent = me.realm === 'TENANT';
+  const hasWorkspace = me.realm === 'PLATFORM' && Boolean(me.activeTenantId);
+  if (under(path, STUDENT_PREFIXES) && !isStudent) return home;
+  if (under(path, WORKSPACE_PREFIXES) && !hasWorkspace) return home;
+  if (under(path, STAFF_PREFIXES) && me.realm !== 'PLATFORM') return home;
+  return path;
+}
+
 export function GuestOnly() {
   const auth = useAuth();
   const location = useLocation();
   if (auth.status === 'loading') return <FullPageSpinner />;
   if (auth.status === 'authenticated') {
-    const next = safeNextPath(new URLSearchParams(location.search).get('next'));
-    return <Navigate to={next ?? landingPath(auth.me, auth.surface)} replace />;
+    return <Navigate to={postLoginPath(auth.me, auth.surface, new URLSearchParams(location.search).get('next'))} replace />;
   }
   return <Outlet />;
 }

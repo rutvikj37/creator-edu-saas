@@ -6,7 +6,7 @@ import { vi } from 'vitest';
 import { LoginPage } from './LoginPage.jsx';
 import { authApi } from '../../services/api/auth.js';
 
-const establish = vi.fn(async () => ({ platformRoles: [], activeTenantId: 't1', mfaSetupRequired: false }));
+const establish = vi.fn(async () => ({ realm: 'PLATFORM', platformRoles: [], activeTenantId: 't1', mfaSetupRequired: false }));
 const authState = { surface: 'platform', establish };
 vi.mock('../../context/AuthContext.jsx', () => ({ useAuth: () => authState }));
 vi.mock('../../services/api/auth.js', () => ({

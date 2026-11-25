@@ -11,7 +11,7 @@ import { Alert } from '../../components/auth/Alert.jsx';
 import { Button, Input } from '../../components/ui/index.js';
 import { authApi } from '../../services/api/auth.js';
 import { useAuth } from '../../context/AuthContext.jsx';
-import { landingPath } from '../../routes/guards.jsx';
+import { postLoginPath } from '../../routes/guards.jsx';
 
 const credentialsSchema = z.object({
   email: z.email('Enter a valid email address'),
@@ -23,11 +23,6 @@ const URL_ERRORS = {
   google_no_account: 'No account uses that Google email here. Sign up first, then you can use Google to sign in.',
   google_cancelled: 'Google sign-in was cancelled.',
 };
-
-/** Safe post-login redirect: only same-site relative paths. */
-function safeNext(next) {
-  return next && next.startsWith('/') && !next.startsWith('//') ? next : null;
-}
 
 function copyFor(surface) {
   if (surface === 'admin') {
@@ -67,7 +62,7 @@ export function LoginPage() {
 
   const finish = async (result) => {
     const me = await auth.establish(result);
-    navigate(safeNext(params.get('next')) ?? landingPath(me, auth.surface), { replace: true });
+    navigate(postLoginPath(me, auth.surface, params.get('next')), { replace: true });
   };
 
   const onCredentials = creds.handleSubmit(async (values) => {
