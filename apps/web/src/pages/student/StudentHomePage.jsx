@@ -5,7 +5,6 @@ import {
   Award,
   BookOpen,
   CalendarCheck,
-  CalendarClock,
   CheckCircle2,
   ChevronRight,
   Clock,
@@ -95,10 +94,8 @@ export function StudentHomePage() {
   const coachingBookings = useMemo(() => upcomingCoachingBookings(coachingQ.data), [coachingQ.data]);
   const expiring = useMemo(() => expiringEnrollments(all), [all]);
   const liveUpcoming = liveQ.data ?? [];
-  const upcomingCount = liveUpcoming.length + coachingBookings.length;
 
   const certCount = (certificatesQ.data ?? []).filter((c) => c.status === 'ISSUED').length;
-  const statsLoading = enrollmentsQ.isLoading || certificatesQ.isLoading || liveQ.isLoading || coachingQ.isLoading;
 
   const upNextItems = useMemo(() => {
     const items = [];
@@ -142,13 +139,6 @@ export function StudentHomePage() {
       <PageHeader title={`Hi, ${firstName}`} description="Pick up where you left off." breadcrumbs={[{ label: 'My learning' }]} />
       <EmailVerificationBanner />
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="In progress" value={formatNumber(inProgressCount)} icon={PlayCircle} loading={enrollmentsQ.isLoading} />
-        <StatCard label="Completed" value={formatNumber(completedCount)} icon={CheckCircle2} loading={enrollmentsQ.isLoading} />
-        <StatCard label="Certificates" value={formatNumber(certCount)} icon={GraduationCap} loading={certificatesQ.isLoading} />
-        <StatCard label="Upcoming" value={formatNumber(upcomingCount)} hint="Live & coaching" icon={CalendarClock} loading={statsLoading} />
-      </div>
-
       {resume && (
         <Card className="mb-6 overflow-hidden border-primary-200 bg-gradient-to-r from-primary-50/80 to-surface dark:border-primary-500/30 dark:from-primary-500/10">
           <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
@@ -175,44 +165,43 @@ export function StudentHomePage() {
         </Card>
       )}
 
-      <div className="mb-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-        <Card className="h-fit">
+      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+        <StatCard label="In progress" value={formatNumber(inProgressCount)} icon={PlayCircle} loading={enrollmentsQ.isLoading} />
+        <StatCard label="Completed" value={formatNumber(completedCount)} icon={CheckCircle2} loading={enrollmentsQ.isLoading} />
+        <StatCard label="Certificates" value={formatNumber(certCount)} icon={GraduationCap} loading={certificatesQ.isLoading} />
+      </div>
+
+      {upNextItems.length > 0 && (
+        <Card className="mb-6">
           <CardHeader title="Up next" description="Live sessions, coaching and access reminders" />
           <CardBody className="p-0">
-            {liveQ.isLoading || coachingQ.isLoading ? (
-              <div className="p-5">
-                <Skeleton className="h-20" />
-              </div>
-            ) : upNextItems.length === 0 ? (
-              <p className="px-5 pb-5 text-sm text-muted">You’re all caught up — nothing scheduled in the next few weeks.</p>
-            ) : (
-              <ul className="divide-y divide-line">
-                {upNextItems.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <li key={item.key}>
-                      <Link
-                        to={item.to}
-                        className="flex items-start gap-3 px-5 py-4 text-sm transition hover:bg-surface-2"
-                      >
-                        <span className={`mt-0.5 grid size-8 shrink-0 place-items-center rounded-md ${item.accent ? 'bg-red-50 text-red-600 dark:bg-red-500/10' : 'bg-surface-2 text-muted'}`}>
-                          <Icon className="size-4" aria-hidden />
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium text-fg">{item.title}</p>
-                          <p className="mt-0.5 text-xs text-muted">{item.meta}</p>
-                        </div>
-                        <ChevronRight className="size-4 shrink-0 text-line-strong" aria-hidden />
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+            <ul className="divide-y divide-line">
+              {upNextItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <li key={item.key}>
+                    <Link
+                      to={item.to}
+                      className="flex items-start gap-3 px-5 py-4 text-sm transition hover:bg-surface-2"
+                    >
+                      <span className={`mt-0.5 grid size-8 shrink-0 place-items-center rounded-md ${item.accent ? 'bg-red-50 text-red-600 dark:bg-red-500/10' : 'bg-surface-2 text-muted'}`}>
+                        <Icon className="size-4" aria-hidden />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-fg">{item.title}</p>
+                        <p className="mt-0.5 text-xs text-muted">{item.meta}</p>
+                      </div>
+                      <ChevronRight className="size-4 shrink-0 text-line-strong" aria-hidden />
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
           </CardBody>
         </Card>
+      )}
 
-        <div>
+      <div className="mb-6">
           <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
             <h2 className="text-sm font-semibold text-fg">My courses</h2>
             <Tabs
@@ -282,7 +271,6 @@ export function StudentHomePage() {
               ))}
             </div>
           )}
-        </div>
       </div>
 
       <div className="flex flex-wrap gap-2 border-t border-line pt-5">
@@ -291,7 +279,7 @@ export function StudentHomePage() {
           <Link
             key={to}
             to={to}
-            className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition hover:border-primary-300 hover:bg-primary-50 dark:hover:bg-primary-500/10"
+            className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition hover:border-primary-300 hover:bg-primary-50 dark:hover:bg-primary-500/10"
           >
             <Icon className="size-4 text-primary-600" aria-hidden />
             {label}

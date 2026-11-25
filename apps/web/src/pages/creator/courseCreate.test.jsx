@@ -27,7 +27,7 @@ it('works out selling price, original price and % off', () => {
 
 it('validates, shows what the creator receives and creates the course in one step', async () => {
   const router = renderPage();
-  await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Create & add lessons' }));
   expect(screen.getByText('Enter a title of at least 3 characters')).toBeInTheDocument();
   expect(screen.getByText('Enter the course price')).toBeInTheDocument();
   await userEvent.type(screen.getByRole('textbox', { name: /^Title/ }), 'GST Basics');
@@ -36,7 +36,7 @@ it('validates, shows what the creator receives and creates the course in one ste
   await userEvent.type(screen.getByLabelText(/Discounted price/), '1000');
   expect(screen.getByLabelText(/50% off/)).toBeInTheDocument();
   expect(await screen.findByText('₹950.00')).toBeInTheDocument(); // 1000 − 5% fee
-  await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Create & add lessons' }));
   await waitFor(() => expect(coursesApi.create).toHaveBeenCalledWith({ title: 'GST Basics', description: { type: 'doc', text: 'Learn GST' }, isFree: false, priceAmount: 1000, compareAtAmount: 2000 }));
   await waitFor(() => expect(router.state.location.pathname).toBe('/creator/courses/c9'));
 });
@@ -47,6 +47,6 @@ it('creates a free course without asking for prices', async () => {
   await userEvent.type(screen.getByRole('textbox', { name: 'Description' }), 'Hello');
   await userEvent.click(screen.getByRole('radio', { name: /Free plan/ }));
   expect(screen.queryByLabelText(/Total price/)).toBeNull();
-  await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Create & add lessons' }));
   await waitFor(() => expect(coursesApi.create).toHaveBeenLastCalledWith(expect.objectContaining({ isFree: true, priceAmount: null })));
 });

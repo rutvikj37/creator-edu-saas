@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Award, Star, Bookmark, BookmarkCheck, Check, ChevronLeft, ChevronRight, CircleCheck, Download, ExternalLink, Lock, Menu, MessageSquare, NotebookPen, Sparkles, Trash2, X } from 'lucide-react';
 import { Alert } from '../../components/auth/Alert.jsx';
-import { Badge, Button, ErrorState, Skeleton, Tabs, Textarea, toast } from '../../components/ui/index.js';
+import { Badge, Button, Drawer, ErrorState, Skeleton, Tabs, Textarea, toast } from '../../components/ui/index.js';
 import { RichTextView } from '../../components/forms/RichTextView.jsx';
 import { learnApi } from '../../services/api/learn.js';
 import { cn } from '../../utils/cn.js';
@@ -87,6 +87,7 @@ export function PlayerPage() {
   const qc = useQueryClient();
   const player = useQuery({ queryKey: ['player', courseId], queryFn: () => learnApi.player(courseId), retry: false });
   const [sidebar, setSidebar] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [rating, setRating] = useState(false);
   const [tab, setTab] = useState('notes');
   const tutor = useQuery({ queryKey: ['learn', 'ai-tutor'], queryFn: aiApi.tutorStatus, staleTime: 60_000, retry: false });
@@ -135,7 +136,13 @@ export function PlayerPage() {
         <Link to="/learn" className="flex items-center gap-1 text-sm text-muted hover:text-fg"><ArrowLeft className="size-4" /><span className="hidden sm:inline">My learning</span></Link>
         <p className="min-w-0 flex-1 truncate font-semibold">{p.course.title}</p>
         <div className="hidden items-center gap-2 sm:flex"><div className="h-1.5 w-32 rounded-full bg-surface-2"><div className="h-1.5 rounded-full bg-green-600" style={{ width: `${p.enrollment.progressPercent}%` }} /></div><span className="text-xs text-muted">{p.enrollment.progressPercent}%</span></div>
-        <Button size="sm" variant="ghost" leftIcon={Star} onClick={() => setRating(true)}><span className="hidden sm:inline">Rate course</span></Button>
+        {current && (
+          <Button size="sm" variant="secondary" leftIcon={NotebookPen} onClick={() => setToolsOpen(true)}>
+            <span className="hidden sm:inline">Notes & Q&A</span>
+            <span className="sm:hidden">Tools</span>
+          </Button>
+        )}
+        <Button size="sm" variant="ghost" leftIcon={Star} onClick={() => setRating(true)}><span className="hidden sm:inline">Rate</span></Button>
         {p.enrollment.completedAt && p.course.certificateEnabled && <Link to="/learn/certificates" className="inline-flex items-center gap-1 text-sm font-medium text-primary-600"><Award className="size-4" />Certificate</Link>}
       </header>
       <ReviewDialog courseId={p.course.id} open={rating} onClose={() => setRating(false)} />
@@ -158,17 +165,17 @@ export function PlayerPage() {
             </div>
           ) : <p className="p-8 text-muted">This course has no lessons yet.</p>}
         </main>
-        {current && (
-          <aside className="hidden w-80 shrink-0 overflow-y-auto border-l border-line bg-surface p-4 xl:block">
-            <Tabs className="mb-4" value={tab} onChange={setTab} tabs={[
-              { value: 'notes', label: <span className="inline-flex items-center gap-1"><NotebookPen className="size-4" />Notes</span> },
-              { value: 'discussion', label: <span className="inline-flex items-center gap-1"><MessageSquare className="size-4" />Q&A</span> },
-              ...(tutor.data?.enabled ? [{ value: 'ai', label: <span className="inline-flex items-center gap-1"><Sparkles className="size-4" />Ask AI</span> }] : []),
-            ]} />
-            {tab === 'notes' ? <NotesPanel courseId={courseId} lessonId={current.id} /> : tab === 'ai' ? <TutorPanel key={current.id} lessonId={current.id} /> : <DiscussionPanel lessonId={current.id} />}
-          </aside>
-        )}
       </div>
+      {current && (
+        <Drawer open={toolsOpen} onClose={() => setToolsOpen(false)} title="Lesson tools" side="right">
+          <Tabs className="mb-4" value={tab} onChange={setTab} tabs={[
+            { value: 'notes', label: <span className="inline-flex items-center gap-1"><NotebookPen className="size-4" />Notes</span> },
+            { value: 'discussion', label: <span className="inline-flex items-center gap-1"><MessageSquare className="size-4" />Q&A</span> },
+            ...(tutor.data?.enabled ? [{ value: 'ai', label: <span className="inline-flex items-center gap-1"><Sparkles className="size-4" />Ask AI</span> }] : []),
+          ]} />
+          {tab === 'notes' ? <NotesPanel courseId={courseId} lessonId={current.id} /> : tab === 'ai' ? <TutorPanel key={current.id} lessonId={current.id} /> : <DiscussionPanel lessonId={current.id} />}
+        </Drawer>
+      )}
     </div>
   );
 }

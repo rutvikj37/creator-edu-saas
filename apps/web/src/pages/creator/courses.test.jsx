@@ -25,6 +25,7 @@ it('shows course cards with count, enrolment, status and editor shortcuts', asyn
   expect(screen.getByText('Updated 3 days ago')).toBeInTheDocument();
   expect(screen.getAllByText('Draft').length).toBeGreaterThan(0);
   expect(screen.getByRole('link', { name: 'Curriculum: Algebra' })).toHaveAttribute('href', '/creator/courses/c1?tab=curriculum');
+  expect(screen.getByRole('link', { name: 'Landing page: Algebra' })).toHaveAttribute('href', '/creator/courses/c1?tab=details');
   expect(screen.getByRole('link', { name: 'Students: Geometry' })).toHaveAttribute('href', '/creator/courses/c2?tab=students');
 });
 

@@ -108,6 +108,12 @@ export const NAV = {
         item('Browse courses', '/courses', BookOpen, 5, { available: true }),
         item('Live classes', '/learn/live', Video, 9, { available: true }),
         item('Certificates', '/learn/certificates', Award, 5, { available: true }),
+      ],
+    },
+    {
+      label: 'More',
+      icon: Package,
+      items: [
         item('Communities', '/learn/communities', MessagesSquare, 10, { available: true }),
         item('Memberships', '/memberships', Crown, 10, { available: true }),
         item('Downloads', '/learn/downloads', Package, 7, { available: true }),
