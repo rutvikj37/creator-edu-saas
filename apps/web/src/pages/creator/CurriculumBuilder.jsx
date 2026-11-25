@@ -8,19 +8,21 @@ import { coursesApi } from '../../services/api/creator.js';
 import { cn } from '../../utils/cn.js';
 
 export const LESSON_TYPES = [
-  { value: 'TEXT', label: 'Text', icon: FileText },
-  { value: 'VIDEO', label: 'Video', icon: Video },
+  { value: 'VIDEO', label: 'Video', icon: Video, primary: true },
+  { value: 'TEXT', label: 'Text', icon: FileText, primary: true },
+  { value: 'QUIZ', label: 'Quiz', icon: ClipboardCheck, primary: true },
   { value: 'PDF', label: 'PDF', icon: File },
   { value: 'DOCUMENT', label: 'Document', icon: File },
   { value: 'IMAGE', label: 'Image', icon: Image },
   { value: 'AUDIO', label: 'Audio', icon: AudioLines },
   { value: 'DOWNLOAD', label: 'Download', icon: Download },
   { value: 'LINK', label: 'External link', icon: Link2 },
-  { value: 'QUIZ', label: 'Quiz', icon: ClipboardCheck },
   { value: 'ASSIGNMENT', label: 'Assignment', icon: PenSquare },
   { value: 'LIVE', label: 'Live class', icon: Radio, soon: 'Phase 9' },
 ];
 const TYPE_BY = Object.fromEntries(LESSON_TYPES.map((t) => [t.value, t]));
+const PRIMARY_TYPES = LESSON_TYPES.filter((t) => t.primary);
+const MORE_TYPES = LESSON_TYPES.filter((t) => !t.primary);
 
 /** Converts the curriculum tree to the reorder payload the API expects. */
 export function toOrderPayload(sections) {
@@ -58,7 +60,8 @@ export function CurriculumBuilder({ courseId, sections, onChange, onEditLesson, 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
   const [collapsed, setCollapsed] = useState({});
   const [adding, setAdding] = useState(null); // { sectionId, parentLessonId? }
-  const [newLesson, setNewLesson] = useState({ title: '', type: 'TEXT' });
+  const [newLesson, setNewLesson] = useState({ title: '', type: 'VIDEO' });
+  const [showMoreTypes, setShowMoreTypes] = useState(false);
   const [sectionTitle, setSectionTitle] = useState('');
   const [renaming, setRenaming] = useState(null);
   const [toDelete, setToDelete] = useState(null);
@@ -122,7 +125,8 @@ export function CurriculumBuilder({ courseId, sections, onChange, onEditLesson, 
     try {
       const l = await coursesApi.addLesson(courseId, { sectionId: adding.sectionId, parentLessonId: adding.parentLessonId, ...newLesson });
       setAdding(null);
-      setNewLesson({ title: '', type: 'TEXT' });
+      setNewLesson({ title: '', type: 'VIDEO' });
+      setShowMoreTypes(false);
       await reload();
       onEditLesson(l);
     } catch (e) { toast.error(e.details?.[0]?.message ?? e.message); } finally { setBusy(false); }
@@ -143,7 +147,7 @@ export function CurriculumBuilder({ courseId, sections, onChange, onEditLesson, 
   const lessonMenu = (lesson, section, parent) => readOnly ? null : (
     <Dropdown trigger={(p) => <Button variant="ghost" size="icon-sm" aria-label={`Actions for ${lesson.title}`} {...p}><MoreHorizontal className="size-4" /></Button>}>
       <DropdownItem onClick={() => onEditLesson(lesson)}>Edit lesson</DropdownItem>
-      {!parent && <DropdownItem onClick={() => { setAdding({ sectionId: section.id, parentLessonId: lesson.id }); setNewLesson({ title: '', type: 'TEXT' }); }}>Add sub-lesson</DropdownItem>}
+      {!parent && <DropdownItem onClick={() => { setAdding({ sectionId: section.id, parentLessonId: lesson.id }); setNewLesson({ title: '', type: 'VIDEO' }); setShowMoreTypes(false); }}>Add sub-lesson</DropdownItem>}
       {!parent && <DropdownItem onClick={() => nest(lesson, section.id)}>Make sub-lesson of previous</DropdownItem>}
       {parent && <DropdownItem onClick={() => unnest(lesson, parent, section.id)}>Move out of “{parent.title}”</DropdownItem>}
       {!parent && sections.length > 1 && <DropdownSeparator />}
@@ -155,6 +159,16 @@ export function CurriculumBuilder({ courseId, sections, onChange, onEditLesson, 
 
   return (
     <div className="space-y-4">
+      {!readOnly && sections.length === 0 && (
+        <div className="rounded-xl border border-dashed border-line-strong bg-surface-2/40 px-6 py-10 text-center">
+          <p className="text-base font-semibold text-fg">Add your first section</p>
+          <p className="mt-1 text-sm text-muted">Sections group lessons (e.g. “Week 1” or “Getting started”).</p>
+          <form className="mx-auto mt-5 flex max-w-md gap-2" onSubmit={(e) => { e.preventDefault(); if (sectionTitle.trim()) addSection(); }}>
+            <Input aria-label="First section title" placeholder="e.g. Introduction" value={sectionTitle} onChange={(e) => setSectionTitle(e.target.value)} autoFocus />
+            <Button type="submit" leftIcon={Plus} loading={busy && !adding} disabled={!sectionTitle.trim()}>Add section</Button>
+          </form>
+        </div>
+      )}
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onSectionDragEnd}>
         <SortableContext items={sectionIds} strategy={verticalListSortingStrategy}>
           {sections.map((section, si) => (
@@ -191,8 +205,19 @@ export function CurriculumBuilder({ courseId, sections, onChange, onEditLesson, 
                           ))}
                         </SortableContext>
                       </DndContext>
-                      {section.lessons.length === 0 && <p className="px-2 py-3 text-sm text-muted">No lessons yet.</p>}
-                      {!readOnly && <Button variant="ghost" size="sm" leftIcon={Plus} onClick={() => { setAdding({ sectionId: section.id }); setNewLesson({ title: '', type: 'TEXT' }); }}>Add lesson</Button>}
+                      {section.lessons.length === 0 && (
+                        <div className="rounded-md border border-dashed border-line px-3 py-4 text-center">
+                          <p className="text-sm text-muted">No lessons yet — start with a video or text lesson.</p>
+                          {!readOnly && (
+                            <Button className="mt-3" size="sm" leftIcon={Plus} onClick={() => { setAdding({ sectionId: section.id }); setNewLesson({ title: '', type: 'VIDEO' }); setShowMoreTypes(false); }}>
+                              Add first lesson
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                      {!readOnly && section.lessons.length > 0 && (
+                        <Button variant="ghost" size="sm" leftIcon={Plus} onClick={() => { setAdding({ sectionId: section.id }); setNewLesson({ title: '', type: 'VIDEO' }); setShowMoreTypes(false); }}>Add lesson</Button>
+                      )}
                     </div>
                   )}
                 </>
@@ -201,7 +226,7 @@ export function CurriculumBuilder({ courseId, sections, onChange, onEditLesson, 
           ))}
         </SortableContext>
       </DndContext>
-      {!readOnly && (
+      {!readOnly && sections.length > 0 && (
         <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); if (sectionTitle.trim()) addSection(); }}>
           <Input aria-label="New section title" placeholder="New section title" value={sectionTitle} onChange={(e) => setSectionTitle(e.target.value)} />
           <Button type="submit" variant="secondary" leftIcon={Plus} loading={busy && !adding} disabled={!sectionTitle.trim()}>Add section</Button>
@@ -214,8 +239,8 @@ export function CurriculumBuilder({ courseId, sections, onChange, onEditLesson, 
           <Input label="Lesson title" autoFocus value={newLesson.title} onChange={(e) => setNewLesson({ ...newLesson, title: e.target.value })} />
           <div>
             <p className="mb-2 text-sm font-medium text-fg-2">Type</p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Lesson type">
-              {LESSON_TYPES.map((t) => (
+            <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Lesson type">
+              {(showMoreTypes ? LESSON_TYPES : PRIMARY_TYPES).map((t) => (
                 <button key={t.value} type="button" role="radio" aria-checked={newLesson.type === t.value} disabled={Boolean(t.soon)}
                   onClick={() => setNewLesson({ ...newLesson, type: t.value })}
                   className={cn('flex items-center gap-2 rounded-md border px-3 py-2 text-left text-sm', newLesson.type === t.value ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-line hover:bg-surface-2', t.soon && 'cursor-not-allowed opacity-50')}>
@@ -223,6 +248,11 @@ export function CurriculumBuilder({ courseId, sections, onChange, onEditLesson, 
                 </button>
               ))}
             </div>
+            {!showMoreTypes && (
+              <button type="button" className="mt-2 text-sm font-medium text-primary-600 hover:underline" onClick={() => setShowMoreTypes(true)}>
+                More types ({MORE_TYPES.filter((t) => !t.soon).length})
+              </button>
+            )}
           </div>
         </form>
       </Modal>

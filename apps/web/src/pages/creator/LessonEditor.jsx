@@ -1,17 +1,17 @@
-import { useEffect, useState } from 'react';
-import { Button, Drawer, Input, Switch, toast } from '../../components/ui/index.js';
-import { Alert } from '../../components/auth/Alert.jsx';
+import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Upload } from 'lucide-react';
+import { Button, Drawer, Input, Select, Switch, toast } from '../../components/ui/index.js';
 import { FileUpload } from '../../components/forms/FileUpload.jsx';
 import { RichTextEditor } from '../../components/forms/RichTextEditor.jsx';
 import { coursesApi } from '../../services/api/creator.js';
 import { QuizEditor } from './QuizEditor.jsx';
 import { AiDraftButton } from '../../components/ai/AiTools.jsx';
 import { AssignmentEditor } from './AssignmentEditor.jsx';
-import { useQuery } from '@tanstack/react-query';
-import { Select } from '../../components/ui/index.js';
-import { videosApi } from '../../services/api/videos.js';
+import { readVideoDuration, uploadVideo, videosApi } from '../../services/api/videos.js';
+import { startTusUpload } from '../../services/api/tusUpload.js';
 import { fmtDuration } from './VideosPage.jsx';
-import { Link } from 'react-router';
 
 const ACCEPT = {
   PDF: 'application/pdf',
@@ -21,15 +21,116 @@ const ACCEPT = {
   DOWNLOAD: '.pdf,.zip,.docx,.pptx,.xlsx,.txt,.csv,image/*',
 };
 
+/** Uploads a video from the lesson drawer and attaches it when ready. */
+function InlineVideoUpload({ courseId, lessonId, disabled, onAttached }) {
+  const inputRef = useRef(null);
+  const [phase, setPhase] = useState(null); // uploading | processing | null
+  const [progress, setProgress] = useState(0);
+  const config = useQuery({ queryKey: ['videos', 'config'], queryFn: videosApi.config, staleTime: 60_000, retry: false });
+
+  const attach = async (videoId) => {
+    await videosApi.edit(videoId, { courseId, lessonId });
+    onAttached(videoId);
+    toast.success('Video attached to this lesson');
+  };
+
+  const waitReady = async (videoId) => {
+    for (let i = 0; i < 60; i++) {
+      const s = await videosApi.status(videoId).catch(() => null);
+      if (s?.status === 'READY') { await attach(videoId); setPhase(null); return; }
+      if (s?.status === 'FAILED') throw new Error(s.errorMessage || 'Video processing failed');
+      setPhase('processing');
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+    toast.success('Upload received — processing in the background. Refresh the library if it does not appear.');
+    setPhase(null);
+  };
+
+  const onFile = async (file) => {
+    if (!file || disabled) return;
+    setPhase('uploading');
+    setProgress(0);
+    try {
+      if (config.data?.provider === 'BUNNY') {
+        const init = await videosApi.initiate({
+          title: file.name.replace(/\.[^.]+$/, '').slice(0, 200),
+          filename: file.name,
+          size: file.size,
+          mimeType: file.type || 'video/mp4',
+          courseId,
+          lessonId,
+        });
+        const h = startTusUpload(file, init.upload, {
+          onProgress: setProgress,
+          onStart: () => videosApi.complete({ videoId: init.videoId, uploadSessionId: init.uploadSessionId, outcome: 'started' }).catch(() => {}),
+        });
+        await h.promise;
+        await videosApi.complete({ videoId: init.videoId, uploadSessionId: init.uploadSessionId, outcome: 'success' });
+        await waitReady(init.videoId);
+        return;
+      }
+      const duration = await readVideoDuration(file);
+      const f = await uploadVideo(file, setProgress);
+      const created = await videosApi.create({
+        fileId: f.id,
+        title: file.name.replace(/\.[^.]+$/, '').slice(0, 200),
+        durationSeconds: duration ?? undefined,
+      });
+      await attach(created.id);
+      setPhase(null);
+    } catch (e) {
+      toast.error(e.details?.[0]?.message ?? e.message);
+      setPhase(null);
+    }
+  };
+
+  return (
+    <div className="space-y-2 rounded-lg border border-dashed border-line-strong bg-surface-2/40 p-3">
+      <p className="text-sm font-medium text-fg">Upload a new video</p>
+      <p className="text-xs text-muted">Stays on this lesson — no need to leave for the asset library.</p>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="video/*,.mp4,.mov,.webm,.mkv"
+        className="hidden"
+        disabled={disabled || Boolean(phase)}
+        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onFile(f); }}
+      />
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        leftIcon={Upload}
+        loading={Boolean(phase)}
+        disabled={disabled || config.isLoading}
+        onClick={() => inputRef.current?.click()}
+      >
+        {phase === 'uploading' ? `Uploading ${progress}%` : phase === 'processing' ? 'Processing…' : 'Choose video file'}
+      </Button>
+    </div>
+  );
+}
+
 /** Side drawer for editing one lesson's content and settings. */
 export function LessonEditor({ courseId, lesson, onClose, onSaved, readOnly }) {
+  const qc = useQueryClient();
   const [draft, setDraft] = useState(null);
   const videos = useQuery({ queryKey: ['videos'], queryFn: videosApi.list, enabled: lesson?.type === 'VIDEO' });
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState({});
   useEffect(() => {
     if (lesson) {
-      setDraft({ title: lesson.title, content: lesson.content ?? null, externalUrl: lesson.externalUrl ?? '', file: lesson.file ?? null, isFreePreview: lesson.isFreePreview, isPublished: lesson.isPublished, isRequired: lesson.isRequired, durationMinutes: lesson.durationSeconds ? Math.round(lesson.durationSeconds / 60) : '', videoAssetId: lesson.videoAssetId ?? '' });
+      setDraft({
+        title: lesson.title,
+        content: lesson.content ?? null,
+        externalUrl: lesson.externalUrl ?? '',
+        file: lesson.file ?? null,
+        isFreePreview: lesson.isFreePreview,
+        isPublished: lesson.isPublished ?? true,
+        isRequired: lesson.isRequired,
+        durationMinutes: lesson.durationSeconds ? Math.round(lesson.durationSeconds / 60) : '',
+        videoAssetId: lesson.videoAssetId ?? '',
+      });
       setErrors({});
     }
   }, [lesson]);
@@ -78,30 +179,53 @@ export function LessonEditor({ courseId, lesson, onClose, onSaved, readOnly }) {
         {lesson.type === 'QUIZ' && <QuizEditor courseId={courseId} lessonId={lesson.id} />}
         {lesson.type === 'ASSIGNMENT' && <AssignmentEditor courseId={courseId} lessonId={lesson.id} />}
         {lesson.type === 'VIDEO' && (
-          <div className="space-y-2">
-            <Select label="Video" placeholder="Choose from your library" value={draft.videoAssetId} error={errors.videoAssetId}
+          <div className="space-y-4">
+            {!readOnly && (
+              <InlineVideoUpload
+                courseId={courseId}
+                lessonId={lesson.id}
+                disabled={readOnly}
+                onAttached={(videoId) => {
+                  setDraft((d) => ({ ...d, videoAssetId: videoId, isPublished: true }));
+                  qc.invalidateQueries({ queryKey: ['videos'] });
+                }}
+              />
+            )}
+            <Select
+              label="Or pick from library"
+              placeholder="Choose a ready video"
+              value={draft.videoAssetId}
+              error={errors.videoAssetId}
               onChange={(e) => setDraft({ ...draft, videoAssetId: e.target.value, isPublished: e.target.value ? true : false })}
-              options={(videos.data ?? []).filter((v) => v.status === 'READY').map((v) => ({ value: v.id, label: `${v.title} (${fmtDuration(v.durationSeconds)})` }))} />
+              options={(videos.data ?? []).filter((v) => v.status === 'READY').map((v) => ({ value: v.id, label: `${v.title} (${fmtDuration(v.durationSeconds)})` }))}
+            />
             {!readOnly && (
               <p className="text-xs text-muted">
-                Need a new video?{' '}
+                Prefer the full uploader?{' '}
                 <Link
                   to={`/creator/videos?courseId=${encodeURIComponent(courseId)}&lessonId=${encodeURIComponent(lesson.id)}`}
                   className="font-medium text-primary-600 underline"
                 >
-                  Upload in Asset library
+                  Open asset library
                 </Link>
-                {' '}— it attaches to this lesson when ready.
               </p>
             )}
           </div>
         )}
-        <Input label="Duration (minutes, optional)" type="number" min={0} value={draft.durationMinutes} onChange={(e) => setDraft({ ...draft, durationMinutes: e.target.value })} />
-        <div className="space-y-3 border-t border-line pt-4">
-          <Switch label="Free preview (visible before purchase)" checked={draft.isFreePreview} onChange={(v) => setDraft({ ...draft, isFreePreview: v })} />
-          <Switch label="Required for completion" checked={draft.isRequired} onChange={(v) => setDraft({ ...draft, isRequired: v })} />
-          {(lesson.type !== 'VIDEO' || draft.videoAssetId) && <Switch label="Published" checked={draft.isPublished} onChange={(v) => setDraft({ ...draft, isPublished: v })} />}
-        </div>
+        <details className="rounded-lg border border-line">
+          <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium marker:hidden">More options</summary>
+          <div className="space-y-3 border-t border-line px-3 py-3">
+            <Input label="Duration (minutes, optional)" type="number" min={0} value={draft.durationMinutes} onChange={(e) => setDraft({ ...draft, durationMinutes: e.target.value })} />
+            <Switch label="Free preview (visible before purchase)" checked={draft.isFreePreview} onChange={(v) => setDraft({ ...draft, isFreePreview: v })} />
+            <Switch label="Required for completion" checked={draft.isRequired} onChange={(v) => setDraft({ ...draft, isRequired: v })} />
+          </div>
+        </details>
+        {(lesson.type !== 'VIDEO' || draft.videoAssetId) && (
+          <div className="space-y-1">
+            <Switch label="Ready for students" checked={draft.isPublished} onChange={(v) => setDraft({ ...draft, isPublished: v })} />
+            <p className="text-xs text-muted">Turn this on so the lesson counts when you publish the course.</p>
+          </div>
+        )}
       </div>
     </Drawer>
   );

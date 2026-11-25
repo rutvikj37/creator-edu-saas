@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, Copy, Eye, EyeOff, RotateCcw, Rocket, Trash2, X } from 'lucide-react';
+import { Archive, ChevronDown, Copy, ExternalLink, Eye, EyeOff, RotateCcw, Rocket, Trash2, X } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
 import { Alert } from '../../components/auth/Alert.jsx';
 import { FileUpload } from '../../components/forms/FileUpload.jsx';
@@ -37,6 +37,18 @@ function ListEditor({ label, values, onChange, placeholder }) {
   );
 }
 
+function Advanced({ title, children, defaultOpen = false }) {
+  return (
+    <details className="group rounded-xl border border-line bg-surface" open={defaultOpen || undefined}>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-medium marker:hidden">
+        {title}
+        <ChevronDown className="size-4 shrink-0 text-muted transition group-open:rotate-180" aria-hidden />
+      </summary>
+      <div className="space-y-4 border-t border-line px-4 py-4">{children}</div>
+    </details>
+  );
+}
+
 const pick = (c) => ({
   title: c.title, slug: c.slug, shortDescription: c.shortDescription ?? '', description: c.description ?? null, categorySlug: c.categorySlug ?? '', level: c.level, language: c.language,
   objectives: c.objectives ?? [], prerequisites: c.prerequisites ?? [], tags: c.tags ?? [], durationMinutes: c.durationMinutes ?? '',
@@ -45,15 +57,22 @@ const pick = (c) => ({
   dripType: c.dripType, completionPercent: c.completionPercent, certificateEnabled: c.certificateEnabled, seoTitle: c.seoTitle ?? '', seoDescription: c.seoDescription ?? '',
 });
 
+/** Maps legacy ?tab=seo (and landing) onto the simplified tab set. */
+export function normalizeCourseTab(raw) {
+  if (!raw || raw === 'landing' || raw === 'seo') return 'details';
+  return raw;
+}
+
 export function CourseEditorPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const auth = useAuth();
   const qc = useQueryClient();
   const [params, setParams] = useSearchParams();
-  const tab = params.get('tab') ?? 'details';
+  const tab = normalizeCourseTab(params.get('tab') ?? 'curriculum');
   const setTab = (t) => setParams({ tab: t }, { replace: true });
   const readOnly = !auth.can('courses.manage');
+  const openSeo = params.get('tab') === 'seo';
 
   const course = useQuery({ queryKey: ['course', id], queryFn: () => coursesApi.get(id) });
   const curriculum = useQuery({ queryKey: ['course', id, 'curriculum'], queryFn: () => coursesApi.curriculum(id) });
@@ -66,7 +85,6 @@ export function CourseEditorPage() {
   const [publishOpen, setPublishOpen] = useState(false);
   const [scheduleAt, setScheduleAt] = useState('');
   const [deleteOpen, setDeleteOpen] = useState(false);
-  // Readiness must reflect the latest saved state every time the dialog opens.
   const check = useQuery({ queryKey: ['course', id, 'check'], queryFn: () => coursesApi.publishCheck(id), enabled: publishOpen, staleTime: 0, gcTime: 0 });
 
   useEffect(() => {
@@ -111,16 +129,22 @@ export function CourseEditorPage() {
   const c = course.data;
   const set = (k) => (e) => setForm({ ...form, [k]: e?.target ? (e.target.type === 'checkbox' ? e.target.checked : e.target.value) : e });
   const isLive = c.status === 'PUBLISHED' || c.status === 'SCHEDULED';
+  const previewHref = c.slug ? `/courses/${c.slug}` : null;
 
   return (
     <>
       <PageHeader
         title={<span className="flex flex-wrap items-center gap-3">{c.title} <StatusBadge status={c.status} /></span>}
-        description={c.status === 'SCHEDULED' ? `Publishes ${formatDate(c.publishAt, { withTime: true })}` : c.publishedAt ? `Published ${formatDate(c.publishedAt)}` : 'Not published yet'}
+        description={c.status === 'SCHEDULED' ? `Publishes ${formatDate(c.publishAt, { withTime: true })}` : c.publishedAt ? `Published ${formatDate(c.publishedAt)}` : 'Add lessons, then publish when ready'}
         breadcrumbs={[{ label: 'Courses', to: '/creator/courses' }, { label: c.title }]}
         actions={!readOnly && (
           <>
-            {['details', 'pricing', 'seo'].includes(tab) && <Button variant="secondary" loading={save.isPending} onClick={() => save.mutate()}>Save changes</Button>}
+            {['details', 'pricing'].includes(tab) && <Button variant="secondary" loading={save.isPending} onClick={() => save.mutate()}>Save changes</Button>}
+            {previewHref && (
+              <Button variant="secondary" leftIcon={ExternalLink} onClick={() => window.open(previewHref, '_blank', 'noopener,noreferrer')}>
+                Preview
+              </Button>
+            )}
             {c.status === 'ARCHIVED' ? <Button variant="secondary" leftIcon={RotateCcw} loading={restore.isPending} onClick={() => restore.mutate()}>Restore</Button> : isLive ? (
               <Button variant="secondary" leftIcon={EyeOff} loading={unpublish.isPending} onClick={() => unpublish.mutate()}>Unpublish</Button>
             ) : <Button leftIcon={Rocket} onClick={() => { setScheduleAt(''); setPublishOpen(true); }}>Publish</Button>}
@@ -130,82 +154,109 @@ export function CourseEditorPage() {
           </>
         )}
       />
-      <Tabs className="mb-6" value={tab} onChange={setTab} tabs={[{ value: 'details', label: 'Details' }, { value: 'curriculum', label: 'Curriculum' }, { value: 'pricing', label: 'Pricing & access' }, { value: 'seo', label: 'SEO' }, { value: 'students', label: 'Students' }]} />
-
-      {tab === 'details' && (
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="space-y-6 lg:col-span-2">
-            <Card><CardBody className="grid gap-4">
-              <Input label="Title" value={form.title} onChange={set('title')} error={errors.title} />
-              <Input label="URL slug" value={form.slug} onChange={set('slug')} error={errors.slug} hint="Used in the course address on your academy site." />
-              <Textarea label="Short description" rows={2} value={form.shortDescription} onChange={set('shortDescription')} error={errors.shortDescription} hint={`${form.shortDescription.length}/500`} />
-              <RichTextEditor label="Full description" value={form.description} onChange={set('description')} error={errors.description} />
-            </CardBody></Card>
-            <Card><CardBody className="grid gap-6 sm:grid-cols-2">
-              <ListEditor label="What students will learn" values={form.objectives} onChange={set('objectives')} placeholder="e.g. Design a mobile app screen" />
-              <ListEditor label="Prerequisites" values={form.prerequisites} onChange={set('prerequisites')} placeholder="e.g. Basic computer skills" />
-            </CardBody></Card>
-          </div>
-          <div className="space-y-6">
-            <Card><CardHeader title="Media" /><CardBody className="space-y-5">
-              <FileUpload purpose="COURSE_THUMBNAIL" accept="image/png,image/jpeg,image/webp" label="Thumbnail (16:9)" hint="PNG/JPG/WebP, max 5 MB" value={thumb} onUploaded={(f) => setThumb({ id: f.id, url: f.url })} onClear={() => setThumb(null)} />
-              <FileUpload purpose="COURSE_BANNER" accept="image/png,image/jpeg,image/webp" label="Banner" hint="Max 10 MB" value={banner} onUploaded={(f) => setBanner({ id: f.id, url: f.url })} onClear={() => setBanner(null)} />
-              <p className="text-xs text-muted">Click “Save changes” to apply new images.</p>
-            </CardBody></Card>
-            <Card><CardHeader title="Organisation" /><CardBody className="space-y-4">
-              <Select label="Category" placeholder="None" value={form.categorySlug} onChange={set('categorySlug')} options={(categories.data ?? []).map((x) => ({ value: x.slug, label: x.name }))} error={errors.categorySlug} />
-              <Select label="Level" value={form.level} onChange={set('level')} options={[{ value: 'ALL_LEVELS', label: 'All levels' }, { value: 'BEGINNER', label: 'Beginner' }, { value: 'INTERMEDIATE', label: 'Intermediate' }, { value: 'ADVANCED', label: 'Advanced' }]} />
-              <Select label="Language" value={form.language} onChange={set('language')} options={[{ value: 'en', label: 'English' }, { value: 'hi', label: 'हिन्दी' }, { value: 'gu', label: 'ગુજરાતી' }]} />
-              <Input label="Total duration (minutes)" type="number" min={0} value={form.durationMinutes} onChange={set('durationMinutes')} />
-              <Select label="Visibility" value={form.visibility} onChange={set('visibility')} options={[{ value: 'PUBLIC', label: 'Public — listed on your site' }, { value: 'UNLISTED', label: 'Unlisted — direct link only' }, { value: 'PRIVATE', label: 'Private — enrolled students only' }]} />
-              <div><p className="text-sm font-medium text-fg-2">Instructors</p><div className="mt-2 flex flex-wrap gap-1">{c.instructors.map((i) => <Badge key={i.id}>{i.fullName}{i.isPrimary ? ' (primary)' : ''}</Badge>)}</div></div>
-            </CardBody></Card>
-          </div>
-        </div>
-      )}
+      <Tabs
+        className="mb-6"
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { value: 'curriculum', label: 'Curriculum' },
+          { value: 'details', label: 'Landing page' },
+          { value: 'pricing', label: 'Pricing' },
+          { value: 'students', label: 'Students' },
+        ]}
+      />
 
       {tab === 'curriculum' && (
         curriculum.isLoading ? <Skeleton className="h-64" /> : curriculum.isError ? <Card><ErrorState error={curriculum.error} onRetry={() => curriculum.refetch()} /></Card> : (
-          <div className="max-w-3xl">
+          <div className="max-w-3xl space-y-3">
+            <p className="text-sm text-muted">Build sections and lessons here. Changes save as you go. Mark each lesson ready before you publish the course.</p>
             <CurriculumBuilder courseId={id} sections={curriculum.data} readOnly={readOnly} onChange={(d) => qc.setQueryData(['course', id, 'curriculum'], d)} onEditLesson={setEditing} />
           </div>
         )
       )}
 
-      {tab === 'pricing' && (
-        <div className="grid max-w-4xl gap-6 lg:grid-cols-2">
-          <Card><CardHeader title="Price" /><CardBody className="space-y-4">
-            <Switch label="Free course" checked={form.isFree} onChange={set('isFree')} />
-            {!form.isFree && (
-              <div className="grid gap-4 sm:grid-cols-3">
-                <Input label="Price" type="number" min={0} step="0.01" value={form.priceAmount} onChange={set('priceAmount')} error={errors.priceAmount} />
-                <Input label="Original price" type="number" min={0} step="0.01" value={form.compareAtAmount} onChange={set('compareAtAmount')} error={errors.compareAtAmount} hint="Shown struck through" />
-                <Select label="Currency" value={form.currency} onChange={set('currency')} options={['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD'].map((x) => ({ value: x, label: x }))} />
-              </div>
-            )}
-            <p className="text-xs text-muted">Checkout and payments are enabled with the commerce module.</p>
-          </CardBody></Card>
-          <Card><CardHeader title="Access" /><CardBody className="space-y-4">
-            <Select label="Access duration" value={form.accessType} onChange={set('accessType')} options={[{ value: 'LIFETIME', label: 'Lifetime' }, { value: 'FIXED_DAYS', label: 'Number of days after enrolment' }, { value: 'FIXED_DATE', label: 'Until a fixed date' }]} />
-            {form.accessType === 'FIXED_DAYS' && <Input label="Days of access" type="number" min={1} value={form.accessDays} onChange={set('accessDays')} error={errors.accessDays} />}
-            {form.accessType === 'FIXED_DATE' && <Input label="Access ends on" type="date" value={form.accessUntil} onChange={set('accessUntil')} error={errors.accessUntil} />}
-            <Select label="Drip content" value={form.dripType} onChange={set('dripType')} options={[{ value: 'NONE', label: 'All content available immediately' }, { value: 'DAYS_AFTER_ENROLL', label: 'Unlock sections days after enrolment' }, { value: 'DATE', label: 'Unlock sections on dates' }]} />
-            <Input label="Completion threshold (%)" type="number" min={1} max={100} value={form.completionPercent} onChange={set('completionPercent')} hint="Share of required lessons to complete the course" />
-            <Checkbox label="Issue a certificate on completion" checked={form.certificateEnabled} onChange={set('certificateEnabled')} />
-          </CardBody></Card>
+      {tab === 'details' && (
+        <div className="mx-auto max-w-3xl space-y-6">
+          <Card>
+            <CardHeader title="What students see" description="Keep this short — you can add more detail later." />
+            <CardBody className="grid gap-4">
+              <Input label="Title" value={form.title} onChange={set('title')} error={errors.title} />
+              <Textarea label="Short description" rows={2} value={form.shortDescription} onChange={set('shortDescription')} error={errors.shortDescription} hint={`${form.shortDescription.length}/500`} />
+              <FileUpload purpose="COURSE_THUMBNAIL" accept="image/png,image/jpeg,image/webp" label="Thumbnail (16:9)" hint="PNG/JPG/WebP, max 5 MB · remember to Save changes" value={thumb} onUploaded={(f) => setThumb({ id: f.id, url: f.url })} onClear={() => setThumb(null)} />
+              <ListEditor label="What students will learn" values={form.objectives} onChange={set('objectives')} placeholder="e.g. Design a mobile app screen" />
+            </CardBody>
+          </Card>
+
+          <Advanced title="Full description & media">
+            <RichTextEditor label="Full description" value={form.description} onChange={set('description')} error={errors.description} />
+            <FileUpload purpose="COURSE_BANNER" accept="image/png,image/jpeg,image/webp" label="Banner" hint="Max 10 MB" value={banner} onUploaded={(f) => setBanner({ id: f.id, url: f.url })} onClear={() => setBanner(null)} />
+            <ListEditor label="Prerequisites" values={form.prerequisites} onChange={set('prerequisites')} placeholder="e.g. Basic computer skills" />
+          </Advanced>
+
+          <Advanced title="Organisation & visibility">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Select label="Category" placeholder="None" value={form.categorySlug} onChange={set('categorySlug')} options={(categories.data ?? []).map((x) => ({ value: x.slug, label: x.name }))} error={errors.categorySlug} />
+              <Select label="Level" value={form.level} onChange={set('level')} options={[{ value: 'ALL_LEVELS', label: 'All levels' }, { value: 'BEGINNER', label: 'Beginner' }, { value: 'INTERMEDIATE', label: 'Intermediate' }, { value: 'ADVANCED', label: 'Advanced' }]} />
+              <Select label="Language" value={form.language} onChange={set('language')} options={[{ value: 'en', label: 'English' }, { value: 'hi', label: 'हिन्दी' }, { value: 'gu', label: 'ગુજરાતી' }]} />
+              <Input label="Total duration (minutes)" type="number" min={0} value={form.durationMinutes} onChange={set('durationMinutes')} />
+            </div>
+            <Input label="URL slug" value={form.slug} onChange={set('slug')} error={errors.slug} hint="Used in the course address on your academy site." />
+            <Select label="Visibility" value={form.visibility} onChange={set('visibility')} options={[{ value: 'PUBLIC', label: 'Public — listed on your site' }, { value: 'UNLISTED', label: 'Unlisted — direct link only' }, { value: 'PRIVATE', label: 'Private — enrolled students only' }]} />
+            <div><p className="text-sm font-medium text-fg-2">Instructors</p><div className="mt-2 flex flex-wrap gap-1">{c.instructors.map((i) => <Badge key={i.id}>{i.fullName}{i.isPrimary ? ' (primary)' : ''}</Badge>)}</div></div>
+          </Advanced>
+
+          <Advanced title="SEO" defaultOpen={openSeo}>
+            <Input label="SEO title" value={form.seoTitle} onChange={set('seoTitle')} hint={`${form.seoTitle.length}/70 · defaults to the course title`} error={errors.seoTitle} />
+            <Textarea label="Meta description" rows={3} value={form.seoDescription} onChange={set('seoDescription')} hint={`${form.seoDescription.length}/170`} error={errors.seoDescription} />
+            <div className="rounded-lg border border-line p-4">
+              <p className="text-xs text-muted">Search preview</p>
+              <p className="mt-1 truncate text-base text-[#1a0dab]">{form.seoTitle || form.title}</p>
+              <p className="line-clamp-2 text-sm text-fg-2">{form.seoDescription || form.shortDescription || 'Add a description to improve search results.'}</p>
+            </div>
+          </Advanced>
+
+          {!readOnly && (
+            <div className="flex justify-end">
+              <Button loading={save.isPending} onClick={() => save.mutate()}>Save changes</Button>
+            </div>
+          )}
         </div>
       )}
 
-      {tab === 'seo' && (
-        <Card className="max-w-3xl"><CardBody className="space-y-4">
-          <Input label="SEO title" value={form.seoTitle} onChange={set('seoTitle')} hint={`${form.seoTitle.length}/70 · defaults to the course title`} error={errors.seoTitle} />
-          <Textarea label="Meta description" rows={3} value={form.seoDescription} onChange={set('seoDescription')} hint={`${form.seoDescription.length}/170`} error={errors.seoDescription} />
-          <div className="rounded-lg border border-line p-4">
-            <p className="text-xs text-muted">Search preview</p>
-            <p className="mt-1 truncate text-base text-[#1a0dab]">{form.seoTitle || form.title}</p>
-            <p className="line-clamp-2 text-sm text-fg-2">{form.seoDescription || form.shortDescription || 'Add a description to improve search results.'}</p>
-          </div>
-        </CardBody></Card>
+      {tab === 'pricing' && (
+        <div className="mx-auto max-w-xl space-y-6">
+          <Card>
+            <CardHeader title="Price" description="Students pay once for full access unless you change access below." />
+            <CardBody className="space-y-4">
+              <Switch label="Free course" checked={form.isFree} onChange={set('isFree')} />
+              {!form.isFree && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Input label="Price" type="number" min={0} step="0.01" value={form.priceAmount} onChange={set('priceAmount')} error={errors.priceAmount} />
+                  <Input label="Original price (optional)" type="number" min={0} step="0.01" value={form.compareAtAmount} onChange={set('compareAtAmount')} error={errors.compareAtAmount} hint="Shown struck through" />
+                  <Select label="Currency" value={form.currency} onChange={set('currency')} options={['INR', 'USD', 'EUR', 'GBP', 'AED', 'SGD'].map((x) => ({ value: x, label: x }))} />
+                </div>
+              )}
+              <Checkbox label="Issue a certificate on completion" checked={form.certificateEnabled} onChange={set('certificateEnabled')} />
+            </CardBody>
+          </Card>
+
+          <Advanced title="Access & completion">
+            <Select label="Access duration" value={form.accessType} onChange={set('accessType')} options={[{ value: 'LIFETIME', label: 'Lifetime' }, { value: 'FIXED_DAYS', label: 'Number of days after enrolment' }, { value: 'FIXED_DATE', label: 'Until a fixed date' }]} />
+            {form.accessType === 'FIXED_DAYS' && <Input label="Days of access" type="number" min={1} value={form.accessDays} onChange={set('accessDays')} error={errors.accessDays} />}
+            {form.accessType === 'FIXED_DATE' && <Input label="Access ends on" type="date" value={form.accessUntil} onChange={set('accessUntil')} error={errors.accessUntil} />}
+            <Input label="Completion threshold (%)" type="number" min={1} max={100} value={form.completionPercent} onChange={set('completionPercent')} hint="Share of required lessons to complete the course" />
+            <p className="text-xs text-muted">Drip unlocks per section are coming soon. For now all published lessons unlock together when access starts.</p>
+            {form.dripType !== 'NONE' && (
+              <Select label="Drip content (legacy)" value={form.dripType} onChange={set('dripType')} options={[{ value: 'NONE', label: 'All content available immediately' }, { value: 'DAYS_AFTER_ENROLL', label: 'Days after enrolment' }, { value: 'DATE', label: 'On dates' }]} />
+            )}
+          </Advanced>
+
+          {!readOnly && (
+            <div className="flex justify-end">
+              <Button loading={save.isPending} onClick={() => save.mutate()}>Save changes</Button>
+            </div>
+          )}
+        </div>
       )}
 
       {tab === 'students' && <CourseStudentsTab courseId={id} canManage={auth.can('students.manage')} />}
@@ -216,12 +267,13 @@ export function CourseEditorPage() {
         footer={<><Button variant="secondary" onClick={() => setPublishOpen(false)}>Cancel</Button><Button leftIcon={Eye} disabled={!check.data?.ready} loading={publish.isPending} onClick={() => publish.mutate()}>{scheduleAt ? 'Schedule' : 'Publish now'}</Button></>}>
         {check.isLoading ? <Skeleton className="h-24" /> : check.data?.ready ? (
           <div className="space-y-4">
-            <Alert tone="success" title="Ready to publish">All checks passed.</Alert>
+            <Alert tone="success" title="Ready to publish">Lessons are ready and pricing looks good.</Alert>
             <Input label="Schedule for later (optional)" type="datetime-local" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} />
           </div>
         ) : (
-          <Alert tone="error" title="Fix these before publishing">
+          <Alert tone="error" title="Almost there — fix these first">
             <ul className="mt-1 list-disc space-y-1 pl-4">{(check.data?.problems ?? []).map((p) => <li key={p.field + p.message}>{p.message}</li>)}</ul>
+            <p className="mt-3 text-sm">Tip: open each lesson and turn on <strong>Ready for students</strong>, and attach a video or file where needed.</p>
           </Alert>
         )}
       </Modal>

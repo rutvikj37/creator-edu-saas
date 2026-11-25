@@ -23,7 +23,7 @@ function timeAgo(iso) {
 /** Course tile: cover, status ribbon when not live, key numbers and one-click shortcuts into the editor. */
 function CourseCard({ c }) {
   const to = (tab) => `/creator/courses/${c.id}?tab=${tab}`;
-  const shortcuts = [{ tab: 'details', icon: Pencil, label: 'Edit details' }, { tab: 'curriculum', icon: ListTree, label: 'Curriculum' }, { tab: 'pricing', icon: IndianRupee, label: 'Pricing & access' }, { tab: 'students', icon: Users, label: 'Students' }];
+  const shortcuts = [{ tab: 'curriculum', icon: ListTree, label: 'Curriculum' }, { tab: 'details', icon: Pencil, label: 'Landing page' }, { tab: 'pricing', icon: IndianRupee, label: 'Pricing' }, { tab: 'students', icon: Users, label: 'Students' }];
   return (
     <Card className="group flex h-full flex-col overflow-hidden transition-shadow hover:shadow-md">
       <Link to={`/creator/courses/${c.id}`} className="relative block aspect-video overflow-hidden bg-surface-2" tabIndex={-1} aria-hidden>

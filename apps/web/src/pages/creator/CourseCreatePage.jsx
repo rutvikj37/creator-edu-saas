@@ -90,7 +90,7 @@ export function CourseCreatePage() {
           <Button variant="ghost" size="icon-sm" aria-label="Back to courses" onClick={leave}><ArrowLeft className="size-4" /></Button>
           <h1 className="text-lg font-semibold tracking-tight">Create a course</h1>
         </div>
-        <Button loading={create.isPending} onClick={submit}>Next</Button>
+        <Button loading={create.isPending} onClick={submit}>Create & add lessons</Button>
       </div>
 
       <form className="mx-auto max-w-3xl space-y-6 px-4 py-8 sm:px-6" onSubmit={(e) => { e.preventDefault(); submit(); }} noValidate>
@@ -104,7 +104,7 @@ export function CourseCreatePage() {
         <Card className="space-y-4 p-6">
           <div>
             <h2 className="font-semibold">Set pricing</h2>
-            <p className="text-sm text-muted">You can change pricing and access rules later under the course’s pricing tab.</p>
+            <p className="text-sm text-muted">You can change this later under Pricing. Next you’ll add lessons.</p>
           </div>
           <div role="radiogroup" aria-label="Pricing plan" className="grid gap-3 sm:grid-cols-2">
             <PlanCard value="FREE" current={plan} onSelect={setPlan} icon={Gift} title="Free plan" body="Unrestricted access to your content, free of cost." />
