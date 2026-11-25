@@ -99,6 +99,8 @@ export function BundleCard({ b, color }) {
 }
 
 export function AcademyLandingPage({ catalogOnly = false }) {
+  const auth = useAuth();
+  const inStudentShell = auth.status === 'authenticated';
   const site = useQuery({ queryKey: ['brand', 'academy'], queryFn: academyApi.site, staleTime: 5 * 60_000, retry: false });
   const courses = useQuery({ queryKey: ['catalog'], queryFn: () => catalogApi.courses(), enabled: Boolean(site.data) });
   const bundles = useQuery({ queryKey: ['public', 'bundles'], queryFn: bundlesApi.publicList, enabled: Boolean(site.data), retry: false });
@@ -107,8 +109,8 @@ export function AcademyLandingPage({ catalogOnly = false }) {
   const s = site.data;
   const color = s?.theme?.primaryColor;
   return (
-    <div className="min-h-dvh" style={{ fontFamily: s?.theme?.fontBody }}>
-      <AcademyHeader site={s} />
+    <div className={inStudentShell ? undefined : 'min-h-dvh'} style={inStudentShell ? undefined : { fontFamily: s?.theme?.fontBody }}>
+      {!inStudentShell && <AcademyHeader site={s} />}
       {!catalogOnly && (
         <section className="border-b border-line" style={{ background: color ? `${color}10` : undefined }}>
           <div className="mx-auto max-w-6xl px-4 py-16 text-center">
@@ -118,7 +120,7 @@ export function AcademyLandingPage({ catalogOnly = false }) {
           </div>
         </section>
       )}
-      <main className="mx-auto max-w-6xl px-4 py-10">
+      <main className={inStudentShell ? 'max-w-6xl' : 'mx-auto max-w-6xl px-4 py-10'}>
         {bundles.data?.length > 0 && (
           <section className="mb-10">
             <h2 className="mb-6 text-xl font-semibold">Bundles</h2>

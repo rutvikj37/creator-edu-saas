@@ -119,10 +119,11 @@ export function PublicMembershipsPage() {
   const plans = useQuery({ queryKey: ['public', 'memberships'], queryFn: membershipsApi.publicPlans });
   const mine = useQuery({ queryKey: ['learn', 'memberships'], queryFn: membershipsApi.mine, enabled: Boolean(auth.user) });
   const active = (planId) => mine.data?.find((m) => m.plan.id === planId && m.active);
+  const inStudentShell = auth.status === 'authenticated';
   return (
-    <div className="min-h-dvh bg-surface-2" style={{ fontFamily: site.data?.theme?.fontBody }}>
-      <AcademyHeader site={site.data} />
-      <main className="mx-auto max-w-5xl px-4 py-10">
+    <div className={inStudentShell ? undefined : 'min-h-dvh bg-surface-2'} style={inStudentShell ? undefined : { fontFamily: site.data?.theme?.fontBody }}>
+      {!inStudentShell && <AcademyHeader site={site.data} />}
+      <main className={inStudentShell ? 'max-w-5xl' : 'mx-auto max-w-5xl px-4 py-10'}>
         <h1 className="text-3xl font-semibold">Memberships</h1>
         <p className="mt-2 text-muted">One price, many courses. Renew whenever you like — no automatic charges.</p>
         <div className="mt-8">

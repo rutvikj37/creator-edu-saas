@@ -2,7 +2,7 @@ import { lazy, Suspense } from 'react';
 import { Navigate } from 'react-router';
 import { Spinner } from '../components/ui/index.js';
 import { RouteError } from './RouteError.jsx';
-import { GuestOnly, RequireAuth, SurfaceOnly } from './guards.jsx';
+import { AcademyCatalogLayout, GuestOnly, RequireAuth, SurfaceOnly } from './guards.jsx';
 import { NotFoundPage } from '../pages/NotFoundPage.jsx';
 import { AffiliateLayout, CreatorLayout, FinanceLayout, StudentLayout, SuperAdminLayout, SupportLayout } from '../layouts/PanelLayouts.jsx';
 import { getSurface } from '../utils/host.js';
@@ -313,12 +313,17 @@ export function buildRoutes(surface = getSurface()) {
   const academy = [
     { path: '/', element: page(AcademySitePage) },
     { path: '/p/:slug', element: page(AcademySitePage) },
-    { path: '/courses', element: page(AcademyCatalog) },
+    {
+      element: <AcademyCatalogLayout />,
+      children: [
+        { path: '/courses', element: page(AcademyCatalog) },
+        { path: '/memberships', element: page(PublicMembershipsPage) },
+      ],
+    },
     { path: '/courses/:slug', element: page(CourseLandingPage) },
     { path: '/bundles/:slug', element: page(BundlePage) },
     { path: '/products/:slug', element: page(ProductPage) },
     { path: '/coaching/:slug', element: page(CoachingProgramPage) },
-    { path: '/memberships', element: page(PublicMembershipsPage) },
     { path: '/webinars/:slug', element: page(WebinarPage) },
     { path: '/live/ticket/:code', element: page(TicketPage) },
     { path: '/pay/:code', element: page(PaymentLinkPage) },

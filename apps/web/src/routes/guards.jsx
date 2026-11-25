@@ -2,6 +2,7 @@ import { Navigate, Outlet, useLocation } from 'react-router';
 import { useAuth } from '../context/AuthContext.jsx';
 import { Spinner } from '../components/ui/index.js';
 import { NotFoundPage } from '../pages/NotFoundPage.jsx';
+import { StudentLayout } from '../layouts/PanelLayouts.jsx';
 
 export function landingPath(me, surface) {
   if (!me) return '/login';
@@ -67,5 +68,13 @@ export function GuestOnly() {
     const next = safeNextPath(new URLSearchParams(location.search).get('next'));
     return <Navigate to={next ?? landingPath(auth.me, auth.surface)} replace />;
   }
+  return <Outlet />;
+}
+
+/** Signed-in learners keep the student shell on public catalogue URLs (`/courses`, `/memberships`). */
+export function AcademyCatalogLayout() {
+  const auth = useAuth();
+  if (auth.status === 'loading') return <FullPageSpinner />;
+  if (auth.status === 'authenticated') return <StudentLayout />;
   return <Outlet />;
 }

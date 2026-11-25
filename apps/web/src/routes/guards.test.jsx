@@ -1,10 +1,11 @@
 import { render, screen } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { vi } from 'vitest';
-import { RequireAuth, GuestOnly, landingPath, safeNextPath } from './guards.jsx';
+import { AcademyCatalogLayout, RequireAuth, GuestOnly, landingPath, safeNextPath } from './guards.jsx';
 
 const authState = { current: null };
 vi.mock('../context/AuthContext.jsx', () => ({ useAuth: () => authState.current }));
+vi.mock('../layouts/PanelLayouts.jsx', () => ({ StudentLayout: () => <p>student shell</p> }));
 
 function renderAt(path, routes) {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
@@ -66,6 +67,24 @@ describe('route guards', () => {
     expect(landingPath(me({ realm: 'PLATFORM' }), 'platform')).toBe('/creator');
     expect(landingPath(me({ realm: 'PLATFORM', activeTenantId: null, platformRoles: [] }), 'admin')).toBe('/account/security');
     expect(landingPath(null, 'platform')).toBe('/login');
+  });
+});
+
+describe('AcademyCatalogLayout', () => {
+  it('wraps signed-in users in the student shell and leaves guests on the catalogue page', () => {
+    const child = [{ element: <AcademyCatalogLayout />, children: [{ path: '/courses', element: <p>catalogue</p> }] }];
+    authState.current = { status: 'loading', surface: 'academy' };
+    const loading = renderAt('/courses', child);
+    expect(screen.getByText('Loading your session')).toBeInTheDocument();
+
+    authState.current = { status: 'anonymous', surface: 'academy' };
+    renderAt('/courses', child);
+    expect(screen.getByText('catalogue')).toBeInTheDocument();
+    expect(screen.queryByText('student shell')).toBeNull();
+
+    authState.current = { status: 'authenticated', surface: 'academy', me: me({ realm: 'TENANT' }) };
+    renderAt('/courses', child);
+    expect(screen.getByText('student shell')).toBeInTheDocument();
   });
 });
 
