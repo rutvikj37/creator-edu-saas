@@ -35,9 +35,14 @@ export class TenantGuard implements CanActivate {
       return true;
     }
 
-    // workspace
+    // workspace — platform app host, or the academy's own domain when the active tenant matches
     const auth = req.auth;
-    if (!auth || auth.realm !== 'PLATFORM' || req.hostRealm?.kind !== 'platform') throw AppException.notFound();
+    if (!auth || auth.realm !== 'PLATFORM' || !req.hostRealm) throw AppException.notFound();
+    if (req.hostRealm.kind === 'tenant') {
+      if (auth.tenantId !== req.hostRealm.tenantId) throw AppException.notFound();
+    } else if (req.hostRealm.kind !== 'platform') {
+      throw AppException.notFound();
+    }
     if (!auth.tenantId) throw new AppException(ERROR_CODES.NOT_FOUND, 'Select a workspace first.', HttpStatus.NOT_FOUND);
     const member = await this.prisma.tenantMember.findUnique({
       where: { tenantId_userId: { tenantId: auth.tenantId, userId: auth.userId } },

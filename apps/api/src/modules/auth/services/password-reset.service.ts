@@ -24,8 +24,19 @@ export class PasswordResetService {
   ) {}
 
   /** Always succeeds from the caller's perspective so accounts cannot be enumerated. */
-  async request(email: string, realmKey: string, origin: string, brand: string) {
-    const user = await this.prisma.user.findUnique({ where: { realmKey_email: { realmKey, email } } });
+  async request(email: string, realmKey: string, origin: string, brand: string, tenantIdForStaff?: string) {
+    let user = await this.prisma.user.findUnique({ where: { realmKey_email: { realmKey, email } } });
+    // Agency staff may reset from their academy domain even though the account lives in the platform realm.
+    if ((!user || user.status !== 'ACTIVE' || user.deletedAt) && tenantIdForStaff && realmKey !== 'platform') {
+      const staff = await this.prisma.user.findUnique({ where: { realmKey_email: { realmKey: 'platform', email } } });
+      if (staff && staff.status === 'ACTIVE' && !staff.deletedAt) {
+        const member = await this.prisma.tenantMember.findUnique({
+          where: { tenantId_userId: { tenantId: tenantIdForStaff, userId: staff.id } },
+          select: { status: true },
+        });
+        if (member?.status === 'ACTIVE') user = staff;
+      }
+    }
     if (!user || user.status !== 'ACTIVE' || user.deletedAt) {
       this.logger.log({ realmKey }, 'password reset requested for unknown account');
       return;
@@ -37,10 +48,25 @@ export class PasswordResetService {
     await this.mail.send({ to: user.email, tenantId: user.tenantId, tag: 'password-reset', ...emailTemplates.passwordReset({ brand, name: user.fullName, url }) });
   }
 
-  async reset(token: string, newPassword: string, realmKey: string, brand: string, meta: { ip?: string; userAgent?: string }) {
+  async reset(token: string, newPassword: string, realmKey: string, brand: string, meta: { ip?: string; userAgent?: string }, tenantIdForStaff?: string) {
     const row = await this.prisma.passwordReset.findUnique({ where: { tokenHash: sha256(token) }, include: { user: true } });
-    if (!row || row.usedAt || row.expiresAt < new Date() || row.user.realmKey !== realmKey) {
+    const realmOk =
+      row &&
+      (row.user.realmKey === realmKey ||
+        (row.user.realmKey === 'platform' &&
+          tenantIdForStaff &&
+          realmKey === tenantIdForStaff));
+    if (!row || row.usedAt || row.expiresAt < new Date() || !realmOk) {
       throw new AppException(ERROR_CODES.INVALID_TOKEN, 'This reset link is invalid or has expired. Request a new one.', HttpStatus.BAD_REQUEST);
+    }
+    if (row.user.realmKey === 'platform' && tenantIdForStaff) {
+      const member = await this.prisma.tenantMember.findUnique({
+        where: { tenantId_userId: { tenantId: tenantIdForStaff, userId: row.userId } },
+        select: { status: true },
+      });
+      if (!member || member.status !== 'ACTIVE') {
+        throw new AppException(ERROR_CODES.INVALID_TOKEN, 'This reset link is invalid or has expired. Request a new one.', HttpStatus.BAD_REQUEST);
+      }
     }
     const passwordHash = await this.passwords.hash(newPassword);
     await this.prisma.$transaction([

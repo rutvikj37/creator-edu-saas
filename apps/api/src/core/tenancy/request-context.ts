@@ -26,3 +26,11 @@ export const CLS_AUTH = 'auth';
 export function realmKeyOf(host: HostRealm): string {
   return host.kind === 'platform' ? 'platform' : host.tenantId;
 }
+
+/**
+ * Platform staff sessions are issued with realmKey `platform`, but may refresh/call
+ * workspace APIs on their academy's own host when the active tenant matches that host.
+ */
+export function platformStaffAllowedOnHost(auth: Pick<AuthContext, 'realmKey' | 'tenantId'>, host: HostRealm): boolean {
+  return auth.realmKey === 'platform' && host.kind === 'tenant' && auth.tenantId === host.tenantId;
+}

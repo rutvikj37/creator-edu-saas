@@ -200,18 +200,18 @@ export class PlatformTenantsService {
     await this.subscriptions.afterChange(result.tenant.id);
 
     const { origin: portalUrl } = await academyOrigin(this.prisma, this.config, result.tenant.id);
-    const appUrl = `${this.config.get('WEB_PUBLIC_URL')}/login`;
+    const loginUrl = `${portalUrl}/login`;
     const e = escapeHtml;
     const emailBody = `
       <h2>Welcome to ${e(dto.name)}!</h2>
       <p>Hello ${e(dto.ownerName)},</p>
       <p>Your agency portal has been successfully provisioned by the platform administrator.</p>
       <p><strong>Agency Name:</strong> ${e(dto.name)}</p>
-      <p><strong>Student Portal:</strong> <a href="${e(portalUrl)}">${e(portalUrl)}</a></p>
-      <p><strong>Management Login:</strong> <a href="${e(appUrl)}">${e(appUrl)}</a></p>
+      <p><strong>Academy website:</strong> <a href="${e(portalUrl)}">${e(portalUrl)}</a></p>
+      <p><strong>Sign in (agency + students):</strong> <a href="${e(loginUrl)}">${e(loginUrl)}</a></p>
       <p><strong>Login Email:</strong> ${e(email)}</p>
       ${result.isNewUser ? `<p><strong>Temporary Password:</strong> <code>${e(result.tempPassword)}</code></p><p>Please change it after your first sign-in.</p>` : `<p>You can sign in using your existing account credentials.</p>`}
-      <p>Please sign in to configure your courses and custom branding.</p>
+      <p>Please sign in on your academy domain to configure courses and branding.</p>
     `;
 
     try {
@@ -219,7 +219,7 @@ export class PlatformTenantsService {
         to: email,
         subject: `Your agency ${dto.name} has been created`,
         html: emailBody,
-        text: `Welcome to ${dto.name}. Your portal is ready at ${portalUrl}. Sign in at ${appUrl} with ${email}.`,
+        text: `Welcome to ${dto.name}. Your portal is ready at ${portalUrl}. Sign in at ${loginUrl} with ${email}.`,
         tag: 'admin-agency-created',
       });
     } catch {

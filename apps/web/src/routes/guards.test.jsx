@@ -21,7 +21,7 @@ const routes = [
   { element: <GuestOnly />, children: [{ path: '/signup', element: <p>signup</p> }] },
 ];
 
-const me = (over = {}) => ({ platformRoles: [], activeTenantId: 't1', mfaSetupRequired: false, ...over });
+const me = (over = {}) => ({ realm: 'PLATFORM', platformRoles: [], activeTenantId: 't1', mfaSetupRequired: false, ...over });
 
 describe('route guards', () => {
   it('sends anonymous users to login with a return path', () => {
@@ -50,13 +50,14 @@ describe('route guards', () => {
   });
 
   it('computes landing paths per surface and role', () => {
-    expect(landingPath(me(), 'academy')).toBe('/learn');
+    expect(landingPath(me({ realm: 'TENANT', activeTenantId: null }), 'academy')).toBe('/learn');
+    expect(landingPath(me({ realm: 'PLATFORM', platformRoles: [] }), 'academy')).toBe('/creator');
     expect(landingPath(me({ platformRoles: ['FINANCE_ADMIN'] }), 'platform')).toBe('/finance');
     expect(landingPath(me({ platformRoles: ['SUPPORT_ADMIN'] }), 'platform')).toBe('/support');
     expect(landingPath(me({ platformRoles: ['PLATFORM_ADMIN'] }), 'platform')).toBe('/super-admin');
     expect(landingPath(me({ platformRoles: ['SUPER_ADMIN'] }), 'admin')).toBe('/super-admin');
-    expect(landingPath(me(), 'platform')).toBe('/creator');
-    expect(landingPath(me(), 'admin')).toBe('/account/security');
+    expect(landingPath(me({ realm: 'PLATFORM' }), 'platform')).toBe('/creator');
+    expect(landingPath(me({ realm: 'PLATFORM', activeTenantId: null, platformRoles: [] }), 'admin')).toBe('/account/security');
     expect(landingPath(null, 'platform')).toBe('/login');
   });
 });

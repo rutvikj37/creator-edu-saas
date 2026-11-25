@@ -41,7 +41,7 @@ function copyFor(surface) {
   if (surface === 'academy') {
     return {
       title: 'Sign in',
-      subtitle: 'Welcome back. Sign in to continue learning.',
+      subtitle: 'Welcome back. Students continue learning; academy staff open the dashboard.',
       showForgot: true,
       showGoogle: true,
     };

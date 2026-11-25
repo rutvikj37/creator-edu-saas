@@ -6,13 +6,20 @@ import { NotFoundPage } from '../pages/NotFoundPage.jsx';
 export function landingPath(me, surface) {
   if (!me) return '/login';
   if (me.mfaSetupRequired) return '/setup-2fa';
-  if (surface === 'academy') return '/learn';
   const roles = me.platformRoles ?? [];
-  if (roles.includes('SUPER_ADMIN') || roles.includes('PLATFORM_ADMIN')) return '/super-admin';
-  if (roles.includes('FINANCE_ADMIN')) return '/finance';
-  if (roles.includes('SUPPORT_ADMIN')) return '/support';
+  if (roles.includes('SUPER_ADMIN') || roles.includes('PLATFORM_ADMIN')) {
+    // Super Admin console only on the dedicated admin / platform hosts.
+    if (surface !== 'academy') return '/super-admin';
+  }
+  if (surface !== 'academy') {
+    if (roles.includes('FINANCE_ADMIN')) return '/finance';
+    if (roles.includes('SUPPORT_ADMIN')) return '/support';
+  }
   // Dedicated Super Admin host: no agency panel here — stay on security.
   if (surface === 'admin') return '/account/security';
+  // Agency staff signing in on their academy domain (or platform host) land in the creator panel.
+  if (me.realm === 'PLATFORM' && me.activeTenantId) return '/creator';
+  if (surface === 'academy') return '/learn';
   return me.activeTenantId ? '/creator' : '/account/security';
 }
 

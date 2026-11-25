@@ -60,12 +60,14 @@ export class AuthService {
   }
 
   async login(dto: LoginDto, host: HostRealm, meta: ClientMeta): Promise<LoginResult> {
-    const realmKey = realmKeyOf(host);
-    const user = await this.prisma.user.findUnique({ where: { realmKey_email: { realmKey, email: dto.email } } });
+    const hostRealmKey = realmKeyOf(host);
+    const resolved = await this.resolveLoginUser(dto.email, host);
+    const user = resolved?.user ?? null;
+    const preferredTenantId = resolved?.preferredTenantId ?? null;
     const invalid = new AppException(ERROR_CODES.INVALID_CREDENTIALS, 'Incorrect email or password.', HttpStatus.UNAUTHORIZED);
 
     if (user?.lockedUntil && user.lockedUntil > new Date()) {
-      await this.recordLogin(user.id, realmKey, dto.email, false, 'locked', 'password', meta);
+      await this.recordLogin(user.id, hostRealmKey, dto.email, false, 'locked', 'password', meta);
       throw new AppException(ERROR_CODES.ACCOUNT_LOCKED, `Too many failed attempts. Try again in ${LOCK_MINUTES} minutes or reset your password.`, HttpStatus.TOO_MANY_REQUESTS);
     }
 
@@ -78,21 +80,43 @@ export class AuthService {
           data: { failedLoginCount: failed, lockedUntil: failed >= MAX_FAILED_LOGINS ? new Date(Date.now() + LOCK_MINUTES * 60_000) : null },
         });
       }
-      await this.recordLogin(user?.id ?? null, realmKey, dto.email, false, user ? 'bad_password' : 'unknown_user', 'password', meta);
+      await this.recordLogin(user?.id ?? null, hostRealmKey, dto.email, false, user ? 'bad_password' : 'unknown_user', 'password', meta);
       throw invalid;
     }
     if (user.status !== 'ACTIVE' || user.deletedAt) {
-      await this.recordLogin(user.id, realmKey, dto.email, false, 'inactive', 'password', meta);
+      await this.recordLogin(user.id, hostRealmKey, dto.email, false, 'inactive', 'password', meta);
       throw AppException.forbidden('This account is not active. Contact support.');
     }
     if (host.kind === 'tenant' && host.status === 'SUSPENDED') throw AppException.forbidden('This academy is temporarily unavailable.');
 
     await this.prisma.user.update({ where: { id: user.id }, data: { failedLoginCount: 0, lockedUntil: null } });
 
+    // MFA challenge is bound to the host so completeMfaLogin can re-check the same surface.
     if (user.twoFactorEnabledAt) {
-      return { kind: 'mfa', mfaToken: await this.tokens.signMfaChallenge(user.id, realmKey) };
+      return { kind: 'mfa', mfaToken: await this.tokens.signMfaChallenge(user.id, hostRealmKey) };
     }
-    return { kind: 'session', session: await this.startSession(user, realmKey, meta, 'password') };
+    return { kind: 'session', session: await this.startSession(user, hostRealmKey, meta, 'password', preferredTenantId) };
+  }
+
+  /**
+   * Students are looked up in the academy realm. On an academy host, platform staff who are
+   * active members of that academy may also sign in (so agencies use their own domain).
+   * Student accounts win when both exist for the same email.
+   */
+  private async resolveLoginUser(email: string, host: HostRealm) {
+    const hostRealmKey = realmKeyOf(host);
+    const local = await this.prisma.user.findUnique({ where: { realmKey_email: { realmKey: hostRealmKey, email } } });
+    if (local) return { user: local, preferredTenantId: host.kind === 'tenant' && local.realm === 'TENANT' ? host.tenantId : null };
+
+    if (host.kind !== 'tenant') return null;
+    const staff = await this.prisma.user.findUnique({ where: { realmKey_email: { realmKey: 'platform', email } } });
+    if (!staff || staff.status !== 'ACTIVE' || staff.deletedAt) return null;
+    const member = await this.prisma.tenantMember.findUnique({
+      where: { tenantId_userId: { tenantId: host.tenantId, userId: staff.id } },
+      select: { status: true },
+    });
+    if (!member || member.status !== 'ACTIVE') return null;
+    return { user: staff, preferredTenantId: host.tenantId };
   }
 
   mfaChallenge(userId: string, realmKey: string) {
@@ -101,25 +125,51 @@ export class AuthService {
 
   async completeMfaLogin(mfaToken: string, code: string, host: HostRealm, meta: ClientMeta): Promise<IssuedSession> {
     const challenge = await this.tokens.verifyMfaChallenge(mfaToken);
-    const realmKey = realmKeyOf(host);
-    if (!challenge || challenge.realmKey !== realmKey) {
+    const hostRealmKey = realmKeyOf(host);
+    if (!challenge || challenge.realmKey !== hostRealmKey) {
       throw new AppException(ERROR_CODES.INVALID_TOKEN, 'Your sign-in attempt expired. Please sign in again.', HttpStatus.UNAUTHORIZED);
     }
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: challenge.userId } });
+    let preferredTenantId: string | null = null;
+    if (host.kind === 'tenant' && user.realm === 'PLATFORM') {
+      const member = await this.prisma.tenantMember.findUnique({
+        where: { tenantId_userId: { tenantId: host.tenantId, userId: user.id } },
+        select: { status: true },
+      });
+      if (!member || member.status !== 'ACTIVE') {
+        throw new AppException(ERROR_CODES.INVALID_TOKEN, 'Your sign-in attempt expired. Please sign in again.', HttpStatus.UNAUTHORIZED);
+      }
+      preferredTenantId = host.tenantId;
+    }
     if (!(await this.twoFactor.verify(user, code))) {
-      await this.recordLogin(user.id, realmKey, user.email, false, 'bad_totp', 'totp', meta);
+      await this.recordLogin(user.id, hostRealmKey, user.email, false, 'bad_totp', 'totp', meta);
       throw new AppException(ERROR_CODES.INVALID_TOKEN, 'The code is incorrect. Try again.', HttpStatus.UNAUTHORIZED);
     }
-    return this.startSession(user, realmKey, meta, 'totp');
+    return this.startSession(user, hostRealmKey, meta, 'totp', preferredTenantId);
   }
 
   /** Issues a session after all factors passed. Admins without 2FA get a restricted session. */
-  async startSession(user: { id: string; realm: 'PLATFORM' | 'TENANT'; realmKey: string; email: string; twoFactorEnabledAt: Date | null }, realmKey: string, meta: ClientMeta, method: string) {
+  async startSession(
+    user: { id: string; realm: 'PLATFORM' | 'TENANT'; realmKey: string; email: string; twoFactorEnabledAt: Date | null },
+    realmKey: string,
+    meta: ClientMeta,
+    method: string,
+    preferredTenantId: string | null = null,
+  ) {
     let tenantId: string | null = null;
     let mfaSetupRequired = false;
     if (user.realm === 'PLATFORM') {
-      const membership = await this.prisma.tenantMember.findFirst({ where: { userId: user.id, status: 'ACTIVE' }, orderBy: { createdAt: 'asc' }, select: { tenantId: true } });
-      tenantId = membership?.tenantId ?? null;
+      if (preferredTenantId) {
+        const member = await this.prisma.tenantMember.findUnique({
+          where: { tenantId_userId: { tenantId: preferredTenantId, userId: user.id } },
+          select: { status: true },
+        });
+        tenantId = member?.status === 'ACTIVE' ? preferredTenantId : null;
+      }
+      if (!tenantId) {
+        const membership = await this.prisma.tenantMember.findFirst({ where: { userId: user.id, status: 'ACTIVE' }, orderBy: { createdAt: 'asc' }, select: { tenantId: true } });
+        tenantId = membership?.tenantId ?? null;
+      }
       mfaSetupRequired = !user.twoFactorEnabledAt && (await this.authz.requiresMfa(user.id));
     } else {
       tenantId = user.realmKey;

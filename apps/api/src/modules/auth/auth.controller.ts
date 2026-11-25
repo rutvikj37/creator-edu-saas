@@ -254,7 +254,13 @@ export class AuthController {
   @ApiOperation({ summary: 'Request a reset link (always succeeds to prevent account enumeration)' })
   async forgot(@Body() dto: ForgotPasswordDto, @Req() req: AppRequest) {
     const host = this.host(req);
-    await this.resets.request(dto.email, realmKeyOf(host), this.origin(req), await this.brand(host));
+    await this.resets.request(
+      dto.email,
+      realmKeyOf(host),
+      this.origin(req),
+      await this.brand(host),
+      host.kind === 'tenant' ? host.tenantId : undefined,
+    );
     return { sent: true };
   }
 
@@ -264,7 +270,14 @@ export class AuthController {
   @Post('password/reset')
   async reset(@Body() dto: ResetPasswordDto, @Req() req: AppRequest, @ClientMetaParam() meta: ClientMeta) {
     const host = this.host(req);
-    await this.resets.reset(dto.token, dto.password, realmKeyOf(host), await this.brand(host), meta);
+    await this.resets.reset(
+      dto.token,
+      dto.password,
+      realmKeyOf(host),
+      await this.brand(host),
+      meta,
+      host.kind === 'tenant' ? host.tenantId : undefined,
+    );
     return { reset: true };
   }
 

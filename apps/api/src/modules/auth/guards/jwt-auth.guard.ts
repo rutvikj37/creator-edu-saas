@@ -5,15 +5,15 @@ import { ERROR_CODES } from '@ce/shared';
 import { IS_PUBLIC_KEY } from '../../../common/decorators/public.decorator.js';
 import { ALLOW_MFA_SETUP_KEY, REALM_KEY } from '../../../common/decorators/auth.decorators.js';
 import { AppException } from '../../../common/errors/app-exception.js';
-import { CLS_AUTH, CLS_TENANT_ID, realmKeyOf, type AppRequest } from '../../../core/tenancy/request-context.js';
+import { CLS_AUTH, CLS_TENANT_ID, platformStaffAllowedOnHost, realmKeyOf, type AppRequest } from '../../../core/tenancy/request-context.js';
 import { TokenService } from '../services/token.service.js';
 import { SessionService } from '../services/session.service.js';
 import { AuthzService } from '../../authz/authz.service.js';
 
 /**
  * Global, default-deny authentication. Every route requires a valid access token unless
- * marked @Public(). A token is only valid on hosts of its own realm: platform tokens on
- * platform hosts, academy tokens on that academy's hosts.
+ * marked @Public(). Tokens are host-bound: academy students on that academy's hosts,
+ * platform tokens on platform hosts, and platform staff also on their active academy host.
  */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -37,7 +37,9 @@ export class JwtAuthGuard implements CanActivate {
     if (!token) throw AppException.unauthenticated();
     const auth = await this.tokens.verifyAccess(token);
     if (!auth) throw new AppException(ERROR_CODES.INVALID_TOKEN, 'Your session has expired. Please sign in again.', HttpStatus.UNAUTHORIZED);
-    if (auth.realmKey !== realmKeyOf(req.hostRealm)) throw AppException.unauthenticated();
+    if (auth.realmKey !== realmKeyOf(req.hostRealm) && !platformStaffAllowedOnHost(auth, req.hostRealm)) {
+      throw AppException.unauthenticated();
+    }
     if (await this.sessions.isRevoked(auth.sessionId)) {
       throw new AppException(ERROR_CODES.INVALID_TOKEN, 'This session was signed out. Please sign in again.', HttpStatus.UNAUTHORIZED);
     }

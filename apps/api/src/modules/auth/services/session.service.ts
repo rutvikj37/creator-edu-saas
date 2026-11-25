@@ -97,7 +97,11 @@ export class SessionService {
       include: { user: { select: { id: true, realm: true, realmKey: true, status: true, deletedAt: true } } },
     });
     if (!session || session.revokedAt || session.expiresAt < new Date()) throw invalid();
-    if (session.user.realmKey !== expectedRealmKey) throw invalid();
+    // Platform staff may refresh on their academy host when the active workspace matches that host.
+    const realmOk =
+      session.user.realmKey === expectedRealmKey ||
+      (session.user.realmKey === 'platform' && session.activeTenantId === expectedRealmKey);
+    if (!realmOk) throw invalid();
     if (session.user.status !== 'ACTIVE' || session.user.deletedAt) {
       await this.revokeFamily(session.familyId, 'user_inactive');
       throw invalid();
