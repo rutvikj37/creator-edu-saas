@@ -82,7 +82,18 @@ export function LessonEditor({ courseId, lesson, onClose, onSaved, readOnly }) {
             <Select label="Video" placeholder="Choose from your library" value={draft.videoAssetId} error={errors.videoAssetId}
               onChange={(e) => setDraft({ ...draft, videoAssetId: e.target.value, isPublished: e.target.value ? true : false })}
               options={(videos.data ?? []).filter((v) => v.status === 'READY').map((v) => ({ value: v.id, label: `${v.title} (${fmtDuration(v.durationSeconds)})` }))} />
-            <p className="text-xs text-muted">Need a new video? <Link to="/creator/videos" className="text-primary-600 underline">Upload in Videos</Link>.</p>
+            {!readOnly && (
+              <p className="text-xs text-muted">
+                Need a new video?{' '}
+                <Link
+                  to={`/creator/videos?courseId=${encodeURIComponent(courseId)}&lessonId=${encodeURIComponent(lesson.id)}`}
+                  className="font-medium text-primary-600 underline"
+                >
+                  Upload in Asset library
+                </Link>
+                {' '}— it attaches to this lesson when ready.
+              </p>
+            )}
           </div>
         )}
         <Input label="Duration (minutes, optional)" type="number" min={0} value={draft.durationMinutes} onChange={(e) => setDraft({ ...draft, durationMinutes: e.target.value })} />

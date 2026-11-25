@@ -42,7 +42,7 @@ it('uploads straight to Bunny with the server-issued credentials and reports the
   wrap(<VideosPage />);
   await screen.findByText(/MP4, M4V, MOV/);
   fireEvent.change(screen.getByTestId('video-file-input'), { target: { files: [mp4()] } });
-  await waitFor(() => expect(videosApi.initiate).toHaveBeenCalledWith({ title: 'intro', filename: 'intro.mp4', size: 1000, mimeType: 'video/mp4', courseId: undefined, videoId: undefined }));
+  await waitFor(() => expect(videosApi.initiate).toHaveBeenCalledWith({ title: 'intro', filename: 'intro.mp4', size: 1000, mimeType: 'video/mp4', courseId: undefined, lessonId: undefined, videoId: undefined }));
   expect(startTusUpload.mock.calls[0][1]).toBe(auth);
   expect(await screen.findByRole('progressbar', { name: /intro.mp4/ })).toHaveAttribute('aria-valuenow', '40');
   expect(videosApi.complete).toHaveBeenCalledWith({ videoId: 'v1', uploadSessionId: 's1', outcome: 'started' });
@@ -80,6 +80,22 @@ it('library shows processing and backup status and opens details', async () => {
   await userEvent.click(screen.getByText('View details'));
   expect(await screen.findByText('g1')).toBeInTheDocument();
   expect(screen.getByText('1920×1080')).toBeInTheDocument();
+});
+
+it('deep-links from a course lesson and sends courseId + lessonId on upload', async () => {
+  videosApi.initiate.mockResolvedValue({ videoId: 'v1', uploadSessionId: 's1', upload: auth });
+  startTusUpload.mockImplementation(() => ({ promise: new Promise(() => {}), abort: vi.fn() }));
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <MemoryRouter initialEntries={['/creator/videos?courseId=c1&lessonId=l1']}>
+        <VideosPage />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByText(/attach to this course lesson/i)).toBeInTheDocument();
+  expect(screen.getByText(/Upload a video for this lesson/)).toBeInTheDocument();
+  fireEvent.change(screen.getByTestId('video-file-input'), { target: { files: [mp4()] } });
+  await waitFor(() => expect(videosApi.initiate).toHaveBeenCalledWith(expect.objectContaining({ courseId: 'c1', lessonId: 'l1' })));
 });
 
 it('player embed accepts progress only from the Bunny origin and resumes', async () => {

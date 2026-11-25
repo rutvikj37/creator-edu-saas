@@ -85,6 +85,14 @@ export class VideoProcessingService {
       }
     }
     if (!updated) updated = await this.db.videoAsset.update({ where: { id: video.id }, data: meta });
+    // Upload initiated for a specific VIDEO lesson: attach once encoding finishes.
+    if ((updated?.status ?? video.status) === 'READY' && video.lessonId) {
+      const duration = updated?.durationSeconds ?? remote.durationSeconds ?? video.durationSeconds;
+      await this.db.courseLesson.updateMany({
+        where: { id: video.lessonId, type: 'VIDEO' },
+        data: { videoAssetId: video.id, ...(duration ? { durationSeconds: duration } : {}) },
+      });
+    }
     // The original is at the provider once it reports anything past CREATED: start the backup.
     if (remote.state !== 'CREATED' && remote.state !== 'FAILED') await this.enqueueBackup(video.tenantId, video.id);
     return updated;

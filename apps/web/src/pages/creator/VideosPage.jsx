@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Eye, Film, Info, Link2, Pencil, Play, RefreshCw, Trash2, Upload, X } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
@@ -65,6 +66,21 @@ function useUploads(config, onChanged) {
     return null;
   };
 
+  const onChangedRef = useRef(onChanged);
+  onChangedRef.current = onChanged;
+  const attachLesson = useCallback(async (videoId, courseId, lessonId) => {
+    if (!videoId || !lessonId) return false;
+    try {
+      await videosApi.edit(videoId, { courseId: courseId || undefined, lessonId });
+      toast.success('Video added to the lesson');
+      onChangedRef.current();
+      return true;
+    } catch (e) {
+      toast.error(e.details?.[0]?.message ?? e.message);
+      return false;
+    }
+  }, []);
+
   const run = useCallback(async (item, videoId) => {
     const { key, file } = item;
     try {
@@ -72,13 +88,17 @@ function useUploads(config, onChanged) {
         patch(key, { phase: 'uploading', progress: 0, error: null });
         const duration = await readVideoDuration(file);
         const f = await uploadVideo(file, (p) => patch(key, { progress: p }));
-        await videosApi.create({ fileId: f.id, title: item.title, durationSeconds: duration ?? undefined });
-        patch(key, { phase: 'ready', progress: 100 });
-        onChanged();
+        const created = await videosApi.create({ fileId: f.id, title: item.title, durationSeconds: duration ?? undefined });
+        patch(key, { phase: 'ready', progress: 100, videoId: created.id });
+        if (item.lessonId) await attachLesson(created.id, item.courseId, item.lessonId);
+        else onChanged();
         return;
       }
       patch(key, { phase: 'authorizing', progress: 0, error: null });
-      const init = await videosApi.initiate({ title: item.title, filename: file.name, size: file.size, mimeType: file.type || 'video/mp4', courseId: item.courseId || undefined, videoId: videoId ?? undefined });
+      const init = await videosApi.initiate({
+        title: item.title, filename: file.name, size: file.size, mimeType: file.type || 'video/mp4',
+        courseId: item.courseId || undefined, lessonId: item.lessonId || undefined, videoId: videoId ?? undefined,
+      });
       patch(key, { videoId: init.videoId, sessionId: init.uploadSessionId, phase: 'uploading' });
       onChanged();
       const h = startTusUpload(file, init.upload, {
@@ -98,12 +118,12 @@ function useUploads(config, onChanged) {
       if (h?.videoId) videosApi.complete({ videoId: h.videoId, uploadSessionId: h.sessionId, outcome: 'failed', error: e.message }).catch(() => {});
       onChanged();
     }
-  }, [config, onChanged, patch]);
+  }, [attachLesson, config, onChanged, patch]);
 
-  const add = (files, courseId) => {
+  const add = (files, courseId, lessonId) => {
     for (const file of files) {
       const error = validate(file);
-      const item = { key: ++seq, file, title: file.name.replace(/\.[^.]+$/, '').slice(0, 200), courseId, phase: error ? 'invalid' : 'queued', progress: 0, error };
+      const item = { key: ++seq, file, title: file.name.replace(/\.[^.]+$/, '').slice(0, 200), courseId, lessonId, phase: error ? 'invalid' : 'queued', progress: 0, error };
       setItems((l) => [item, ...l]);
       if (!error) run(item);
     }
@@ -120,7 +140,7 @@ function useUploads(config, onChanged) {
   const retry = (item) => run(item, item.videoId);
   const dismiss = (item) => setItems((l) => l.filter((i) => i.key !== item.key));
 
-  // Follow processing until the provider reports a final state.
+  // Follow processing until the provider reports a final state; attach to the lesson when ready.
   useEffect(() => {
     const waiting = items.filter((i) => i.phase === 'processing' && i.videoId);
     if (!waiting.length) return undefined;
@@ -128,24 +148,29 @@ function useUploads(config, onChanged) {
       for (const i of waiting) {
         const s = await videosApi.status(i.videoId).catch(() => null);
         if (!s) continue;
-        if (s.status === 'READY') { patch(i.key, { phase: 'ready', status: s.status }); onChanged(); }
-        else if (s.status === 'FAILED') { patch(i.key, { phase: 'failed', status: s.status, error: s.errorMessage }); onChanged(); }
+        if (s.status === 'READY') {
+          patch(i.key, { phase: 'ready', status: s.status });
+          if (i.lessonId) await attachLesson(i.videoId, i.courseId, i.lessonId);
+          else onChangedRef.current();
+        } else if (s.status === 'FAILED') { patch(i.key, { phase: 'failed', status: s.status, error: s.errorMessage }); onChangedRef.current(); }
         else patch(i.key, { status: s.status, encodeProgress: s.encodeProgress });
       }
     }, 5000);
     return () => clearInterval(t);
-  }, [items, onChanged, patch]);
+  }, [attachLesson, items, patch]);
 
   return { items, add, cancel, retry, dismiss };
 }
 
 const PHASE_TEXT = { queued: 'Queued', authorizing: 'Preparing…', uploading: 'Uploading', confirming: 'Confirming with the video host…', processing: 'Processing', ready: 'Ready', failed: 'Failed', cancelled: 'Cancelled', invalid: 'Not uploaded' };
 
-function UploadPanel({ config, uploads, courses }) {
+function UploadPanel({ config, uploads, courses, target }) {
   const input = useRef(null);
   const [over, setOver] = useState(false);
-  const [courseId, setCourseId] = useState('');
-  const onFiles = (list) => list?.length && uploads.add([...list], courseId);
+  const [courseId, setCourseId] = useState(target?.courseId ?? '');
+  useEffect(() => { if (target?.courseId) setCourseId(target.courseId); }, [target?.courseId]);
+  const lockedLesson = Boolean(target?.lessonId);
+  const onFiles = (list) => list?.length && uploads.add([...list], lockedLesson ? target.courseId : courseId, target?.lessonId || undefined);
   return (
     <Card className="mb-6 p-5">
       <div
@@ -156,11 +181,11 @@ function UploadPanel({ config, uploads, courses }) {
         className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-8 text-center transition-colors ${over ? 'border-primary-500 bg-primary-50 dark:bg-primary-950' : 'border-line hover:border-line-strong'}`}
       >
         <Upload className="size-6 text-muted" aria-hidden />
-        <p className="font-medium">Drag videos here or click to choose</p>
+        <p className="font-medium">{lockedLesson ? 'Upload a video for this lesson' : 'Drag videos here or click to choose'}</p>
         <p className="text-xs text-muted">{config ? `${config.extensions.map((e) => e.toUpperCase()).join(', ')} · up to ${fmtSize(config.maxUploadBytes)}` : ' '}{config?.provider === 'BUNNY' ? ' · uploads go straight to the video host and resume if interrupted' : ''}</p>
-        <input ref={input} type="file" multiple accept={config ? [...config.mimeTypes, ...config.extensions.map((e) => `.${e}`)].join(',') : 'video/*'} className="hidden" data-testid="video-file-input" onChange={(e) => { onFiles(e.target.files); e.target.value = ''; }} />
+        <input ref={input} type="file" multiple={!lockedLesson} accept={config ? [...config.mimeTypes, ...config.extensions.map((e) => `.${e}`)].join(',') : 'video/*'} className="hidden" data-testid="video-file-input" onChange={(e) => { onFiles(e.target.files); e.target.value = ''; }} />
       </div>
-      {config?.provider === 'BUNNY' && (
+      {config?.provider === 'BUNNY' && !lockedLesson && (
         <div className="mt-3 max-w-sm"><Select label="Course for new uploads (optional)" value={courseId} onChange={(e) => setCourseId(e.target.value)} placeholder="No course" options={(courses ?? []).map((c) => ({ value: c.id, label: c.title }))} /></div>
       )}
       {uploads.items.length > 0 && (
@@ -284,17 +309,25 @@ function Details({ id, onClose, onPreview }) {
 
 export function VideosPage() {
   const qc = useQueryClient();
+  const [params] = useSearchParams();
+  const targetCourseId = params.get('courseId') || '';
+  const targetLessonId = params.get('lessonId') || '';
+  const uploadTarget = targetCourseId && targetLessonId ? { courseId: targetCourseId, lessonId: targetLessonId } : targetCourseId ? { courseId: targetCourseId } : null;
   const config = useQuery({ queryKey: ['videos', 'config'], queryFn: videosApi.config, staleTime: 10 * 60_000 });
   const [filters, setFilters] = useState({ status: '', q: '' });
-  const [courseF, setCourseF] = useState();
+  const [courseF, setCourseF] = useState(targetCourseId || undefined);
   const [periodF, setPeriodF] = useState();
+  useEffect(() => { if (targetCourseId) setCourseF(targetCourseId); }, [targetCourseId]);
   const q = useQuery({
     queryKey: ['videos', 'library', filters],
     queryFn: () => videosApi.library({ status: filters.status || undefined, q: filters.q || undefined }),
     refetchInterval: (query) => ((query.state.data ?? []).some((v) => IN_FLIGHT.has(v.status)) ? 5000 : false),
   });
   const courses = useQuery({ queryKey: ['creator', 'courses', 'all'], queryFn: () => coursesApi.list({ pageSize: 100 }) });
-  const changed = useCallback(() => qc.invalidateQueries({ queryKey: ['videos'] }), [qc]);
+  const changed = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ['videos'] });
+    if (targetCourseId) qc.invalidateQueries({ queryKey: ['course', targetCourseId] });
+  }, [qc, targetCourseId]);
   const uploads = useUploads(config.data, changed);
   const [preview, setPreview] = useState(null);
   const [details, setDetails] = useState(null);
@@ -303,6 +336,7 @@ export function VideosPage() {
   const [deleting, setDeleting] = useState(null);
   const remove = useMutation({ mutationFn: (v) => videosApi.destroy(v.id), onSuccess: () => { changed(); toast.success('Video deleted'); setDeleting(null); }, onError: (e) => { toast.error(e.message); setDeleting(null); } });
   const courseList = courses.data?.items ?? [];
+  const targetCourse = courseList.find((c) => c.id === targetCourseId);
   const all = q.data ?? [];
   const courseOf = (v) => v.course?.id ?? v.usedIn?.[0]?.course?.id;
   const rows = all.filter((v) => (!courseF || courseOf(v) === courseF || v.usedIn?.some((u) => u.course?.id === courseF)) && inPeriod(v.updatedAt ?? v.createdAt, periodF));
@@ -311,8 +345,15 @@ export function VideosPage() {
   return (
     <>
       <PageHeader title="Asset library" count={q.data && !filtered ? all.length : undefined} description="Re-use your course content with ease. Upload once, use in any lesson; only enrolled students can play videos." breadcrumbs={[{ label: 'Videos' }]} />
+      {uploadTarget?.lessonId && (
+        <Alert tone="info" className="mb-4">
+          Uploads here attach to this course lesson when they are ready.
+          {targetCourse ? ` (${targetCourse.title})` : ''}{' '}
+          <Link to={`/creator/courses/${encodeURIComponent(targetCourseId)}`} className="font-medium underline">Back to course</Link>
+        </Alert>
+      )}
       {config.data?.provider === 'STORAGE' && <Alert tone="info" className="mb-4">The video host (Bunny Stream) is not configured, so uploads are stored privately and played without adaptive streaming.</Alert>}
-      <UploadPanel config={config.data} uploads={uploads} courses={courseList} />
+      <UploadPanel config={config.data} uploads={uploads} courses={courseList} target={uploadTarget} />
       <Card>
         <ListToolbar search={filters.q} onSearch={(v) => setFilters({ ...filters, q: v })} placeholder="Search by title" count={rows.length} noun="file"
           filtered={filtered} onReset={() => { setFilters({ status: '', q: '' }); setCourseF(undefined); setPeriodF(undefined); }}
