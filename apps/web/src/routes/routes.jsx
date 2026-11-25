@@ -332,7 +332,7 @@ export function buildRoutes(surface = getSurface()) {
     { element: <RequireAuth allowMfaSetup />, children: [{ path: '/setup-2fa', element: page(MfaSetupPage) }] },
     creatorWorkspaceRoutes,
     {
-      element: <RequireAuth />,
+      element: <RequireAuth student />,
       children: [
         {
           element: <StudentLayout />,

@@ -21,7 +21,8 @@ export function landingPath(me, surface) {
   if (me.realm === 'TENANT') return surface === 'academy' ? '/learn' : '/account/security';
   // Agency staff signing in on their academy domain (or platform host) land in the creator panel.
   if (me.realm === 'PLATFORM' && me.activeTenantId) return '/creator';
-  if (surface === 'academy') return '/learn';
+  // Platform accounts can't use the student app (its API is learner-only): academy home instead.
+  if (surface === 'academy') return '/';
   return me.activeTenantId ? '/creator' : '/account/security';
 }
 
@@ -39,8 +40,8 @@ export function SurfaceOnly({ surface }) {
   return auth.surface === surface ? <Outlet /> : <NotFoundPage />;
 }
 
-/** Requires a signed-in user; optionally an admin or a creator workspace. */
-export function RequireAuth({ admin = false, workspace = false }) {
+/** Requires a signed-in user; optionally an admin, a creator workspace, or a learner (TENANT realm). */
+export function RequireAuth({ admin = false, workspace = false, student = false }) {
   const auth = useAuth();
   const location = useLocation();
   if (auth.status === 'loading') return <FullPageSpinner />;
@@ -51,6 +52,8 @@ export function RequireAuth({ admin = false, workspace = false }) {
   const hasWorkspace =
     auth.me.realm === 'PLATFORM' && Boolean(auth.me.activeTenantId);
   if (workspace && !hasWorkspace) return <Navigate to={landingPath(auth.me, auth.surface)} replace />;
+  // Student pages call learner-only APIs that answer 403 for agency/platform accounts.
+  if (student && auth.me.realm !== 'TENANT') return <Navigate to={landingPath(auth.me, auth.surface)} replace />;
   return <Outlet />;
 }
 
@@ -97,6 +100,6 @@ export function GuestOnly() {
 export function AcademyCatalogLayout() {
   const auth = useAuth();
   if (auth.status === 'loading') return <FullPageSpinner />;
-  if (auth.status === 'authenticated') return <StudentLayout />;
+  if (auth.status === 'authenticated' && auth.me?.realm === 'TENANT') return <StudentLayout />;
   return <Outlet />;
 }

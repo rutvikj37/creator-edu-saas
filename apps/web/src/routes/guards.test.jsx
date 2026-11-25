@@ -21,6 +21,7 @@ const routes = [
   { element: <RequireAuth admin />, children: [{ path: '/super-admin', element: <p>admin area</p> }] },
   { element: <RequireAuth workspace />, children: [{ path: '/creator/domains', element: <p>domains</p> }] },
   { element: <GuestOnly />, children: [{ path: '/signup', element: <p>signup</p> }] },
+  { element: <RequireAuth student />, children: [{ path: '/learn/coaching', element: <p>my coaching</p> }] },
 ];
 
 const me = (over = {}) => ({ realm: 'PLATFORM', platformRoles: [], activeTenantId: 't1', mfaSetupRequired: false, ...over });
@@ -43,6 +44,18 @@ describe('route guards', () => {
     authState.current = { status: 'authenticated', surface: 'platform', isAdmin: true, me: me({ platformRoles: ['SUPER_ADMIN'], activeTenantId: null }) };
     renderAt('/super-admin', routes);
     expect(screen.getByText('admin area')).toBeInTheDocument();
+  });
+
+  it('keeps agency staff out of the student app (its API is learner-only)', () => {
+    authState.current = { status: 'authenticated', surface: 'academy', isAdmin: false, me: me() };
+    renderAt('/learn/coaching', routes);
+    expect(screen.getByText('creator home')).toBeInTheDocument();
+  });
+
+  it('lets learners into the student app', () => {
+    authState.current = { status: 'authenticated', surface: 'academy', isAdmin: false, me: me({ realm: 'TENANT' }) };
+    renderAt('/learn/coaching', routes);
+    expect(screen.getByText('my coaching')).toBeInTheDocument();
   });
 
   it('keeps tenant learners out of the creator workspace', () => {
