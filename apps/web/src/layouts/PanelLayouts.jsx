@@ -72,7 +72,7 @@ export function SuperAdminLayout(props) {
   const account = useShellAccount('/super-admin/account/security');
   const roles = auth.me?.platformRoles ?? [];
   const subtitle = roles.includes('SUPER_ADMIN') ? 'Super Admin' : 'Platform Admin';
-  return <DashboardShell nav={filterNav(NAV.superAdmin, auth.can)} brand={usePlatformBrand(subtitle, 'super-admin')} defaultCollapsed {...account} {...props} />;
+  return <DashboardShell nav={filterNav(NAV.superAdmin, auth.can)} brand={usePlatformBrand(subtitle, 'super-admin')} {...account} {...props} />;
 }
 /** Super/Platform Admins keep their full sidebar on the Finance and Support pages; only dedicated role holders get the focused panel. */
 function isPlatformWideAdmin(me) {
@@ -85,14 +85,14 @@ export function FinanceLayout(props) {
   const account = useShellAccount('/super-admin/account/security');
   const brand = usePlatformBrand('Finance', 'finance');
   if (isPlatformWideAdmin(auth.me)) return <SuperAdminLayout {...props} />;
-  return <DashboardShell nav={filterNav(NAV.finance, auth.can)} brand={brand} defaultCollapsed {...account} {...props} />;
+  return <DashboardShell nav={filterNav(NAV.finance, auth.can)} brand={brand} {...account} {...props} />;
 }
 export function SupportLayout(props) {
   const auth = useAuth();
   const account = useShellAccount('/super-admin/account/security');
   const brand = usePlatformBrand('Support', 'support');
   if (isPlatformWideAdmin(auth.me)) return <SuperAdminLayout {...props} />;
-  return <DashboardShell nav={filterNav(NAV.support, auth.can)} brand={brand} defaultCollapsed {...account} {...props} />;
+  return <DashboardShell nav={filterNav(NAV.support, auth.can)} brand={brand} {...account} {...props} />;
 }
 /** Shown when the academy requires 2FA for its team and this account hasn't turned it on. */
 function TeamTwoFactorBanner() {
@@ -112,7 +112,6 @@ export function CreatorLayout({ preview = false, ...props }) {
       banner={preview ? undefined : auth.me?.workspaceRequiresTwoFactor ? <TeamTwoFactorBanner /> : <AnnouncementsBanner />}
       brand={{ key: 'creator', mark: name.slice(0, 2).toUpperCase(), name, subtitle: auth.activeTenant?.role?.name ?? 'Creator workspace' }}
       footer={preview ? undefined : <WorkspaceSwitcher />}
-      defaultCollapsed
       {...(preview ? {} : account)}
       {...props}
     />

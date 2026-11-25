@@ -33,12 +33,12 @@ describe('DashboardShell', () => {
   it('remembers the collapsed sidebar preference', async () => {
     setup();
     await userEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
-    expect(JSON.parse(localStorage.getItem('ce.sidebar.test.collapsed'))).toBe(true);
+    expect(JSON.parse(localStorage.getItem('ce.sidebar.test.collapsed.v2'))).toBe(true);
     expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeInTheDocument();
   });
 
   it('collapsed rail shows one icon per section with a flyout of its pages', async () => {
-    localStorage.setItem('ce.sidebar.rail.collapsed', 'true');
+    localStorage.setItem('ce.sidebar.rail.collapsed.v2', 'true');
     const railNav = [
       { label: null, items: [{ label: 'Overview', to: '/', icon: LayoutDashboard, available: true, end: true }] },
       { label: 'Content', icon: BookOpen, items: [{ label: 'Courses', to: '/courses', icon: BookOpen, available: true }, { label: 'Videos', to: '/videos', icon: BookOpen, available: true }] },

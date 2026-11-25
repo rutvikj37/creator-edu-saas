@@ -151,7 +151,8 @@ export function DashboardShell({ nav, brand, user, footer, onSignOut, notificati
   const { t, i18n } = useTranslation();
   const { theme, toggle } = useTheme();
   const location = useLocation();
-  const [collapsed, setCollapsed] = usePersistentState(`sidebar.${brand.key}.collapsed`, defaultCollapsed);
+  // v2 key: older builds defaulted panels to collapsed and persisted that preference.
+  const [collapsed, setCollapsed] = usePersistentState(`sidebar.${brand.key}.collapsed.v2`, defaultCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const items = useMemo(() => flatten(nav), [nav]);
