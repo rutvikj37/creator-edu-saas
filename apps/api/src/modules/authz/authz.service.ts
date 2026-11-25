@@ -35,7 +35,7 @@ export class AuthzService {
   }
 
   async requiresMfa(userId: string): Promise<boolean> {
-    if (!this.config.isProduction && this.config.get('ADMIN_MFA_REQUIRED') === false) return false;
+    if (this.config.get('ADMIN_MFA_REQUIRED') !== true) return false;
     const keys = await this.platformRoleKeys(userId);
     return keys.some((k) => MFA_REQUIRED_ROLES.includes(k));
   }

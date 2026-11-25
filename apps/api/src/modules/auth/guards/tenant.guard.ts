@@ -6,7 +6,6 @@ import { ALLOW_WHEN_SUSPENDED_KEY, FEATURE_KEY, TENANT_SCOPE_KEY, type TenantSco
 import { EntitlementsService } from '../../subscriptions/entitlements.service.js';
 import { AppException } from '../../../common/errors/app-exception.js';
 import { PrismaService } from '../../../core/prisma/prisma.service.js';
-import { AcademySecurityService } from '../../../core/security/academy-security.service.js';
 import { CLS_TENANT_ID, type AppRequest } from '../../../core/tenancy/request-context.js';
 
 /**
@@ -21,7 +20,6 @@ export class TenantGuard implements CanActivate {
     private readonly prisma: PrismaService,
     private readonly cls: ClsService,
     private readonly entitlements: EntitlementsService,
-    private readonly security: AcademySecurityService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -46,7 +44,7 @@ export class TenantGuard implements CanActivate {
     if (!auth.tenantId) throw new AppException(ERROR_CODES.NOT_FOUND, 'Select a workspace first.', HttpStatus.NOT_FOUND);
     const member = await this.prisma.tenantMember.findUnique({
       where: { tenantId_userId: { tenantId: auth.tenantId, userId: auth.userId } },
-      select: { status: true, tenant: { select: { status: true } }, user: { select: { twoFactorEnabledAt: true } } },
+      select: { status: true, tenant: { select: { status: true } } },
     });
     if (!member || member.status !== 'ACTIVE' || member.tenant.status === 'DELETED') throw AppException.notFound();
     const targets = [context.getHandler(), context.getClass()];
@@ -57,10 +55,6 @@ export class TenantGuard implements CanActivate {
       !this.reflector.getAllAndOverride<boolean>(ALLOW_WHEN_SUSPENDED_KEY, targets)
     ) {
       throw new AppException(ERROR_CODES.TENANT_SUSPENDED, 'This academy is suspended. Contact support to restore access.', HttpStatus.FORBIDDEN);
-    }
-    // Settings → Security: the academy requires two-factor authentication for its team.
-    if (!member.user.twoFactorEnabledAt && (await this.security.get(auth.tenantId)).teamTwoFactor) {
-      throw new AppException(ERROR_CODES.MFA_SETUP_REQUIRED, 'This academy requires two-factor authentication. Turn it on in Account security to continue.', HttpStatus.FORBIDDEN);
     }
     this.cls.set(CLS_TENANT_ID, auth.tenantId);
     const feature = this.reflector.getAllAndOverride<string>(FEATURE_KEY, targets);

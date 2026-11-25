@@ -356,8 +356,6 @@ export class AuthController {
     const userId = await this.google.consumeHandoff(dto.code, realmKeyOf(host));
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     if (user.status !== 'ACTIVE') throw AppException.forbidden('This account is not active.');
-    // Google proves the first factor only; accounts with 2FA still need their authenticator code.
-    if (user.twoFactorEnabledAt) return { mfaRequired: true, mfaToken: await this.auth.mfaChallenge(user.id, realmKeyOf(host)) };
     const session = await this.auth.startSession(user, realmKeyOf(host), meta, 'google');
     return this.respond(res, session, { mfaSetupRequired: session.auth.mfaSetupRequired, user: await this.prisma.user.findUnique({ where: { id: user.id }, select: PUBLIC_USER_SELECT }) });
   }

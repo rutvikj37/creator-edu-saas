@@ -30,7 +30,7 @@ export const envSchema = z.object({
     .refine((v) => Buffer.from(v, 'base64').length === 32, 'ENCRYPTION_KEY must be 32 bytes, base64-encoded'),
   CSRF_SECRET: z.string().min(8),
   SWAGGER_ENABLED: bool.optional(),
-  /** Platform admins must set up two-factor sign-in. Can only be turned off outside production. */
+  /** When true, platform admins must set up two-factor sign-in before using the panel. Defaults off when unset. */
   ADMIN_MFA_REQUIRED: bool.optional(),
   RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(300),
   AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(10),

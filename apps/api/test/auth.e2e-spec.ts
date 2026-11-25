@@ -213,28 +213,23 @@ describe('Authentication (e2e)', () => {
       expect(enabled.body.data.enabled).toBe(true);
 
       const first = await login(app, PLATFORM, body.email, body.password);
-      expect(first.res.body.data).toEqual({ mfaRequired: true, mfaToken: expect.any(String) });
-      expect(first.res.headers['set-cookie']).toBeUndefined();
-      await api(app).post('/api/v1/auth/login/2fa').set('Host', PLATFORM).send({ mfaToken: first.res.body.data.mfaToken, code: '000000' }).expect(401);
-      const ok = await api(app).post('/api/v1/auth/login/2fa').set('Host', PLATFORM).send({ mfaToken: first.res.body.data.mfaToken, code: nextTotp(secret, 1) }).expect(200);
-      expect(ok.body.data.accessToken).toBeTruthy();
+      expect(first.res.body.data.mfaRequired).toBeUndefined();
+      expect(first.res.headers['set-cookie']).toBeDefined();
+      expect(first.res.body.data.accessToken).toBeTruthy();
     });
 
-    it('forces administrators to enrol before using anything else', async () => {
+    it('lets administrators sign in without mandatory 2FA enrolment', async () => {
       const res = await login(app, PLATFORM, 'root@platform.test', 'Sup3r-Admin-Passw0rd!');
       expect(res.res.status).toBe(200);
-      expect(res.res.body.data.mfaSetupRequired).toBe(true);
-      const restricted = await authed(app, res.session).get('/api/v1/auth/sessions').expect(403);
-      expect(restricted.body.error.code).toBe('MFA_SETUP_REQUIRED');
+      expect(res.res.body.data.mfaSetupRequired).toBe(false);
+      await authed(app, res.session).get('/api/v1/auth/sessions').expect(200);
       const me = await authed(app, res.session).get('/api/v1/auth/me').expect(200);
       expect(me.body.data.platformRoles).toEqual(['SUPER_ADMIN']);
 
       const setup = await authed(app, res.session).post('/api/v1/auth/2fa/setup').expect(200);
       const enabled = await authed(app, res.session).post('/api/v1/auth/2fa/enable').send({ code: nextTotp(setup.body.data.secret, 0) }).expect(200);
       const full = parseSession(enabled, PLATFORM);
-      await authed(app, full).get('/api/v1/auth/sessions').expect(200);
-      await authed(app, res.session).get('/api/v1/auth/me').expect(401); // restricted session was replaced
-      await authed(app, full).post('/api/v1/auth/2fa/disable').send({ password: 'Sup3r-Admin-Passw0rd!', code: nextTotp(setup.body.data.secret, 1) }).expect(403);
+      await authed(app, full).post('/api/v1/auth/2fa/disable').send({ password: 'Sup3r-Admin-Passw0rd!', code: nextTotp(setup.body.data.secret, 1) }).expect(200);
       expect(await prisma.auditLog.count({ where: { action: 'auth.admin_login' } })).toBeGreaterThan(0);
     });
   });

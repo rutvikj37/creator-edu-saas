@@ -5,7 +5,6 @@ import { NotFoundPage } from '../pages/NotFoundPage.jsx';
 
 export function landingPath(me, surface) {
   if (!me) return '/login';
-  if (me.mfaSetupRequired) return '/setup-2fa';
   const roles = me.platformRoles ?? [];
   if (roles.includes('SUPER_ADMIN') || roles.includes('PLATFORM_ADMIN')) {
     // Super Admin console only on the dedicated admin / platform hosts.
@@ -38,14 +37,13 @@ export function SurfaceOnly({ surface }) {
 }
 
 /** Requires a signed-in user; optionally an admin or a creator workspace. */
-export function RequireAuth({ admin = false, workspace = false, allowMfaSetup = false }) {
+export function RequireAuth({ admin = false, workspace = false }) {
   const auth = useAuth();
   const location = useLocation();
   if (auth.status === 'loading') return <FullPageSpinner />;
   if (auth.status !== 'authenticated') {
     return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />;
   }
-  if (auth.me.mfaSetupRequired && !allowMfaSetup) return <Navigate to="/setup-2fa" replace />;
   if (admin && !auth.isAdmin) return <Navigate to={landingPath(auth.me, auth.surface)} replace />;
   if (workspace && !auth.me.activeTenantId) return <Navigate to={landingPath(auth.me, auth.surface)} replace />;
   return <Outlet />;
@@ -63,7 +61,7 @@ export function GuestOnly() {
   if (auth.status === 'loading') return <FullPageSpinner />;
   if (auth.status === 'authenticated') {
     const next = safeNextPath(new URLSearchParams(location.search).get('next'));
-    return <Navigate to={auth.me?.mfaSetupRequired ? '/setup-2fa' : next ?? landingPath(auth.me, auth.surface)} replace />;
+    return <Navigate to={next ?? landingPath(auth.me, auth.surface)} replace />;
   }
   return <Outlet />;
 }

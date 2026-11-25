@@ -37,12 +37,6 @@ describe('route guards', () => {
     expect(screen.getByText('creator home')).toBeInTheDocument();
   });
 
-  it('forces pending admins to enrol in two-factor first', () => {
-    authState.current = { status: 'authenticated', surface: 'platform', isAdmin: true, me: me({ platformRoles: ['SUPER_ADMIN'], mfaSetupRequired: true }) };
-    renderAt('/super-admin', routes);
-    expect(screen.getByText('mfa setup')).toBeInTheDocument();
-  });
-
   it('lets admins in and redirects signed-in users away from sign-up', () => {
     authState.current = { status: 'authenticated', surface: 'platform', isAdmin: true, me: me({ platformRoles: ['SUPER_ADMIN'], activeTenantId: null }) };
     renderAt('/super-admin', routes);

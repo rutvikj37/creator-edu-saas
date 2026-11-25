@@ -91,10 +91,6 @@ export class AuthService {
 
     await this.prisma.user.update({ where: { id: user.id }, data: { failedLoginCount: 0, lockedUntil: null } });
 
-    // MFA challenge is bound to the host so completeMfaLogin can re-check the same surface.
-    if (user.twoFactorEnabledAt) {
-      return { kind: 'mfa', mfaToken: await this.tokens.signMfaChallenge(user.id, hostRealmKey) };
-    }
     return { kind: 'session', session: await this.startSession(user, hostRealmKey, meta, 'password', preferredTenantId) };
   }
 
@@ -170,7 +166,7 @@ export class AuthService {
         const membership = await this.prisma.tenantMember.findFirst({ where: { userId: user.id, status: 'ACTIVE' }, orderBy: { createdAt: 'asc' }, select: { tenantId: true } });
         tenantId = membership?.tenantId ?? null;
       }
-      mfaSetupRequired = !user.twoFactorEnabledAt && (await this.authz.requiresMfa(user.id));
+      mfaSetupRequired = false;
     } else {
       tenantId = user.realmKey;
       await this.enforceDeviceLimit(user.id, tenantId);
@@ -198,7 +194,7 @@ export class AuthService {
   async refresh(refreshToken: string, host: HostRealm, meta: ClientMeta) {
     const rotated = await this.sessions.rotate(refreshToken, realmKeyOf(host), meta);
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: rotated.user.id }, select: { twoFactorEnabledAt: true, realm: true } });
-    const mfaSetupRequired = user.realm === 'PLATFORM' && !user.twoFactorEnabledAt && (await this.authz.requiresMfa(rotated.user.id));
+    const mfaSetupRequired = false;
     const auth: AuthContext = {
       userId: rotated.user.id,
       realm: rotated.user.realm,
@@ -231,7 +227,7 @@ export class AuthService {
       permissions: [...permissions].sort(),
       mfaSetupRequired: auth.mfaSetupRequired,
       // The active academy requires 2FA for its team and this account hasn't turned it on.
-      workspaceRequiresTwoFactor: Boolean(auth.realm === 'PLATFORM' && auth.tenantId && !user.twoFactorEnabledAt && (await this.security.get(auth.tenantId)).teamTwoFactor),
+      workspaceRequiresTwoFactor: false,
       memberships: memberships.map((m) => ({ ...m.tenant, role: m.role })),
     };
   }

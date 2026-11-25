@@ -63,7 +63,6 @@ export class AcademySecurityService {
     if (!/^#[0-9A-Fa-f]{6}$/.test(next.pdfWatermark.color)) errors.push({ field: 'pdfWatermark.color', message: 'Use a hex colour like #100F0F' });
     if (!['off', 'static', 'dynamic'].includes(next.videoWatermark.mode)) errors.push({ field: 'videoWatermark.mode', message: 'Choose off, static or dynamic' });
     if (!int(next.videoWatermark.showForSec, 1, 600) || !int(next.videoWatermark.everySec, 1, 3600)) errors.push({ field: 'videoWatermark', message: 'Seconds must be whole numbers (show 1–600, every 1–3600)' });
-    if (patch.teamTwoFactor && !cur.teamTwoFactor && !actor.twoFactorEnabled) errors.push({ field: 'teamTwoFactor', message: 'Turn on two-factor authentication for your own account first, so you don’t lock yourself out.' });
     if (errors.length) throw AppException.validation(errors);
     await this.prisma.tenantSetting.upsert({
       where: { tenantId_key: { tenantId, key: SECURITY_KEY } },

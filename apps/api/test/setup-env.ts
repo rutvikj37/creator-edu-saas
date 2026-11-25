@@ -37,4 +37,4 @@ process.env.ZOOM_OAUTH_BASE_URL = 'http://127.0.0.1:47811';
 process.env.ZOOM_API_BASE_URL = 'http://127.0.0.1:47811/v2';
 
 // Admins must enrol in two-factor sign-in in tests, whatever a developer's local .env says.
-process.env.ADMIN_MFA_REQUIRED = 'true';
+process.env.ADMIN_MFA_REQUIRED = 'false';

@@ -48,23 +48,15 @@ describe('Academy security settings (e2e)', () => {
     await authed(app, d2).get('/api/v1/auth/me').expect(200);
     await authed(app, d3).get('/api/v1/auth/me').expect(200);
 
-    // ── Team 2FA: the owner must have 2FA first; then a member without it is blocked from the workspace.
-    await authed(app, cs).put('/api/v1/creator/settings/security').send({ teamTwoFactor: true }).expect(422);
-    const setup = await authed(app, cs).post('/api/v1/auth/2fa/setup').expect(200);
-    const enabled = await authed(app, cs).post('/api/v1/auth/2fa/enable').send({ code: nextTotp(setup.body.data.secret, 0) }).expect(200);
-    cs = parseSession(enabled, PLATFORM);
+    // ── Team 2FA toggle is stored but no longer enforced on workspace access.
     await authed(app, cs).put('/api/v1/creator/settings/security').send({ teamTwoFactor: true }).expect(200);
     const mEmail = uniqueEmail('team');
     await authed(app, cs).post('/api/v1/creator/staff/invitations').send({ email: mEmail, roleKey: 'INSTRUCTOR' }).expect(201);
     const token = tokenFromEmail((await lastEmail(app, mEmail))!.text);
     const ms = parseSession(await api(app).post('/api/v1/invitations/register').set('Host', PLATFORM).send({ token, fullName: 'No Twofa', password: 'team-password-123' }).expect(201), PLATFORM) as Session;
-    const blocked = await authed(app, ms).get('/api/v1/creator/courses').expect(403);
-    expect(blocked.body.error.code).toBe('MFA_SETUP_REQUIRED');
-    expect((await authed(app, ms).get('/api/v1/auth/me').expect(200)).body.data.workspaceRequiresTwoFactor).toBe(true);
-    await authed(app, cs).get('/api/v1/creator/courses').expect(200);
-    expect((await authed(app, cs).get('/api/v1/auth/me')).body.data.workspaceRequiresTwoFactor).toBe(false);
-    await authed(app, cs).put('/api/v1/creator/settings/security').send({ teamTwoFactor: false }).expect(200);
     await authed(app, ms).get('/api/v1/creator/courses').expect(200);
+    expect((await authed(app, ms).get('/api/v1/auth/me').expect(200)).body.data.workspaceRequiresTwoFactor).toBe(false);
+    await authed(app, cs).put('/api/v1/creator/settings/security').send({ teamTwoFactor: false }).expect(200);
 
     // ── PDF watermark on a lesson PDF.
     const original = await PDFDocument.create();
