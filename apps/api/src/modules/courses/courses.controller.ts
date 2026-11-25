@@ -29,6 +29,13 @@ export class CoursesController {
     return this.courses.create(dto, auth);
   }
 
+  @Get('instructor-candidates')
+  @RequirePermissions(PERMISSIONS.COURSES_MANAGE)
+  @ApiOperation({ summary: 'Active staff who can be assigned as instructors on a course' })
+  instructorCandidates() {
+    return this.courses.instructorCandidates();
+  }
+
   @Get(':id')
   @RequirePermissions(PERMISSIONS.COURSES_READ)
   get(@Param('id') id: string, @Req() req: AppRequest) {

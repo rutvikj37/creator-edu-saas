@@ -6,7 +6,7 @@ import { PageHeader } from '../../components/layout/PageHeader.jsx';
 import { Alert } from '../../components/auth/Alert.jsx';
 import { FileUpload } from '../../components/forms/FileUpload.jsx';
 import { RichTextEditor } from '../../components/forms/RichTextEditor.jsx';
-import { Badge, Button, Card, CardBody, CardHeader, Checkbox, ConfirmDialog, ErrorState, Input, Modal, Select, Skeleton, StatusBadge, Switch, Tabs, Textarea, toast } from '../../components/ui/index.js';
+import { Button, Card, CardBody, CardHeader, Checkbox, ConfirmDialog, ErrorState, Input, Modal, Select, Skeleton, StatusBadge, Switch, Tabs, Textarea, toast } from '../../components/ui/index.js';
 import { coursesApi } from '../../services/api/creator.js';
 import { platformApi } from '../../services/api/platform.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -14,6 +14,7 @@ import { formatDate } from '../../utils/format.js';
 import { CurriculumBuilder } from './CurriculumBuilder.jsx';
 import { LessonEditor } from './LessonEditor.jsx';
 import { CourseStudentsTab } from './CourseStudentsTab.jsx';
+import { CourseInstructorsEditor } from './CourseInstructorsEditor.jsx';
 
 function ListEditor({ label, values, onChange, placeholder }) {
   const [text, setText] = useState('');
@@ -202,7 +203,12 @@ export function CourseEditorPage() {
             </div>
             <Input label="URL slug" value={form.slug} onChange={set('slug')} error={errors.slug} hint="Used in the course address on your academy site." />
             <Select label="Visibility" value={form.visibility} onChange={set('visibility')} options={[{ value: 'PUBLIC', label: 'Public — listed on your site' }, { value: 'UNLISTED', label: 'Unlisted — direct link only' }, { value: 'PRIVATE', label: 'Private — enrolled students only' }]} />
-            <div><p className="text-sm font-medium text-fg-2">Instructors</p><div className="mt-2 flex flex-wrap gap-1">{c.instructors.map((i) => <Badge key={i.id}>{i.fullName}{i.isPrimary ? ' (primary)' : ''}</Badge>)}</div></div>
+            <CourseInstructorsEditor
+              courseId={id}
+              instructors={c.instructors}
+              readOnly={readOnly}
+              onSaved={(list) => qc.setQueryData(['course', id], (prev) => (prev ? { ...prev, instructors: list } : prev))}
+            />
           </Advanced>
 
           <Advanced title="SEO" defaultOpen={openSeo}>

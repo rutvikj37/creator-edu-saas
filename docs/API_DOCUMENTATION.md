@@ -41,7 +41,7 @@ Status: **Phase 0 design**. Live docs will be served by Swagger at `/api/docs` (
 | 4 | `GET/PUT /creator/academy` · `GET/PUT /creator/academy/business` | academy.manage | Profile, branding, business |
 | 4 | `GET /creator/onboarding` · `PUT /creator/onboarding/step` · `POST /creator/onboarding/publish` | workspace | Onboarding |
 | 4 | `GET /creator/dashboard` | workspace | Creator KPIs |
-| 4 | `GET/POST /creator/courses` · `GET/PATCH/DELETE /:id` · `GET /:id/publish-check` · `POST /:id/publish|unpublish|archive|restore|duplicate` · `PUT /:id/instructors` | courses.read / courses.manage | Courses |
+| 4 | `GET/POST /creator/courses` · `GET /instructor-candidates` · `GET/PATCH/DELETE /:id` · `GET /:id/publish-check` · `POST /:id/publish|unpublish|archive|restore|duplicate` · `PUT /:id/instructors` | courses.read / courses.manage | Courses |
 | 4 | `GET /creator/courses/:id/curriculum` · `PUT /:id/curriculum/order` · `POST/PATCH/DELETE /:id/sections[/:sid]` · `POST/PATCH/DELETE /:id/lessons[/:lid]` | courses.manage | Curriculum |
 | 4 | `GET /creator/staff` · `POST/DELETE /creator/staff/invitations[/:id]` · `PATCH/DELETE /creator/staff/:memberId` · `GET /invitations/:token` · `POST /invitations/accept` · `POST /invitations/register` | staff.manage / public | Staff |
 | 5 | `GET /public/courses` · `GET /public/courses/:slug` · `GET /public/courses/:slug/preview/:lessonId` · `GET /public/certificates/:number` | public | Catalogue, previews, verification |

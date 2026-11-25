@@ -108,13 +108,30 @@ export class CoursesService {
 
   async detail(id: string, apiOrigin: string) {
     const c = await this.get(id);
-    const instructors = await this.db.courseInstructor.findMany({ where: { courseId: id } });
-    const users = await this.prisma.user.findMany({ where: { id: { in: instructors.map((i) => i.userId) } }, select: { id: true, fullName: true, email: true } });
     return this.present(c, {
       thumbnailUrl: await this.files.urlFor(c.thumbnailFileId, apiOrigin),
       bannerUrl: await this.files.urlFor(c.bannerFileId, apiOrigin),
-      instructors: instructors.map((i) => ({ ...users.find((u) => u.id === i.userId), isPrimary: i.isPrimary })),
+      instructors: await this.presentInstructors(id),
     });
+  }
+
+  /** Active academy staff that can be linked as course instructors (courses.manage — not staff.manage). */
+  async instructorCandidates() {
+    const members = await this.db.tenantMember.findMany({
+      where: { status: 'ACTIVE' },
+      orderBy: { createdAt: 'asc' },
+      select: { role: { select: { key: true, name: true } }, user: { select: { id: true, fullName: true, email: true } } },
+    });
+    return members.map((m) => ({ id: m.user.id, fullName: m.user.fullName, email: m.user.email, role: m.role }));
+  }
+
+  private async presentInstructors(courseId: string) {
+    const instructors = await this.db.courseInstructor.findMany({ where: { courseId } });
+    const users = await this.prisma.user.findMany({ where: { id: { in: instructors.map((i) => i.userId) } }, select: { id: true, fullName: true, email: true } });
+    return instructors
+      .map((i) => ({ ...users.find((u) => u.id === i.userId), isPrimary: i.isPrimary }))
+      .filter((i) => i.id)
+      .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary));
   }
 
   async update(id: string, dto: UpdateCourseDto, actor: Actor, apiOrigin: string) {
@@ -242,14 +259,16 @@ export class CoursesService {
   async setInstructors(id: string, userIds: string[]) {
     const tenantId = this.ctx.requireTenantId();
     await this.get(id);
-    const members = await this.db.tenantMember.findMany({ where: { userId: { in: userIds }, status: 'ACTIVE' }, select: { userId: true } });
-    if (members.length !== new Set(userIds).size) throw AppException.validation([{ field: 'userIds', message: 'Instructors must be active staff of this academy' }]);
-    if (!userIds.length) throw AppException.validation([{ field: 'userIds', message: 'A course needs at least one instructor' }]);
+    const unique = [...new Set(userIds)];
+    if (!unique.length) throw AppException.validation([{ field: 'userIds', message: 'A course needs at least one instructor' }]);
+    const members = await this.db.tenantMember.findMany({ where: { userId: { in: unique }, status: 'ACTIVE' }, select: { userId: true } });
+    if (members.length !== unique.length) throw AppException.validation([{ field: 'userIds', message: 'Instructors must be active staff of this academy' }]);
+    // Preserve caller order: first id is primary.
     await this.prisma.$transaction([
-      this.prisma.courseInstructor.deleteMany({ where: { tenantId, courseId: id, userId: { notIn: userIds } } }),
-      ...userIds.map((userId, i) => this.prisma.courseInstructor.upsert({ where: { tenantId_courseId_userId: { tenantId, courseId: id, userId } }, update: { isPrimary: i === 0 }, create: { tenantId, courseId: id, userId, isPrimary: i === 0 } })),
+      this.prisma.courseInstructor.deleteMany({ where: { tenantId, courseId: id, userId: { notIn: unique } } }),
+      ...unique.map((userId, i) => this.prisma.courseInstructor.upsert({ where: { tenantId_courseId_userId: { tenantId, courseId: id, userId } }, update: { isPrimary: i === 0 }, create: { tenantId, courseId: id, userId, isPrimary: i === 0 } })),
     ]);
-    return this.db.courseInstructor.findMany({ where: { courseId: id } });
+    return this.presentInstructors(id);
   }
 
   // ── curriculum ────────────────────────────────────────────

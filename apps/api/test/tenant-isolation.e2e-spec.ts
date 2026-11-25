@@ -30,7 +30,7 @@ const WORKSPACE_ROUTES_COVERED = [
   'POST /api/v1/creator/files', 'POST /api/v1/creator/files/:id/complete',
   'GET /api/v1/creator/academy', 'PUT /api/v1/creator/academy', 'GET /api/v1/creator/academy/business', 'PUT /api/v1/creator/academy/business',
   'GET /api/v1/creator/onboarding', 'PUT /api/v1/creator/onboarding/step', 'POST /api/v1/creator/onboarding/publish', 'GET /api/v1/creator/dashboard',
-  'GET /api/v1/creator/courses', 'POST /api/v1/creator/courses', 'GET /api/v1/creator/courses/:id', 'PATCH /api/v1/creator/courses/:id', 'DELETE /api/v1/creator/courses/:id',
+  'GET /api/v1/creator/courses', 'POST /api/v1/creator/courses', 'GET /api/v1/creator/courses/instructor-candidates', 'GET /api/v1/creator/courses/:id', 'PATCH /api/v1/creator/courses/:id', 'DELETE /api/v1/creator/courses/:id',
   'GET /api/v1/creator/courses/:id/publish-check', 'POST /api/v1/creator/courses/:id/publish', 'POST /api/v1/creator/courses/:id/unpublish', 'POST /api/v1/creator/courses/:id/archive',
   'POST /api/v1/creator/courses/:id/restore', 'POST /api/v1/creator/courses/:id/duplicate', 'PUT /api/v1/creator/courses/:id/instructors', 'GET /api/v1/creator/courses/:id/curriculum',
   'PUT /api/v1/creator/courses/:id/curriculum/order', 'POST /api/v1/creator/courses/:id/sections', 'PATCH /api/v1/creator/courses/:id/sections/:sectionId',
