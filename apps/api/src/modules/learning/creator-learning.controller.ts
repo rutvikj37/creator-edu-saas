@@ -129,6 +129,21 @@ export class CreatorLearningController {
   @Post('quiz-attempts/:attemptId/grade') @HttpCode(200) @RequirePermissions(PERMISSIONS.ASSESSMENTS_GRADE)
   gradeAttempt(@Param('attemptId') id: string, @Body() dto: ManualGradeDto, @CurrentAuth() auth: AuthContext) { return this.quizzes.grade(id, dto, auth.userId); }
 
+  // academy-wide assessment pages (Test reports, Quiz reviews, Assignments)
+  @Get('assessments/quizzes') @RequirePermissions(PERMISSIONS.ASSESSMENTS_GRADE)
+  testReport(@Query('courseId') courseId?: string) { return this.quizzes.report(courseId || undefined); }
+
+  @Get('assessments/quiz-attempts') @RequirePermissions(PERMISSIONS.ASSESSMENTS_GRADE)
+  quizReviews(@Query('status') status?: string, @Query('courseId') courseId?: string) {
+    return this.quizzes.reviewQueue({ status: status === 'GRADED' ? 'GRADED' : 'SUBMITTED', courseId: courseId || undefined });
+  }
+
+  @Get('assessments/submissions') @RequirePermissions(PERMISSIONS.ASSESSMENTS_GRADE)
+  allSubmissions(@Req() req: AppRequest, @Query('status') status?: string, @Query('courseId') courseId?: string) {
+    const st = status === 'SUBMITTED' || status === 'RETURNED' || status === 'GRADED' ? status : undefined;
+    return this.assignments.allSubmissions({ status: st, courseId: courseId || undefined }, apiOrigin(req));
+  }
+
   // assignments
   @Get('courses/:id/lessons/:lessonId/assignment') @RequirePermissions(PERMISSIONS.COURSES_READ)
   assignment(@Param('id') id: string, @Param('lessonId') l: string) { return this.assignments.forLesson(id, l); }

@@ -3,6 +3,7 @@ import { http } from './client.js';
 const d = (r) => r.data;
 
 export const creatorLiveApi = {
+  webinarReport: (period) => http.get('/creator/live/webinars/report', { params: { period } }).then(d),
   providers: () => http.get('/creator/live/providers').then(d),
   integrations: () => http.get('/creator/live/integrations').then(d),
   connectIntegration: (provider) => http.post(`/creator/live/integrations/${provider}/connect`).then(d),

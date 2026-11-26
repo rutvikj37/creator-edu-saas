@@ -106,6 +106,10 @@ export class CreatorLiveController {
   @ApiOperation({ summary: 'Which classroom options are available on this platform' })
   providers() { return this.live.providers(); }
 
+  @Get('webinars/report') @RequirePermissions(PERMISSIONS.LIVE_MANAGE)
+  @ApiOperation({ summary: 'Webinars report: registrations, attendees and revenue per webinar' })
+  webinarReport(@Query('period') period?: string) { return this.live.webinarReport(period === 'past' ? 'past' : 'upcoming'); }
+
   @Get('classes') @RequirePermissions(PERMISSIONS.LIVE_MANAGE)
   list(@Req() req: AppRequest, @Query('kind') kind?: 'CLASS' | 'WEBINAR') { return this.live.list({ kind: kind === 'WEBINAR' || kind === 'CLASS' ? kind : undefined }, apiOrigin(req)); }
 

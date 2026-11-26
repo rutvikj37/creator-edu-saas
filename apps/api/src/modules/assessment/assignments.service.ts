@@ -59,6 +59,30 @@ export class AssignmentsService {
     return this.db.assignmentSubmission.update({ where: { id: submissionId }, data: { points: dto.points, feedback: dto.feedback ?? null, status: dto.status, gradedById: graderId, gradedAt: new Date() } });
   }
 
+  /** Assignments page: submissions across all courses with lesson/course titles and status counts. */
+  async allSubmissions(params: { status?: 'SUBMITTED' | 'RETURNED' | 'GRADED'; courseId?: string }, apiOrigin: string) {
+    const assignments = await this.db.assignment.findMany({ where: params.courseId ? { courseId: params.courseId } : {}, select: { id: true, lessonId: true, courseId: true, maxPoints: true, dueAt: true } });
+    const lessons = await this.db.courseLesson.findMany({ where: { id: { in: assignments.map((a) => a.lessonId) } }, select: { id: true, title: true } });
+    const courses = await this.db.course.findMany({ where: { id: { in: [...new Set(assignments.map((a) => a.courseId))] }, deletedAt: null }, select: { id: true, title: true } });
+    const live = assignments.filter((a) => courses.some((c) => c.id === a.courseId));
+    const byId = new Map(live.map((a) => [a.id, a]));
+    const ids = [...byId.keys()];
+    const counts = await this.db.assignmentSubmission.groupBy({ by: ['status'], where: { assignmentId: { in: ids } }, _count: { _all: true } });
+    const rows = await this.db.assignmentSubmission.findMany({ where: { assignmentId: { in: ids }, ...(params.status ? { status: params.status } : {}) }, orderBy: { submittedAt: params.status === 'SUBMITTED' ? 'asc' : 'desc' }, take: 500 });
+    const users = await this.prisma.user.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.userId))] } }, select: { id: true, fullName: true, email: true } });
+    const count = (st: string) => counts.find((c) => c.status === st)?._count._all ?? 0;
+    return {
+      totals: { assignments: live.length, submissions: counts.reduce((n, c) => n + c._count._all, 0), toReview: count('SUBMITTED'), graded: count('GRADED'), returned: count('RETURNED') },
+      items: await Promise.all(rows.map(async (r) => {
+        const a = byId.get(r.assignmentId)!;
+        return {
+          ...r, files: await this.fileViews(r.fileAssetIds, apiOrigin), student: users.find((u) => u.id === r.userId) ?? null,
+          maxPoints: a.maxPoints, dueAt: a.dueAt, courseId: a.courseId, courseTitle: courses.find((c) => c.id === a.courseId)!.title, lessonTitle: lessons.find((l) => l.id === a.lessonId)?.title ?? 'Assignment',
+        };
+      })),
+    };
+  }
+
   // ── student ───────────────────────────────────────────────
   async forStudent(userId: string, lessonId: string, apiOrigin: string) {
     const { lesson, enrollment } = await this.learning.accessibleLesson(userId, lessonId);

@@ -84,6 +84,13 @@ describe('Paid webinars (e2e)', () => {
     expect(full.body.error.message).toBe('This webinar is full.');
     expect((await api(app).get('/api/v1/public/webinars/tax-saving-masterclass').set('Host', host)).body.data).toMatchObject({ seatsLeft: 0, open: false });
 
+    // Webinars report: registrations and revenue per webinar, 30-day totals.
+    const rep = (await authed(app, cs).get('/api/v1/creator/live/webinars/report').expect(200)).body.data;
+    expect(rep.counts).toEqual({ upcoming: 1, past: 0 });
+    expect(rep.items[0]).toMatchObject({ id: web.id, title: 'Tax Saving Masterclass', registrations: 2, attendees: 1, revenue: '548.00', upcoming: true });
+    expect(rep.last30Days).toMatchObject({ registrations: 2, participants: 1, revenue: '548.00' }); // the ticket holder joined above
+    expect((await authed(app, cs).get('/api/v1/creator/live/webinars/report?period=past').expect(200)).body.data.items).toEqual([]);
+
     // Full refund with revoke cancels the ticket: the link stops working and the seat frees up.
     await authed(app, cs).post(`/api/v1/creator/orders/${order.id}/refunds`).send({ revokeAccess: true, reason: 'Cannot attend' }).expect(201);
     expect((await prisma.webinarRegistration.findUniqueOrThrow({ where: { id: reg.id } })).cancelledAt).not.toBeNull();

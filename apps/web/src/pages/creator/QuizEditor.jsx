@@ -57,7 +57,7 @@ export function QuestionModal({ initial, onClose, onSave, saving, error, withTag
   );
 }
 
-function GradeModal({ attemptId, onClose, onGraded }) {
+export function GradeModal({ attemptId, onClose, onGraded }) {
   const q = useQuery({ queryKey: ['creator', 'attempt', attemptId], queryFn: () => creatorLearnApi.attemptDetail(attemptId), enabled: Boolean(attemptId) });
   const [grades, setGrades] = useState({});
   const save = useMutation({ mutationFn: () => creatorLearnApi.gradeAttempt(attemptId, Object.entries(grades).map(([questionId, g]) => ({ questionId, points: Number(g.points), feedback: g.feedback || undefined }))), onSuccess: () => { toast.success('Grades saved'); onGraded(); onClose(); }, onError: (e) => toast.error(e.details?.[0]?.message ?? e.message) });

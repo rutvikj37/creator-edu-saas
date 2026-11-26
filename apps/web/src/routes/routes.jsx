@@ -89,6 +89,10 @@ const CreatorHelpdeskTicketPage = lazyNamed(() => import('../pages/support/Helpd
 const PlatformChatInboxPage = lazyNamed(() => import('../pages/chat/ChatPages.jsx'), 'PlatformChatInboxPage');
 const LiveIntegrationsPage = lazyNamed(() => import('../pages/creator/LiveIntegrationsPage.jsx'), 'LiveIntegrationsPage');
 const QuestionBankPage = lazyNamed(() => import('../pages/creator/QuestionBankPage.jsx'), 'QuestionBankPage');
+const TestReportsPage = lazyNamed(() => import('../pages/creator/AssessmentPages.jsx'), 'TestReportsPage');
+const QuizReviewsPage = lazyNamed(() => import('../pages/creator/AssessmentPages.jsx'), 'QuizReviewsPage');
+const AssignmentsPage = lazyNamed(() => import('../pages/creator/AssessmentPages.jsx'), 'AssignmentsPage');
+const WebinarsReportPage = lazyNamed(() => import('../pages/creator/AssessmentPages.jsx'), 'WebinarsReportPage');
 const ReviewsPage = lazyNamed(() => import('../pages/creator/ReviewsPage.jsx'), 'ReviewsPage');
 const BundlesPage = lazyNamed(() => import('../pages/creator/BundlesPage.jsx'), 'BundlesPage');
 const BundlePage = lazyNamed(() => import('../pages/public/BundlePage.jsx'), 'BundlePage');
@@ -190,6 +194,9 @@ const creatorWorkspaceRoutes = {
         { path: '/creator/bundles', element: page(BundlesPage) },
         { path: '/creator/reviews', element: page(ReviewsPage) },
         { path: '/creator/question-bank', element: page(QuestionBankPage) },
+        { path: '/creator/test-reports', element: page(TestReportsPage) },
+        { path: '/creator/quiz-reviews', element: page(QuizReviewsPage) },
+        { path: '/creator/assignments', element: page(AssignmentsPage) },
         { path: '/creator/integrations', element: page(LiveIntegrationsPage) },
         { path: '/creator/products', element: page(ProductsPage) },
         { path: '/creator/coaching', element: page(CoachingPage) },
@@ -214,6 +221,7 @@ const creatorWorkspaceRoutes = {
         { path: '/creator/memberships/:id/edit', element: page(MembershipBuilderPage) },
         { path: '/creator/analytics', element: page(AnalyticsPage) },
         { path: '/creator/reports', element: page(ReportsPage) },
+        { path: '/creator/reports/webinars', element: page(WebinarsReportPage) },
         { path: '/creator/settlements', element: page(SettlementsPage) },
         { path: '/creator/ai', element: page(AiStudioPage) },
         { path: '/creator/discussions', element: page(DiscussionsPage) },

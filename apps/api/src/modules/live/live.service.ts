@@ -184,6 +184,59 @@ export class LiveService {
     return created;
   }
 
+  /**
+   * Webinars report: registrations, attendees and revenue per webinar (Upcoming = has a session
+   * still to come), plus 30-day totals. Attendees are distinct non-host identities that joined.
+   */
+  async webinarReport(period: 'upcoming' | 'past') {
+    const now = new Date();
+    const since = new Date(now.getTime() - 30 * 86_400_000);
+    const webinars = await this.db.liveClass.findMany({ where: { kind: 'WEBINAR' }, select: { id: true, title: true, status: true, currency: true, priceAmount: true }, take: 500 });
+    const ids = webinars.map((w) => w.id);
+    const sessions = ids.length ? await this.db.liveSession.findMany({ where: { liveClassId: { in: ids } }, select: { id: true, liveClassId: true, startsAt: true, status: true }, orderBy: { startsAt: 'asc' } }) : [];
+    const sessionIds = sessions.map((x) => x.id);
+    const [regs, regs30, attendance, items] = await Promise.all([
+      ids.length ? this.db.webinarRegistration.groupBy({ by: ['liveClassId'], where: { liveClassId: { in: ids }, cancelledAt: null }, _count: { _all: true } }) : [],
+      ids.length ? this.db.webinarRegistration.count({ where: { liveClassId: { in: ids }, cancelledAt: null, createdAt: { gte: since } } }) : 0,
+      sessionIds.length ? this.db.liveAttendance.findMany({ where: { sessionId: { in: sessionIds }, role: { not: 'host' } }, select: { sessionId: true, identity: true, joinedAt: true }, distinct: ['sessionId', 'identity'] }) : [],
+      ids.length ? this.db.orderItem.findMany({ where: { liveClassId: { in: ids }, order: { status: 'PAID' } }, select: { liveClassId: true, totalAmount: true, order: { select: { paidAt: true, currency: true } } } }) : [],
+    ]);
+    const sessionClass = new Map(sessions.map((x) => [x.id, x.liveClassId]));
+    const attendees = new Map<string, Set<string>>();
+    const recent = new Set<string>();
+    for (const a of attendance) {
+      const cls = sessionClass.get(a.sessionId)!;
+      if (!attendees.has(cls)) attendees.set(cls, new Set());
+      attendees.get(cls)!.add(a.identity);
+      if (a.joinedAt >= since) recent.add(`${cls}:${a.identity}`);
+    }
+    const revenue = new Map<string, number>();
+    let revenue30 = 0;
+    for (const i of items) {
+      revenue.set(i.liveClassId!, (revenue.get(i.liveClassId!) ?? 0) + Number(i.totalAmount));
+      if (i.order.paidAt && i.order.paidAt >= since) revenue30 += Number(i.totalAmount);
+    }
+    const rows = webinars.map((w) => {
+      const own = sessions.filter((x) => x.liveClassId === w.id);
+      const next = own.find((x) => x.startsAt >= now && x.status !== 'CANCELLED');
+      const lastPast = [...own].reverse().find((x) => x.startsAt < now);
+      return {
+        id: w.id, title: w.title, cancelled: w.status === 'CANCELLED', currency: w.currency ?? 'INR',
+        startsAt: (next ?? lastPast ?? own[0])?.startsAt ?? null, upcoming: Boolean(next) && w.status !== 'CANCELLED',
+        registrations: regs.find((r) => r.liveClassId === w.id)?._count._all ?? 0,
+        attendees: attendees.get(w.id)?.size ?? 0,
+        revenue: (revenue.get(w.id) ?? 0).toFixed(2),
+      };
+    });
+    const list = rows.filter((r) => (period === 'upcoming' ? r.upcoming : !r.upcoming))
+      .sort((a, b) => (period === 'upcoming' ? +(a.startsAt ?? 0) - +(b.startsAt ?? 0) : +(b.startsAt ?? 0) - +(a.startsAt ?? 0)));
+    return {
+      last30Days: { registrations: regs30, participants: recent.size, revenue: revenue30.toFixed(2) },
+      counts: { upcoming: rows.filter((r) => r.upcoming).length, past: rows.filter((r) => !r.upcoming).length },
+      items: list,
+    };
+  }
+
   async list(params: { kind?: 'CLASS' | 'WEBINAR' }, origin?: string) {
     const rows = await this.db.liveClass.findMany({
       where: { ...(params.kind ? { kind: params.kind } : {}) },

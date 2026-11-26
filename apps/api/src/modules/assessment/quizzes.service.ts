@@ -107,6 +107,68 @@ export class QuizzesService {
     return rows.map((r) => ({ ...r, score: r.score === null ? null : Number(r.score), maxScore: r.maxScore === null ? null : Number(r.maxScore), percent: r.percent === null ? null : Number(r.percent), student: users.find((u) => u.id === r.userId) }));
   }
 
+  /** Lesson and course titles for a set of lessons (deleted courses are left out). */
+  private async lessonTitles(lessonIds: string[]) {
+    const lessons = await this.db.courseLesson.findMany({ where: { id: { in: [...new Set(lessonIds)] } }, select: { id: true, title: true, courseId: true } });
+    const courses = await this.db.course.findMany({ where: { id: { in: [...new Set(lessons.map((l) => l.courseId))] }, deletedAt: null }, select: { id: true, title: true } });
+    const course = new Map(courses.map((c) => [c.id, c]));
+    return new Map(lessons.filter((l) => course.has(l.courseId)).map((l) => [l.id, { lessonTitle: l.title, courseId: l.courseId, courseTitle: course.get(l.courseId)!.title }]));
+  }
+
+  /** Test reports: every quiz with its candidates, completions, pass rate and average score. */
+  async report(courseId?: string) {
+    const quizzes = await this.db.quiz.findMany({ where: courseId ? { courseId } : {}, select: { id: true, lessonId: true } });
+    const titles = await this.lessonTitles(quizzes.map((q) => q.lessonId));
+    const ids = quizzes.filter((q) => titles.has(q.lessonId)).map((q) => q.id);
+    const done = { quizId: { in: ids }, status: { not: 'IN_PROGRESS' as const } };
+    const [byUser, byStatus, passed] = await Promise.all([
+      this.db.quizAttempt.groupBy({ by: ['quizId', 'userId'], where: done, _count: { _all: true } }),
+      this.db.quizAttempt.groupBy({ by: ['quizId', 'status'], where: done, _count: { _all: true }, _avg: { percent: true } }),
+      this.db.quizAttempt.groupBy({ by: ['quizId'], where: { ...done, passed: true }, _count: { _all: true } }),
+    ]);
+    const items = quizzes.filter((q) => titles.has(q.lessonId)).map((q) => {
+      const rows = byStatus.filter((r) => r.quizId === q.id);
+      const graded = rows.find((r) => r.status === 'GRADED');
+      const completions = rows.reduce((n, r) => n + r._count._all, 0);
+      return {
+        quizId: q.id, lessonId: q.lessonId, ...titles.get(q.lessonId)!,
+        candidates: byUser.filter((r) => r.quizId === q.id).length,
+        completions,
+        pendingReview: rows.find((r) => r.status === 'SUBMITTED')?._count._all ?? 0,
+        passed: passed.find((r) => r.quizId === q.id)?._count._all ?? 0,
+        averagePercent: graded?._avg.percent === null || graded?._avg.percent === undefined ? null : Math.round(Number(graded._avg.percent) * 10) / 10,
+      };
+    }).sort((a, b) => b.completions - a.completions || a.lessonTitle.localeCompare(b.lessonTitle));
+    return {
+      totals: {
+        quizzes: items.length,
+        candidates: new Set(byUser.map((r) => r.userId)).size,
+        completions: items.reduce((n, i) => n + i.completions, 0),
+        pendingReview: items.reduce((n, i) => n + i.pendingReview, 0),
+      },
+      items,
+    };
+  }
+
+  /** Quiz reviews: submitted attempts across all courses, newest first (SUBMITTED = waiting for manual grading). */
+  async reviewQueue(params: { status?: 'SUBMITTED' | 'GRADED'; courseId?: string }) {
+    const quizzes = await this.db.quiz.findMany({ where: params.courseId ? { courseId: params.courseId } : {}, select: { id: true, lessonId: true, passPercent: true } });
+    const titles = await this.lessonTitles(quizzes.map((q) => q.lessonId));
+    const quiz = new Map(quizzes.filter((q) => titles.has(q.lessonId)).map((q) => [q.id, q]));
+    const status = params.status ?? 'SUBMITTED';
+    const rows = await this.db.quizAttempt.findMany({ where: { quizId: { in: [...quiz.keys()] }, status }, orderBy: { submittedAt: status === 'SUBMITTED' ? 'asc' : 'desc' }, take: 500 });
+    const users = await this.prisma.user.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.userId))] } }, select: { id: true, fullName: true, email: true } });
+    const waiting = status === 'SUBMITTED' ? rows.length : await this.db.quizAttempt.count({ where: { quizId: { in: [...quiz.keys()] }, status: 'SUBMITTED' } });
+    return {
+      waiting,
+      items: rows.map((r) => ({
+        id: r.id, quizId: r.quizId, attemptNo: r.attemptNo, status: r.status, submittedAt: r.submittedAt,
+        score: r.score === null ? null : Number(r.score), maxScore: r.maxScore === null ? null : Number(r.maxScore), percent: r.percent === null ? null : Number(r.percent), passed: r.passed,
+        ...titles.get(quiz.get(r.quizId)!.lessonId)!, student: users.find((u) => u.id === r.userId) ?? null,
+      })),
+    };
+  }
+
   // ── student side ──────────────────────────────────────────
   private async quizForStudent(userId: string, lessonId: string) {
     const { lesson, enrollment } = await this.learning.accessibleLesson(userId, lessonId);

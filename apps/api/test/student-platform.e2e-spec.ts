@@ -114,9 +114,19 @@ describe('Student platform (e2e)', () => {
     const quizRow = await prisma.quiz.findFirstOrThrow({ where: { lessonId: quiz.id } });
     const attempts = (await authed(app, cs).get(`/api/v1/creator/quizzes/${quizRow.id}/attempts`).expect(200)).body.data;
     expect(attempts[0]).toMatchObject({ status: 'SUBMITTED', student: { email: s.email } });
+    // Quiz reviews: the submitted attempt waits for manual grading across all courses.
+    const queue = (await authed(app, cs).get('/api/v1/creator/assessments/quiz-attempts').expect(200)).body.data;
+    expect(queue.waiting).toBe(1);
+    expect(queue.items[0]).toMatchObject({ id: attempt.id, status: 'SUBMITTED', lessonTitle: 'Checkpoint quiz', courseId: course.id, student: expect.objectContaining({ fullName: expect.any(String) }) });
+    const pendingReport = (await authed(app, cs).get('/api/v1/creator/assessments/quizzes').expect(200)).body.data;
+    expect(pendingReport.totals).toMatchObject({ quizzes: 1, candidates: 1, completions: 1, pendingReview: 1 });
     await authed(app, cs).post(`/api/v1/creator/quiz-attempts/${attempt.id}/grade`).send({ grades: [{ questionId: short.id, points: 5 }] }).expect(422);
     const graded = (await authed(app, cs).post(`/api/v1/creator/quiz-attempts/${attempt.id}/grade`).send({ grades: [{ questionId: short.id, points: 1.5, feedback: 'Close — mention assignment.' }] }).expect(200)).body.data;
     expect(graded).toMatchObject({ status: 'GRADED', score: 4.5, percent: 90, passed: true });
+    expect((await authed(app, cs).get('/api/v1/creator/assessments/quiz-attempts').expect(200)).body.data.waiting).toBe(0);
+    expect((await authed(app, cs).get('/api/v1/creator/assessments/quiz-attempts?status=GRADED').expect(200)).body.data.items).toHaveLength(1);
+    const report = (await authed(app, cs).get(`/api/v1/creator/assessments/quizzes?courseId=${course.id}`).expect(200)).body.data;
+    expect(report.items[0]).toMatchObject({ lessonTitle: 'Checkpoint quiz', candidates: 1, completions: 1, pendingReview: 0 });
     const result = (await authed(app, s).get(`/api/v1/learn/quiz-attempts/${attempt.id}`).expect(200)).body.data;
     expect(result.questions.find((q: any) => q.id === short.id).feedback).toBe('Close — mention assignment.');
     expect(result.questions.find((q: any) => q.id === mcq.id).options.find((o: any) => o.label === 'Language').isCorrect).toBe(true);
@@ -152,8 +162,13 @@ describe('Student platform (e2e)', () => {
     // Creator views
     const subs = (await authed(app, cs).get(`/api/v1/creator/assignments/${sub.id}/submissions`).expect(200)).body.data;
     expect(subs[0].student.email).toBe(s.email);
+    // Assignments page: submissions across all courses.
+    const toReview = (await authed(app, cs).get('/api/v1/creator/assessments/submissions?status=SUBMITTED').expect(200)).body.data;
+    expect(toReview.totals).toMatchObject({ assignments: 1, submissions: 1, toReview: 1, graded: 0 });
+    expect(toReview.items[0]).toMatchObject({ id: subs[0].id, lessonTitle: 'Homework', maxPoints: 10, files: [expect.objectContaining({ fileName: 'analysis.pdf' })] });
     await authed(app, cs).post(`/api/v1/creator/submissions/${subs[0].id}/grade`).send({ points: 11, status: 'GRADED' }).expect(422);
     await authed(app, cs).post(`/api/v1/creator/submissions/${subs[0].id}/grade`).send({ points: 9, feedback: 'Great work', status: 'GRADED' }).expect(200);
+    expect((await authed(app, cs).get('/api/v1/creator/assessments/submissions').expect(200)).body.data.totals).toMatchObject({ toReview: 0, graded: 1 });
     const students = (await authed(app, cs).get('/api/v1/creator/students?q=lena').expect(200)).body.data;
     expect(students[0]).toMatchObject({ email: s.email, enrollmentCount: 1 });
   });

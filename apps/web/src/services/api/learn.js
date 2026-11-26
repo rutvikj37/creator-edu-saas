@@ -51,6 +51,10 @@ export async function uploadSubmission(file, onProgress) {
 }
 
 export const creatorLearnApi = {
+  // Academy-wide assessment pages
+  testReport: (courseId) => http.get('/creator/assessments/quizzes', { params: courseId ? { courseId } : {} }).then(d),
+  quizReviews: (params) => http.get('/creator/assessments/quiz-attempts', { params }).then(d),
+  allSubmissions: (params) => http.get('/creator/assessments/submissions', { params }).then(d),
   students: (params) => http.get('/creator/students', { params }).then((r) => ({ items: r.data, meta: r.meta })),
   student: (id) => http.get(`/creator/students/${id}`).then(d),
   addStudent: (body) => http.post('/creator/students', body).then(d),
