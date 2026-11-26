@@ -103,6 +103,18 @@
   }
 }
 
+/* Academy public home — presence motion for the hero copy (respects reduced-motion above). */
+@keyframes academy-hero-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.academy-hero-copy {
+  animation: academy-hero-in 0.85s ease-out both;
+}
+.academy-site {
+  --ring: var(--academy-brand, var(--ring));
+}
+
 /* Typography for rich text (editor and rendered lesson content). */
 .prose-content { line-height: 1.65; color: var(--fg); }
 .prose-content > * + * { margin-top: 0.75em; }

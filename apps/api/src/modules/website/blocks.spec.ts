@@ -11,7 +11,7 @@ describe('parseBlocks', () => {
       { id: 'c', type: 'courseGrid', props: {} },
     ]);
     expect(r.errors).toEqual([]);
-    expect(r.blocks[0]).toEqual({ id: 'a', type: 'hero', hidden: false, props: { heading: 'Learn yoga', subheading: '', ctaLabel: '', ctaHref: '', imageFileId: null, align: 'center' } });
+    expect(r.blocks[0]).toEqual({ id: 'a', type: 'hero', hidden: false, props: { heading: 'Learn yoga', subheading: '', ctaLabel: '', ctaHref: '', ctaSecondaryLabel: '', ctaSecondaryHref: '', imageFileId: null, align: 'center' } });
     expect(r.blocks[1].hidden).toBe(true);
     expect(r.blocks[2].props).toMatchObject({ mode: 'all', limit: 6, courseIds: [] });
   });

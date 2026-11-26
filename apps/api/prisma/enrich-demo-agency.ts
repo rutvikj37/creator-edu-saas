@@ -12,6 +12,7 @@ import { TEMPLATES } from '../src/modules/website/templates.js';
 
 const CUSTOM_DOMAIN = 'courses.techxsolutions.io';
 const MARKER_KEY = 'demo.enrich.full_v1';
+const LANDING_MARKER = 'demo.enrich.landing_v2';
 const STUDENT_EMAILS = ['demo.student@techxsolutions.io', 'demo.learner@techxsolutions.io'];
 
 const doc = (text: string) => ({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] });
@@ -233,6 +234,87 @@ async function main() {
       const blocks = page.blocks as never;
       await prisma.sitePage.create({ data: { tenantId, slug, title: page.title, isHome: Boolean(page.isHome), showInNav: page.showInNav ?? true, navOrder: 0, draftBlocks: blocks, publishedBlocks: blocks, publishedTitle: page.title, publishedAt: now, createdById: ownerId } });
       added.push(`site:${slug}`);
+    }
+
+    // Presentation landing for courses.techxsolutions.io — force-refresh once per LANDING_MARKER.
+    if (!(await prisma.tenantSetting.findFirst({ where: { tenantId, key: LANDING_MARKER } }))) {
+      const techxHome = [
+        {
+          id: 'hero',
+          type: 'hero',
+          props: {
+            heading: 'Career-ready skills, taught live',
+            subheading: 'Structured courses, mentor-led live classes and certificates — built for India\'s working learners.',
+            ctaLabel: 'Browse courses',
+            ctaHref: '/courses',
+            ctaSecondaryLabel: 'Start learning',
+            ctaSecondaryHref: '/register',
+            align: 'left',
+          },
+        },
+        {
+          id: 'how',
+          type: 'features',
+          props: {
+            heading: 'How it works',
+            items: [
+              { title: 'Choose a programme', text: 'Browse published courses across technology, marketing and career growth.' },
+              { title: 'Learn live and on demand', text: 'Watch lessons when it suits you, then join live sessions with instructors.' },
+              { title: 'Finish with a certificate', text: 'Complete coursework and download a certificate you can share with employers.' },
+            ],
+          },
+        },
+        { id: 'courses', type: 'courseGrid', props: { heading: 'Featured programmes', mode: 'all', limit: 6 } },
+        {
+          id: 'live',
+          type: 'features',
+          props: {
+            heading: 'Live classes & community',
+            items: [
+              { title: 'Scheduled live sessions', text: 'Show up for mentor-led classes and ask questions in the moment.' },
+              { title: 'Learner community', text: 'Stay accountable with peers who are working through the same material.' },
+              { title: 'Practical outcomes', text: 'Projects and checkpoints designed around skills employers recognise.' },
+            ],
+          },
+        },
+        {
+          id: 'cta',
+          type: 'cta',
+          props: {
+            heading: 'Start learning with TechX Courses',
+            text: 'Explore the catalogue, enrol in minutes, and learn with a clear path to finishing.',
+            buttonLabel: 'Browse courses',
+            buttonHref: '/courses',
+          },
+        },
+      ];
+      const home = await prisma.sitePage.findFirst({ where: { tenantId, slug: 'home' } });
+      if (home) {
+        await prisma.sitePage.update({
+          where: { id: home.id },
+          data: {
+            draftBlocks: techxHome as never,
+            publishedBlocks: techxHome as never,
+            publishedTitle: 'Home',
+            publishedAt: now,
+            draftUpdatedAt: now,
+            title: 'Home',
+          },
+        });
+        added.push('site:home_landing_v2');
+      }
+      await prisma.academy.update({
+        where: { tenantId },
+        data: {
+          tagline: 'Learn skills that get you hired',
+          fontHeading: 'Poppins',
+          fontBody: 'Poppins',
+          primaryColor: academy.primaryColor || '#0f766e',
+          accentColor: academy.accentColor || '#f59e0b',
+        },
+      });
+      added.push('academy:landing_fonts');
+      await prisma.tenantSetting.create({ data: { tenantId, key: LANDING_MARKER, value: { at: now.toISOString() } as never } });
     }
     for (const post of [{ slug: 'five-skills-2026', title: 'Five skills for 2026', excerpt: 'Demo blog.' }, { slug: 'live-cohort-tips', title: 'Live cohort tips', excerpt: 'Batches demo.' }]) {
       if (await prisma.blogPost.findFirst({ where: { tenantId, slug: post.slug } })) continue;

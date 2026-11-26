@@ -225,7 +225,7 @@ export class AiService {
     const featured = [...new Set(o.courses.featuredCourseIds.filter((id) => validIds.has(id)))].slice(0, 6);
     const para = (t: string) => ({ type: 'paragraph', content: t.trim() ? [{ type: 'text', text: clip(t, 2000) }] : [] });
     const blocks: { id: string; type: string; props: Record<string, unknown> }[] = [
-      { id: 'hero', type: 'hero', props: { heading: clip(o.hero.heading, 120) || tenant.name, subheading: clip(o.hero.subheading, 300), ctaLabel: clip(o.hero.ctaLabel, 40) || 'Browse courses', ctaHref: '/courses', imageFileId: null, align: 'center' } },
+      { id: 'hero', type: 'hero', props: { heading: clip(o.hero.heading, 120) || tenant.name, subheading: clip(o.hero.subheading, 300), ctaLabel: clip(o.hero.ctaLabel, 40) || 'Browse courses', ctaHref: '/courses', ctaSecondaryLabel: 'Start learning', ctaSecondaryHref: '/register', imageFileId: null, align: 'left' } },
     ];
     const stats = [
       ...(courses.length >= 2 ? [{ value: String(courses.length), label: 'Courses' }] : []),

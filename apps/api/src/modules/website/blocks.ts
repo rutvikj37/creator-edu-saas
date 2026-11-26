@@ -20,7 +20,16 @@ const richDoc = z.unknown().superRefine((doc, ctx) => {
 });
 
 export const BLOCK_PROPS = {
-  hero: z.object({ heading: text(120).min(1), subheading: optText(300), ctaLabel: optText(40), ctaHref: href.optional().default(''), imageFileId: cuid.nullable().optional().default(null), align: z.enum(['left', 'center']).default('center') }),
+  hero: z.object({
+    heading: text(120).min(1),
+    subheading: optText(300),
+    ctaLabel: optText(40),
+    ctaHref: href.optional().default(''),
+    ctaSecondaryLabel: optText(40),
+    ctaSecondaryHref: href.optional().default(''),
+    imageFileId: cuid.nullable().optional().default(null),
+    align: z.enum(['left', 'center']).default('center'),
+  }),
   richText: z.object({ content: richDoc }),
   courseGrid: z.object({ heading: optText(120), mode: z.enum(['all', 'selected']).default('all'), courseIds: z.array(cuid).max(24).default([]), limit: z.number().int().min(1).max(24).default(6) }),
   features: z.object({ heading: optText(120), items: z.array(z.object({ title: text(80).min(1), text: optText(300) })).min(1).max(12) }),

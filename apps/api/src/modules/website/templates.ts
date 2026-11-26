@@ -23,11 +23,70 @@ const heading = (text: string) => ({ type: 'heading', attrs: { level: 2 }, conte
 const doc = (...content: unknown[]) => ({ type: 'doc', content });
 
 function homeBlocks(a: TemplateInput, variant: 'classic' | 'minimal' | 'bold') {
-  const hero = { id: 'hero', type: 'hero', props: { heading: a.name, subheading: a.tagline ?? '', ctaLabel: 'Browse courses', ctaHref: '/courses', align: variant === 'minimal' ? 'left' : 'center' } };
-  const courses = { id: 'courses', type: 'courseGrid', props: { heading: variant === 'bold' ? 'Start learning today' : 'Courses', mode: 'all', limit: variant === 'minimal' ? 3 : 6 } };
-  const about = a.description ? [{ id: 'about', type: 'richText', props: { content: doc(heading(`About ${a.name}`), para(a.description)) } }] : [];
-  const cta = { id: 'cta', type: 'cta', props: { heading: 'Ready to begin?', text: '', buttonLabel: 'See all courses', buttonHref: '/courses' } };
-  return variant === 'minimal' ? [hero, courses, ...about] : [hero, courses, ...about, cta];
+  const hero = {
+    id: 'hero',
+    type: 'hero',
+    props: {
+      heading: a.tagline || `Learn with ${a.name}`,
+      subheading: a.description
+        ? a.description.slice(0, 180)
+        : 'Structured courses, live classes and certificates — learn at your pace with a clear path to finishing.',
+      ctaLabel: 'Browse courses',
+      ctaHref: '/courses',
+      ctaSecondaryLabel: 'Start learning',
+      ctaSecondaryHref: '/register',
+      align: variant === 'minimal' ? 'left' : 'left',
+    },
+  };
+  const how = {
+    id: 'how',
+    type: 'features',
+    props: {
+      heading: 'How it works',
+      items: [
+        { title: 'Choose a programme', text: 'Browse published courses and pick the skills you need next.' },
+        { title: 'Learn live and on demand', text: 'Watch lessons when it suits you, and join live sessions when your cohort meets.' },
+        { title: 'Finish with a certificate', text: 'Complete the coursework and download a certificate you can share.' },
+      ],
+    },
+  };
+  const courses = {
+    id: 'courses',
+    type: 'courseGrid',
+    props: {
+      heading: variant === 'bold' ? 'Start learning today' : 'Featured programmes',
+      mode: 'all',
+      limit: variant === 'minimal' ? 3 : 6,
+    },
+  };
+  const live = {
+    id: 'live',
+    type: 'features',
+    props: {
+      heading: 'Live classes & community',
+      items: [
+        { title: 'Scheduled live sessions', text: 'Show up for mentor-led classes and ask questions in the moment.' },
+        { title: 'Learner community', text: 'Stay accountable with peers who are working through the same material.' },
+        { title: 'Practical outcomes', text: 'Projects and checkpoints designed around skills employers recognise.' },
+      ],
+    },
+  };
+  const about = a.description
+    ? [{ id: 'about', type: 'richText', props: { content: doc(heading(`About ${a.name}`), para(a.description)) } }]
+    : [];
+  const cta = {
+    id: 'cta',
+    type: 'cta',
+    props: {
+      heading: `Start learning with ${a.name}`,
+      text: a.tagline || 'Browse the catalogue and enrol in a few clicks.',
+      buttonLabel: 'Browse courses',
+      buttonHref: '/courses',
+    },
+  };
+  if (variant === 'minimal') return [hero, courses, ...about];
+  if (variant === 'bold') return [hero, how, courses, cta];
+  return [hero, how, courses, live, cta];
 }
 
 function commonPages(a: TemplateInput): StarterPage[] {
@@ -40,7 +99,7 @@ function commonPages(a: TemplateInput): StarterPage[] {
 export const TEMPLATES = {
   classic: {
     name: 'Classic',
-    description: 'Centered hero, course grid, about section and a call to action.',
+    description: 'Brand-led hero, how it works, course grid, live learning and a final call to action.',
     pages: (a: TemplateInput): StarterPage[] => [{ slug: 'home', title: 'Home', isHome: true, showInNav: false, blocks: homeBlocks(a, 'classic') }, ...commonPages(a)],
   },
   minimal: {

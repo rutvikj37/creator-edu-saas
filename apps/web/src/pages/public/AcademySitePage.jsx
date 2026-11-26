@@ -20,10 +20,30 @@ function useSeo(seo, fallbackTitle) {
   }, [seo?.title, seo?.description, fallbackTitle]);
 }
 
+/** Ensures theme fonts from the allow-list are available on the academy host. */
+function useAcademyFonts(theme) {
+  useEffect(() => {
+    const names = [theme?.fontHeading, theme?.fontBody].filter(Boolean);
+    const need = [...new Set(names)].filter((f) => f && f !== 'Inter' && f !== 'system');
+    if (!need.length) return undefined;
+    const id = 'academy-theme-fonts';
+    let link = document.getElementById(id);
+    const families = need.map((f) => `family=${encodeURIComponent(f).replace(/%20/g, '+')}:wght@400;500;600;700`).join('&');
+    const href = `https://fonts.googleapis.com/css2?${families}&display=swap`;
+    if (!link) {
+      link = document.createElement('link');
+      link.id = id;
+      link.rel = 'stylesheet';
+      document.head.appendChild(link);
+    }
+    link.href = href;
+  }, [theme?.fontHeading, theme?.fontBody]);
+}
+
 function SiteFooter({ site, footer }) {
   return (
-    <footer className="mt-10 border-t border-line">
-      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-8 text-sm text-muted">
+    <footer className="border-t border-line bg-surface">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-10 text-sm text-muted sm:px-6">
         <p>{footer?.text || `© ${new Date().getFullYear()} ${site?.name ?? ''}`}</p>
         <nav className="flex flex-wrap gap-4">{(footer?.links ?? []).map((l) => (l.href.startsWith('/') ? <Link key={l.href + l.label} to={l.href} className="hover:text-fg">{l.label}</Link> : <a key={l.href + l.label} href={l.href} rel="noreferrer noopener" className="hover:text-fg">{l.label}</a>))}</nav>
       </div>
@@ -48,6 +68,7 @@ export function AcademySitePage() {
   const wantsPage = Boolean(slug) || Boolean(layout.data?.hasHomePage);
   const page = useQuery({ queryKey: ['site-page', slug ?? 'home', preview], queryFn: () => websiteApi.publicPage(slug, preview), enabled: Boolean(layout.data) && !external && wantsPage, retry: false });
   useSeo(page.data?.seo, page.data?.title ? `${page.data.title} · ${site.data?.name ?? ''}` : site.data?.name);
+  useAcademyFonts(site.data?.theme);
   useEffect(() => {
     if (external) window.location.replace(layout.data.externalUrl);
   }, [external, layout.data]);
@@ -58,11 +79,27 @@ export function AcademySitePage() {
   if (!wantsPage) return <AcademyLandingPage />;
   if (page.isError) return slug ? <div className="grid min-h-dvh place-items-center"><ErrorState title="Page not found" error={{ message: 'This page does not exist or is not published.' }} /></div> : <AcademyLandingPage />;
   const s = site.data;
+  const color = s?.theme?.primaryColor ?? '#0f766e';
   return (
-    <div className="min-h-dvh bg-surface" style={{ fontFamily: s?.theme?.fontBody }}>
+    <div
+      className="academy-site min-h-dvh bg-surface text-fg"
+      style={{
+        fontFamily: s?.theme?.fontBody,
+        '--academy-brand': color,
+        '--academy-accent': s?.theme?.accentColor ?? '#0d9488',
+      }}
+    >
       {page.data.preview && <div className="bg-amber-100 px-4 py-2 text-center text-sm text-amber-900">Preview of unpublished changes — visitors still see the published page.</div>}
       <AcademyHeader site={s} nav={layout.data.nav} />
-      <main><SiteBlocks blocks={page.data.blocks} data={page.data.data} theme={s?.theme} template={layout.data.template} /></main>
+      <main>
+        <SiteBlocks
+          blocks={page.data.blocks}
+          data={page.data.data}
+          theme={s?.theme}
+          template={layout.data.template}
+          brandName={s?.name}
+        />
+      </main>
       <SiteFooter site={s} footer={layout.data.footer} />
     </div>
   );
