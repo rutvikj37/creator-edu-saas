@@ -171,7 +171,7 @@ export function CourseEditorPage() {
         curriculum.isLoading ? <Skeleton className="h-64" /> : curriculum.isError ? <Card><ErrorState error={curriculum.error} onRetry={() => curriculum.refetch()} /></Card> : (
           <div className="max-w-3xl space-y-3">
             <p className="text-sm text-muted">Build sections and lessons here. Changes save as you go. Mark each lesson ready before you publish the course.</p>
-            <CurriculumBuilder courseId={id} sections={curriculum.data} readOnly={readOnly} onChange={(d) => qc.setQueryData(['course', id, 'curriculum'], d)} onEditLesson={setEditing} />
+            <CurriculumBuilder courseId={id} sections={curriculum.data} readOnly={readOnly} dripType={course.data?.dripType ?? 'NONE'} onChange={(d) => qc.setQueryData(['course', id, 'curriculum'], d)} onEditLesson={setEditing} />
           </div>
         )
       )}
@@ -251,9 +251,21 @@ export function CourseEditorPage() {
             {form.accessType === 'FIXED_DAYS' && <Input label="Days of access" type="number" min={1} value={form.accessDays} onChange={set('accessDays')} error={errors.accessDays} />}
             {form.accessType === 'FIXED_DATE' && <Input label="Access ends on" type="date" value={form.accessUntil} onChange={set('accessUntil')} error={errors.accessUntil} />}
             <Input label="Completion threshold (%)" type="number" min={1} max={100} value={form.completionPercent} onChange={set('completionPercent')} hint="Share of required lessons to complete the course" />
-            <p className="text-xs text-muted">Drip unlocks per section are coming soon. For now all published lessons unlock together when access starts.</p>
+            <Select
+              label="Drip content"
+              value={form.dripType}
+              onChange={set('dripType')}
+              options={[
+                { value: 'NONE', label: 'All content available immediately' },
+                { value: 'DAYS_AFTER_ENROLL', label: 'Days after enrolment' },
+                { value: 'DATE', label: 'On specific dates' },
+              ]}
+            />
             {form.dripType !== 'NONE' && (
-              <Select label="Drip content (legacy)" value={form.dripType} onChange={set('dripType')} options={[{ value: 'NONE', label: 'All content available immediately' }, { value: 'DAYS_AFTER_ENROLL', label: 'Days after enrolment' }, { value: 'DATE', label: 'On dates' }]} />
+              <p className="text-xs text-muted">
+                Set each section’s unlock timing from the curriculum tab (section menu → Edit section).
+                {form.dripType === 'DAYS_AFTER_ENROLL' ? ' Use “days from enrolment” per section.' : ' Use an unlock date per section.'}
+              </p>
             )}
           </Advanced>
 

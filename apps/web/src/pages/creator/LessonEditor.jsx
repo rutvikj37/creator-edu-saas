@@ -219,6 +219,19 @@ export function LessonEditor({ courseId, lesson, onClose, onSaved, readOnly }) {
         )}
         {lesson.type === 'QUIZ' && <QuizEditor courseId={courseId} lessonId={lesson.id} />}
         {lesson.type === 'ASSIGNMENT' && <AssignmentEditor courseId={courseId} lessonId={lesson.id} />}
+        {lesson.type === 'LIVE' && (
+          <div className="space-y-2 rounded-lg border border-line bg-surface-2/50 px-3 py-3 text-sm">
+            <p className="font-medium text-fg">Live class lesson</p>
+            <p className="text-muted">
+              Schedule and host the session under Webinars &amp; live. Students see this lesson in the curriculum as the live class placeholder.
+            </p>
+            {!readOnly && (
+              <Link to="/creator/live" className="inline-flex font-medium text-primary-600 underline">
+                Open Webinars &amp; live
+              </Link>
+            )}
+          </div>
+        )}
         {lesson.type === 'VIDEO' && (
           <div className="space-y-4">
             {!readOnly && (

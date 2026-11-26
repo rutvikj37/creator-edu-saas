@@ -18,7 +18,7 @@ export const LESSON_TYPES = [
   { value: 'DOWNLOAD', label: 'Download', icon: Download },
   { value: 'LINK', label: 'External link', icon: Link2 },
   { value: 'ASSIGNMENT', label: 'Assignment', icon: PenSquare },
-  { value: 'LIVE', label: 'Live class', icon: Radio, soon: 'Phase 9' },
+  { value: 'LIVE', label: 'Live class', icon: Radio },
 ];
 const TYPE_BY = Object.fromEntries(LESSON_TYPES.map((t) => [t.value, t]));
 const PRIMARY_TYPES = LESSON_TYPES.filter((t) => t.primary);
@@ -56,7 +56,7 @@ function LessonRow({ lesson, handle, onEdit, onMenu, sub }) {
  * Drag-and-drop curriculum editor. Sections and top-level lessons are sortable with mouse,
  * touch or keyboard (space to lift, arrows to move). Order is saved to the server immediately.
  */
-export function CurriculumBuilder({ courseId, sections, onChange, onEditLesson, readOnly }) {
+export function CurriculumBuilder({ courseId, sections, onChange, onEditLesson, readOnly, dripType = 'NONE' }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
   const [collapsed, setCollapsed] = useState({});
   const [adding, setAdding] = useState(null); // { sectionId, parentLessonId? }
@@ -132,7 +132,19 @@ export function CurriculumBuilder({ courseId, sections, onChange, onEditLesson, 
     } catch (e) { toast.error(e.details?.[0]?.message ?? e.message); } finally { setBusy(false); }
   };
   const renameSection = async () => {
-    try { await coursesApi.updateSection(courseId, renaming.id, { title: renaming.title }); setRenaming(null); await reload(); } catch (e) { toast.error(e.message); }
+    try {
+      const body = { title: renaming.title };
+      if (dripType === 'DAYS_AFTER_ENROLL') body.dripOffsetDays = renaming.dripOffsetDays === '' || renaming.dripOffsetDays == null ? null : Number(renaming.dripOffsetDays);
+      if (dripType === 'DATE') body.unlockAt = renaming.unlockAt ? new Date(`${renaming.unlockAt}T00:00:00`).toISOString() : null;
+      await coursesApi.updateSection(courseId, renaming.id, body);
+      setRenaming(null);
+      await reload();
+    } catch (e) { toast.error(e.message); }
+  };
+  const dripLabel = (section) => {
+    if (dripType === 'DAYS_AFTER_ENROLL' && section.dripOffsetDays != null) return `Day ${section.dripOffsetDays}`;
+    if (dripType === 'DATE' && section.unlockAt) return `Unlocks ${String(section.unlockAt).slice(0, 10)}`;
+    return null;
   };
   const confirmDelete = async () => {
     try {
@@ -181,10 +193,16 @@ export function CurriculumBuilder({ courseId, sections, onChange, onEditLesson, 
                       {collapsed[section.id] ? <ChevronRight className="size-4" /> : <ChevronDown className="size-4" />}
                     </button>
                     <p className="flex-1 text-sm font-semibold">Section {si + 1}: {section.title}</p>
+                    {dripLabel(section) && <Badge tone="info">{dripLabel(section)}</Badge>}
                     <span className="text-xs text-muted">{section.lessons.reduce((n, l) => n + 1 + (l.children?.length ?? 0), 0)} lessons</span>
                     {!readOnly && (
                       <Dropdown trigger={(p) => <Button variant="ghost" size="icon-sm" aria-label={`Actions for section ${section.title}`} {...p}><MoreHorizontal className="size-4" /></Button>}>
-                        <DropdownItem onClick={() => setRenaming({ id: section.id, title: section.title })}>Rename</DropdownItem>
+                        <DropdownItem onClick={() => setRenaming({
+                          id: section.id,
+                          title: section.title,
+                          dripOffsetDays: section.dripOffsetDays ?? '',
+                          unlockAt: section.unlockAt ? String(section.unlockAt).slice(0, 10) : '',
+                        })}>{dripType !== 'NONE' ? 'Edit section' : 'Rename'}</DropdownItem>
                         <DropdownItem danger icon={Trash2} onClick={() => setToDelete({ kind: 'section', item: section })}>Delete section</DropdownItem>
                       </Dropdown>
                     )}
@@ -256,9 +274,30 @@ export function CurriculumBuilder({ courseId, sections, onChange, onEditLesson, 
           </div>
         </form>
       </Modal>
-      <Modal open={Boolean(renaming)} onClose={() => setRenaming(null)} title="Rename section"
+      <Modal open={Boolean(renaming)} onClose={() => setRenaming(null)} title={dripType !== 'NONE' ? 'Edit section' : 'Rename section'}
         footer={<><Button variant="secondary" onClick={() => setRenaming(null)}>Cancel</Button><Button disabled={!renaming?.title.trim()} onClick={renameSection}>Save</Button></>}>
-        <Input label="Section title" value={renaming?.title ?? ''} onChange={(e) => setRenaming({ ...renaming, title: e.target.value })} />
+        <div className="space-y-4">
+          <Input label="Section title" value={renaming?.title ?? ''} onChange={(e) => setRenaming({ ...renaming, title: e.target.value })} />
+          {dripType === 'DAYS_AFTER_ENROLL' && (
+            <Input
+              label="Unlock after (days from enrolment)"
+              type="number"
+              min={0}
+              hint="Leave empty to unlock with the course. Day 0 = immediately."
+              value={renaming?.dripOffsetDays ?? ''}
+              onChange={(e) => setRenaming({ ...renaming, dripOffsetDays: e.target.value })}
+            />
+          )}
+          {dripType === 'DATE' && (
+            <Input
+              label="Unlock on date"
+              type="date"
+              hint="Leave empty to unlock with the course."
+              value={renaming?.unlockAt ?? ''}
+              onChange={(e) => setRenaming({ ...renaming, unlockAt: e.target.value })}
+            />
+          )}
+        </div>
       </Modal>
       <ConfirmDialog open={Boolean(toDelete)} onClose={() => setToDelete(null)} title={`Delete ${toDelete?.kind} “${toDelete?.item.title}”?`}
         description={toDelete?.kind === 'section' ? 'All lessons in this section are deleted too.' : 'Sub-lessons are deleted too. This cannot be undone.'} confirmLabel="Delete" onConfirm={confirmDelete} />

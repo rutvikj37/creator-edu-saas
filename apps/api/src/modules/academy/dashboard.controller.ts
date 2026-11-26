@@ -68,7 +68,9 @@ export class CreatorDashboardController {
       },
       plan: { name: ent.planName, status: ent.status },
       activity: activity.map((a) => ({ ...a, actor: actors.find((u) => u.id === a.actorUserId)?.fullName ?? null })),
-      revenue: { available: false, reason: 'Revenue appears once payments are enabled.' },
+      revenue: canSeeSales
+        ? { available: true }
+        : { available: false, reason: 'You need orders permission to view revenue.' },
       last30,
       setup,
     };

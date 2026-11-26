@@ -1,5 +1,5 @@
 import {
-  Activity, Bell, CircleUser, FileCheck2, Home, ListChecks, ShoppingBag, CalendarClock, MessageCircle, Award, Banknote, BarChart3, BookOpen, Boxes, Brush, Building2, ClipboardCheck, Component,
+  Activity, Bell, CircleUser, FileCheck2, Home, ListChecks, ShoppingBag, CalendarClock, MessageCircle, Award, BarChart3, BookOpen, Boxes, Brush, Building2, ClipboardCheck, Component,
   CreditCard, Crown, FileText, FolderTree, Globe, GraduationCap, Handshake, HeartPulse, Inbox, LayoutDashboard, LifeBuoy,
   KeyRound, Layers, Library, Link2, Package, Mail, Megaphone, MessagesSquare, Percent, Plug, Radio, Receipt, ScrollText, Settings, ShieldCheck,
   ShoppingCart, Sparkles, Star, Tag, Ticket, UserCog, Users, Video, Wallet,
@@ -173,11 +173,7 @@ export const NAV = {
     {
       label: null,
       items: [
-        item('Dashboard', '/affiliate', LayoutDashboard, 10, { end: true }),
-        item('Links & coupons', '/affiliate/links', Link2, 10),
-        item('Conversions', '/affiliate/conversions', Activity, 10),
-        item('Commissions', '/affiliate/commissions', Percent, 10),
-        item('Payouts', '/affiliate/payouts', Banknote, 10),
+        item('Earn by sharing', '/learn/affiliate', Handshake, 10, { end: true, available: true }),
       ],
     },
   ],

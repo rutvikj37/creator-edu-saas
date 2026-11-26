@@ -15,8 +15,8 @@ import { FilesService } from '../files/files.service.js';
 import { slugify } from '../tenants/slug.js';
 import type { CourseListQuery, CreateCourseDto, CreateLessonDto, CurriculumOrderDto, SectionDto, UpdateCourseDto, UpdateLessonDto } from './dto/course.dto.js';
 
-/** Lesson types whose content can be authored now. Others arrive with their modules (quiz/assignment: Phase 5, live: Phase 9). */
-export const AUTHORABLE_TYPES = new Set(['TEXT', 'LINK', 'PDF', 'DOCUMENT', 'IMAGE', 'AUDIO', 'DOWNLOAD', 'VIDEO', 'QUIZ', 'ASSIGNMENT']);
+/** Lesson types creators can add today. LIVE is a curriculum placeholder; sessions are scheduled under Webinars & live. */
+export const AUTHORABLE_TYPES = new Set(['TEXT', 'LINK', 'PDF', 'DOCUMENT', 'IMAGE', 'AUDIO', 'DOWNLOAD', 'VIDEO', 'QUIZ', 'ASSIGNMENT', 'LIVE']);
 const FILE_TYPES: Record<string, string[]> = { PDF: ['LESSON_FILE'], DOCUMENT: ['LESSON_FILE'], IMAGE: ['LESSON_FILE', 'IMAGE'], AUDIO: ['LESSON_FILE'], DOWNLOAD: ['LESSON_FILE'] };
 const FILE_MIME: Record<string, (m: string) => boolean> = {
   PDF: (m) => m === 'application/pdf',
@@ -196,7 +196,7 @@ export class CoursesService {
         (l.type === 'TEXT' && !l.content) ||
         (l.type === 'LINK' && !l.externalUrl) ||
         (FILE_TYPES[l.type] && !l.fileAssetId) ||
-        (l.type === 'VIDEO' && !readyVideos.has(l.videoAssetId ?? '')) || l.type === 'LIVE' ||
+        (l.type === 'VIDEO' && !readyVideos.has(l.videoAssetId ?? '')) ||
         (l.type === 'QUIZ' && !quizIds.has(l.id)) ||
         (l.type === 'ASSIGNMENT' && !assignmentIds.has(l.id));
       if (missing) {
@@ -310,7 +310,14 @@ export class CoursesService {
 
   async updateSection(courseId: string, sectionId: string, dto: SectionDto) {
     await this.section(courseId, sectionId);
-    return this.db.courseSection.update({ where: { id: sectionId }, data: { title: dto.title, dripOffsetDays: dto.dripOffsetDays ?? null, unlockAt: dto.unlockAt ? new Date(dto.unlockAt) : null } });
+    return this.db.courseSection.update({
+      where: { id: sectionId },
+      data: {
+        title: dto.title,
+        ...(dto.dripOffsetDays !== undefined ? { dripOffsetDays: dto.dripOffsetDays } : {}),
+        ...(dto.unlockAt !== undefined ? { unlockAt: dto.unlockAt ? new Date(dto.unlockAt) : null } : {}),
+      },
+    });
   }
 
   async removeSection(courseId: string, sectionId: string) {

@@ -250,7 +250,7 @@ describe('Creator platform (e2e)', () => {
       expect(d.courses).toMatchObject({ total: 1, draft: 1, published: 0 });
       expect(d.usage.courses).toEqual({ used: 1, limit: 3 });
       expect(d.activity.map((a: any) => a.action)).toEqual(expect.arrayContaining(['course.create', 'tenant.create']));
-      expect(d.revenue.available).toBe(false);
+      expect(d.revenue.available).toBe(true);
     });
 
     it('dashboard: last-30-day trends with previous-period change, setup checklist, sales hidden without orders.read', async () => {
