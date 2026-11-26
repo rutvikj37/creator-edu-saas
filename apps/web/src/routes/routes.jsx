@@ -316,7 +316,7 @@ export function buildRoutes(surface = getSurface()) {
     { element: <RequireAuth />, children: [{ path: '/account/security', element: <NoWorkspacePage /> }] },
   ];
 
-  // Learner app — academy hosts always; platform host when PLATFORM_STUDENT_LOGIN_TENANT is set.
+  // Learner app — academy hosts always; also on platform when students use the LMS host bridge.
   const studentLearnRoutes = {
     element: <RequireAuth student />,
     children: [
@@ -350,22 +350,9 @@ export function buildRoutes(surface = getSurface()) {
     ],
   };
 
-  const platform = [
-    { path: '/', element: page(PlatformLandingPage) },
-    { path: '/pricing', element: page(PlatformLandingPage, { section: 'pricing' }) },
-    { element: <GuestOnly />, children: [{ path: '/login', element: page(LoginPage) }, { path: '/signup', element: <Navigate to="/login" replace /> }] },
-    ...clientAuthRoutes,
-    { path: '/invite', element: page(InvitePage) },
-    { element: <RequireAuth allowMfaSetup />, children: [{ path: '/setup-2fa', element: page(MfaSetupPage) }] },
-    adminPanelRoutes,
-    creatorWorkspaceRoutes,
-    studentLearnRoutes,
-    { element: <RequireAuth />, children: [{ path: '/account/security', element: <NoWorkspacePage /> }] },
-  ];
-
-  const academy = [
-    { path: '/', element: page(AcademySitePage) },
-    { path: '/p/:slug', element: page(AcademySitePage) },
+  // Catalog + buy flow StudentLayout links to (/courses, /memberships, product pages, checkout).
+  // Shared by academy hosts and the platform LMS host so bridged students don't SPA-404.
+  const academyStorefrontRoutes = [
     {
       element: <AcademyCatalogLayout />,
       children: [
@@ -388,6 +375,26 @@ export function buildRoutes(surface = getSurface()) {
     { path: '/checkout/product/:productSlug', element: page(CheckoutPage) },
     { path: '/checkout/coaching/:coachingSlug', element: page(CheckoutPage) },
     { path: '/checkout/link/:linkCode', element: page(CheckoutPage) },
+  ];
+
+  const platform = [
+    { path: '/', element: page(PlatformLandingPage) },
+    { path: '/pricing', element: page(PlatformLandingPage, { section: 'pricing' }) },
+    { element: <GuestOnly />, children: [{ path: '/login', element: page(LoginPage) }, { path: '/signup', element: <Navigate to="/login" replace /> }] },
+    ...clientAuthRoutes,
+    { path: '/invite', element: page(InvitePage) },
+    { element: <RequireAuth allowMfaSetup />, children: [{ path: '/setup-2fa', element: page(MfaSetupPage) }] },
+    adminPanelRoutes,
+    creatorWorkspaceRoutes,
+    ...academyStorefrontRoutes,
+    studentLearnRoutes,
+    { element: <RequireAuth />, children: [{ path: '/account/security', element: <NoWorkspacePage /> }] },
+  ];
+
+  const academy = [
+    { path: '/', element: page(AcademySitePage) },
+    { path: '/p/:slug', element: page(AcademySitePage) },
+    ...academyStorefrontRoutes,
     { element: <GuestOnly />, children: [{ path: '/login', element: page(LoginPage) }, { path: '/register', element: page(StudentRegisterPage) }] },
     ...clientAuthRoutes,
     { element: <RequireAuth allowMfaSetup />, children: [{ path: '/setup-2fa', element: page(MfaSetupPage) }] },

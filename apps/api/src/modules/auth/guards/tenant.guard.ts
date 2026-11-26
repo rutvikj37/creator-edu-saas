@@ -7,6 +7,7 @@ import { EntitlementsService } from '../../subscriptions/entitlements.service.js
 import { AppException } from '../../../common/errors/app-exception.js';
 import { PrismaService } from '../../../core/prisma/prisma.service.js';
 import { CLS_TENANT_ID, type AppRequest } from '../../../core/tenancy/request-context.js';
+import { PlatformStudentLoginService } from '../services/platform-student-login.service.js';
 
 /**
  * Establishes the tenant context for tenant-scoped routes. The tenant is NEVER taken from
@@ -20,6 +21,7 @@ export class TenantGuard implements CanActivate {
     private readonly prisma: PrismaService,
     private readonly cls: ClsService,
     private readonly entitlements: EntitlementsService,
+    private readonly platformStudents: PlatformStudentLoginService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -32,12 +34,21 @@ export class TenantGuard implements CanActivate {
         this.cls.set(CLS_TENANT_ID, req.hostRealm.tenantId);
         return true;
       }
-      // Platform host + configured academy student (PLATFORM_STUDENT_LOGIN_TENANT): tenant
-      // comes from the learner's realm, already host-checked by JwtAuthGuard.
-      const auth = req.auth;
-      if (req.hostRealm?.kind === 'platform' && auth?.realm === 'TENANT' && auth.realmKey) {
-        this.cls.set(CLS_TENANT_ID, auth.realmKey);
-        return true;
+      // Platform LMS host bridge (PLATFORM_STUDENT_LOGIN_TENANT):
+      // - Authenticated TENANT JWT (host-checked by JwtAuthGuard) → learner's academy
+      // - Public academy APIs (no JWT attached) → same configured academy, so catalog /
+      //   memberships / checkout work on lms.* without per-controller patches
+      if (req.hostRealm?.kind === 'platform') {
+        const auth = req.auth;
+        if (auth?.realm === 'TENANT' && auth.realmKey) {
+          this.cls.set(CLS_TENANT_ID, auth.realmKey);
+          return true;
+        }
+        const bridged = await this.platformStudents.allowedTenantId();
+        if (bridged) {
+          this.cls.set(CLS_TENANT_ID, bridged);
+          return true;
+        }
       }
       throw AppException.notFound();
     }

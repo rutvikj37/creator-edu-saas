@@ -139,5 +139,7 @@ describe('postLoginPath', () => {
     expect(postLoginPath(student, 'platform', '/pricing')).toBe('/learn');
     expect(postLoginPath(student, 'platform', '/creator')).toBe('/learn');
     expect(postLoginPath(student, 'platform', '/learn/orders')).toBe('/learn/orders');
+    expect(postLoginPath(student, 'platform', '/courses')).toBe('/courses');
+    expect(postLoginPath(student, 'platform', '/memberships')).toBe('/memberships');
   });
 });

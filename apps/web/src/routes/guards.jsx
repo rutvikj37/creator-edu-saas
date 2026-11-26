@@ -64,7 +64,7 @@ export function safeNextPath(next) {
   return next && next.startsWith('/') && !next.startsWith('//') ? next : null;
 }
 
-const STUDENT_PREFIXES = ['/learn', '/checkout', '/cart'];
+const STUDENT_PREFIXES = ['/learn', '/checkout', '/cart', '/courses', '/memberships', '/bundles', '/products', '/coaching', '/webinars', '/pay'];
 const WORKSPACE_PREFIXES = ['/creator'];
 const STAFF_PREFIXES = ['/super-admin', '/finance', '/support'];
 const under = (path, prefixes) => prefixes.some((p) => path === p || path.startsWith(`${p}/`) || path.startsWith(`${p}?`));

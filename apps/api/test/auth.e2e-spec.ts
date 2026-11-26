@@ -309,12 +309,17 @@ describe('Authentication (e2e)', () => {
       expect(site.body.data).toMatchObject({ name: a.tenant.name, slug: a.tenant.slug });
       expect(site.body.data.platformHost).toBeUndefined();
 
+      // TenantScoped academy public APIs resolve via the same bridge (catalog, etc.).
+      await api(app).get('/api/v1/public/courses').set('Host', PLATFORM).expect(200);
+      await api(app).get('/api/v1/public/memberships').set('Host', PLATFORM).expect(200);
+
       // Wrong academy's password still fails; other academy students are not eligible on platform.
       expect((await login(app, PLATFORM, email, 'other-password-22')).res.status).toBe(401);
       bridge.setAllowedTenantIdForTests(null);
       expect((await login(app, PLATFORM, email, 'student-password-1')).res.status).toBe(401);
       const soft = await api(app).get('/api/v1/public/site').set('Host', PLATFORM).expect(200);
       expect(soft.body.data.platformHost).toBe(true);
+      await api(app).get('/api/v1/public/courses').set('Host', PLATFORM).expect(404);
     });
   });
 
