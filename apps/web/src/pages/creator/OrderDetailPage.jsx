@@ -61,18 +61,27 @@ export function OrderDetailPage() {
   const { id } = useParams();
   const auth = useAuth();
   const [refundOpen, setRefundOpen] = useState(false);
+  const qc = useQueryClient();
   const q = useQuery({ queryKey: ['creator', 'order', id], queryFn: () => creatorCommerceApi.order(id) });
-  const invoice = useMutation({ mutationFn: () => creatorCommerceApi.invoice(id), onSuccess: (blob) => saveBlob(blob, `${o.invoiceNumber.replace(/[^A-Za-z0-9-]+/g, '-')}.pdf`), onError: (e) => toast.error(e.message) });
+  const invoice = useMutation({
+    mutationFn: () => creatorCommerceApi.invoice(id),
+    onSuccess: (blob) => {
+      saveBlob(blob, `${(q.data?.invoiceNumber ?? q.data?.number ?? 'invoice').replace(/[^A-Za-z0-9-]+/g, '-')}.pdf`);
+      qc.invalidateQueries({ queryKey: ['creator', 'order', id] });
+    },
+    onError: (e) => toast.error(e.message),
+  });
   if (q.isError) return <Card><ErrorState error={q.error} onRetry={() => q.refetch()} /></Card>;
   const o = q.data;
   if (!o) return <Skeleton className="h-96" />;
   const m = (v) => formatMoney(v, o.currency);
   const canRefund = auth.can('refunds.manage') && ['PAID', 'PARTIALLY_REFUNDED'].includes(o.status) && o.payments.some((p) => ['CAPTURED', 'PARTIALLY_REFUNDED'].includes(p.status));
+  const canInvoice = ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(o.status);
   return (
     <>
       <PageHeader title={`Order ${o.number}`} description={`Placed ${formatDate(o.createdAt, { withTime: true })}`} breadcrumbs={[{ label: 'Sales' }, { label: 'Orders', to: '/creator/orders' }, { label: o.number }]}
         actions={<div className="flex gap-2">
-          {o.invoiceNumber && <Button variant="secondary" leftIcon={Download} loading={invoice.isPending} onClick={() => invoice.mutate()}>Invoice</Button>}
+          {canInvoice && <Button variant="secondary" leftIcon={Download} loading={invoice.isPending} onClick={() => invoice.mutate()}>Invoice</Button>}
           {canRefund && <Button variant="secondary" leftIcon={RotateCcw} onClick={() => setRefundOpen(true)}>Refund</Button>}
         </div>} />
       {o.failureReason && !['PAID', 'REFUNDED', 'PARTIALLY_REFUNDED'].includes(o.status) && <Alert tone="warning" className="mb-4">{o.failureReason}</Alert>}

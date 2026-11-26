@@ -705,27 +705,10 @@ export class OrdersService {
         if (conversion) entries.push({ type: 'AFFILIATE_COMMISSION', amount: -toMinor(conversion.commission, cur), description: `Affiliate commission ${Number(conversion.percent)}%` });
         for (const e of entries) await tx.ledgerEntry.create({ data: { orderId: order.id, type: e.type, amount: e.amount < 0 ? `-${fromMinor(-e.amount, cur)}` : fromMinor(e.amount, cur), currency: cur, description: e.description } as never });
       }
-      if (business && !business.invoicesEnabled) return { order, invoice: null, tickets };
-      const fy = financialYear(now);
-      const seq = await nextSequence(tx, tenantId, `invoice:${fy}`);
-      const prefix = business?.invoicePrefix || 'INV';
-      const billing = order.billing as Record<string, string | null>;
-      const zeroRated = Boolean(business?.exportsUnderLut && billing.country && billing.country !== 'IN' && Number(order.taxAmount) === 0 && order.taxRate !== null);
-      const invoice = await tx.invoice.create({
-        data: {
-          orderId: order.id, number: invoiceNumber(prefix, fy, business?.invoiceStartNumber ?? 1, seq), issuedAt: now,
-          seller: {
-            name: business?.legalName || tenant.name, address: [business?.addressLine1, business?.addressLine2, business?.city, business?.state, business?.postalCode, business?.country].filter(Boolean).join(', '),
-            gstin: business?.gstRegistered ? business?.gstin ?? null : null, pan: business?.pan ?? null, state: business?.state ?? null,
-            details: business?.taxDetails ?? null, note: business?.invoiceNote ?? null,
-          },
-          buyer: billing,
-          lines: [
-            ...order.items.map((i) => ({ description: i.title, quantity: 1, unitAmount: i.unitAmount.toString(), discountAmount: i.discountAmount.toString(), totalAmount: i.totalAmount.toString() })),
-            ...(Number(order.transactionFeeAmount) > 0 ? [{ description: 'Transaction fee (payment gateway charges)', quantity: 1, unitAmount: order.transactionFeeAmount.toString(), discountAmount: '0', totalAmount: order.transactionFeeAmount.toString() }] : []),
-          ],
-          totals: { currency: cur, subtotal: order.subtotalAmount.toString(), discount: order.discountAmount.toString(), tax: order.taxAmount.toString(), taxRate: order.taxRate?.toString() ?? null, taxInclusive: order.taxInclusive, total: order.totalAmount.toString(), zeroRated, paidVia: paid ? `Razorpay ${paid.result.method ?? ''}`.trim() : opts.offline ? OFFLINE_LABEL[opts.offline.mode] ?? 'Offline payment' : 'Free (100% discount)', paymentId: paid?.result.providerPaymentId ?? opts.offline?.reference ?? null },
-        } as never,
+      const paidVia = paid ? `Razorpay ${paid.result.method ?? ''}`.trim() : opts.offline ? OFFLINE_LABEL[opts.offline.mode] ?? 'Offline payment' : 'Free (100% discount)';
+      const invoice = await this.createInvoiceInTx(tx, order, {
+        tenantId, tenantName: tenant.name, business,
+        paidVia, paymentId: paid?.result.providerPaymentId ?? opts.offline?.reference ?? null, issuedAt: now,
       });
       return { order, invoice, tickets };
     }, { timeout: 20_000 });
@@ -788,11 +771,86 @@ export class OrdersService {
     });
   }
 
+  /**
+   * Issues an invoice row for a paid order when the academy has invoicing on. Used at fulfilment and
+   * lazily on download for orders paid while invoices were off (or before tax settings existed).
+   */
+  private async createInvoiceInTx(
+    tx: Tx,
+    order: {
+      id: string; number: string; currency: string; billing: unknown; taxAmount: { toString(): string }; taxRate: { toString(): string } | null; taxInclusive: boolean;
+      subtotalAmount: { toString(): string }; discountAmount: { toString(): string }; totalAmount: { toString(): string }; transactionFeeAmount: { toString(): string };
+      items: { title: string; unitAmount: { toString(): string }; discountAmount: { toString(): string }; totalAmount: { toString(): string } }[];
+    },
+    opts: {
+      tenantId: string; tenantName: string;
+      business: { invoicesEnabled: boolean; invoicePrefix: string | null; invoiceStartNumber: number | null; legalName: string | null; addressLine1: string | null; addressLine2: string | null; city: string | null; state: string | null; postalCode: string | null; country: string | null; gstRegistered: boolean; gstin: string | null; pan: string | null; taxDetails: string | null; invoiceNote: string | null; exportsUnderLut: boolean } | null;
+      paidVia: string; paymentId: string | null; issuedAt: Date;
+    },
+  ) {
+    if (opts.business && !opts.business.invoicesEnabled) return null;
+    const fy = financialYear(opts.issuedAt);
+    const seq = await nextSequence(tx, opts.tenantId, `invoice:${fy}`);
+    const prefix = opts.business?.invoicePrefix || 'INV';
+    const billing = order.billing as Record<string, string | null>;
+    const zeroRated = Boolean(opts.business?.exportsUnderLut && billing.country && billing.country !== 'IN' && Number(order.taxAmount) === 0 && order.taxRate !== null);
+    const b = opts.business;
+    return tx.invoice.create({
+      data: {
+        orderId: order.id, number: invoiceNumber(prefix, fy, b?.invoiceStartNumber ?? 1, seq), issuedAt: opts.issuedAt,
+        seller: {
+          name: b?.legalName || opts.tenantName, address: [b?.addressLine1, b?.addressLine2, b?.city, b?.state, b?.postalCode, b?.country].filter(Boolean).join(', '),
+          gstin: b?.gstRegistered ? b?.gstin ?? null : null, pan: b?.pan ?? null, state: b?.state ?? null,
+          details: b?.taxDetails ?? null, note: b?.invoiceNote ?? null,
+        },
+        buyer: billing,
+        lines: [
+          ...order.items.map((i) => ({ description: i.title, quantity: 1, unitAmount: i.unitAmount.toString(), discountAmount: i.discountAmount.toString(), totalAmount: i.totalAmount.toString() })),
+          ...(Number(order.transactionFeeAmount) > 0 ? [{ description: 'Transaction fee (payment gateway charges)', quantity: 1, unitAmount: order.transactionFeeAmount.toString(), discountAmount: '0', totalAmount: order.transactionFeeAmount.toString() }] : []),
+        ],
+        totals: {
+          currency: order.currency, subtotal: order.subtotalAmount.toString(), discount: order.discountAmount.toString(), tax: order.taxAmount.toString(),
+          taxRate: order.taxRate?.toString() ?? null, taxInclusive: order.taxInclusive, total: order.totalAmount.toString(), zeroRated,
+          paidVia: opts.paidVia, paymentId: opts.paymentId,
+        },
+      } as never,
+    });
+  }
+
+  /** Creates a missing invoice for a paid order when invoicing is currently enabled. */
+  private async ensureInvoice(orderId: string) {
+    const full = await this.db.order.findFirst({
+      where: { id: orderId },
+      include: { items: true, payments: { where: { status: { in: ['CAPTURED', 'REFUNDED', 'PARTIALLY_REFUNDED'] } }, orderBy: { capturedAt: 'desc' }, take: 1 } },
+    });
+    if (!full || !['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(full.status)) return null;
+    const { tenant, business } = await this.academy(full.tenantId);
+    if (business && !business.invoicesEnabled) return null;
+    const paid = full.payments[0];
+    const paidVia = paid
+      ? `Razorpay ${paid.method ?? ''}`.trim()
+      : full.paymentMode && OFFLINE_MODES.includes(full.paymentMode as (typeof OFFLINE_MODES)[number])
+        ? OFFLINE_LABEL[full.paymentMode] ?? 'Offline payment'
+        : Number(full.totalAmount) === 0 ? 'Free (100% discount)' : 'Paid';
+    const paymentId = paid?.providerPaymentId ?? full.externalReference ?? null;
+    const issuedAt = full.paidAt ?? new Date();
+    try {
+      return await this.db.$transaction(async (tx) => {
+        const existing = await tx.invoice.findFirst({ where: { orderId: full.id } });
+        if (existing) return existing;
+        return this.createInvoiceInTx(tx, full, { tenantId: full.tenantId, tenantName: tenant.name, business, paidVia, paymentId, issuedAt });
+      });
+    } catch {
+      return this.db.invoice.findFirst({ where: { orderId: full.id } });
+    }
+  }
+
   /** Invoice PDF. Buyers see only their own orders (userId given); staff see any order of the academy. */
   async invoicePdf(orderId: string, userId?: string) {
     const o = await this.db.order.findFirst({ where: { id: orderId, ...(userId ? { userId } : {}) } });
     if (!o) throw AppException.notFound('Order not found');
-    const inv = await this.db.invoice.findFirst({ where: { orderId: o.id } });
+    let inv = await this.db.invoice.findFirst({ where: { orderId: o.id } });
+    if (!inv) inv = await this.ensureInvoice(o.id);
     if (!inv) {
       const b = await this.prisma.tenantBusinessProfile.findUnique({ where: { tenantId: o.tenantId }, select: { invoicesEnabled: true } });
       throw AppException.notFound(b && !b.invoicesEnabled && ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(o.status) ? 'This academy does not issue invoices for purchases.' : 'An invoice is issued once the order is paid');

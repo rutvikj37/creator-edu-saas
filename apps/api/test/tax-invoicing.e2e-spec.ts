@@ -90,5 +90,14 @@ describe('Tax and invoicing settings (e2e)', () => {
     const r = await authed(app, third).get(`/api/v1/learn/orders/${o3.id}/invoice`).expect(404);
     expect(r.body.error.message).toMatch(/does not issue invoices/);
     expect((await authed(app, cs).get('/api/v1/creator/academy/business')).body.data.nextInvoiceNumber).toBe(`SPE/${fy}/10003`);
+
+    // Turning invoices back on: download for the earlier paid order issues it (same serial the academy would have used).
+    await authed(app, cs).put('/api/v1/creator/academy/business').send({ invoicesEnabled: true }).expect(200);
+    const late = await authed(app, cs).get(`/api/v1/creator/orders/${o3.id}/invoice`).buffer(true)
+      .parse((res, cb) => { const b: Buffer[] = []; res.on('data', (d: Buffer) => b.push(d)); res.on('end', () => cb(null, Buffer.concat(b))); }).expect(200);
+    expect((late.body as Buffer).subarray(0, 5).toString()).toBe('%PDF-');
+    const inv3 = await prisma.invoice.findFirstOrThrow({ where: { orderId: o3.id } });
+    expect(inv3.number).toBe(`SPE/${fy}/10003`);
+    expect((await authed(app, third).get(`/api/v1/learn/orders/${o3.id}`).expect(200)).body.data.invoiceNumber).toBe(`SPE/${fy}/10003`);
   });
 });
