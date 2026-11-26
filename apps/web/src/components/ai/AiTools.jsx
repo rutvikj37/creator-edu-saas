@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Send, Sparkles } from 'lucide-react';
 import { Alert } from '../auth/Alert.jsx';
 import { Button, Checkbox, Input, Modal, Select, Textarea, toast } from '../ui/index.js';
+import { FEATURE_FLAGS } from '../../config/featureFlags.js';
 import { aiApi } from '../../services/api/ai.js';
 import { coursesApi } from '../../services/api/creator.js';
 import { creatorLearnApi } from '../../services/api/learn.js';
@@ -10,7 +11,12 @@ import { creatorLearnApi } from '../../services/api/learn.js';
 const credits = (n) => `${n} AI credit${n === 1 ? '' : 's'} used`;
 
 /** "Draft with AI" for a text lesson. The draft replaces the editor content; nothing is saved until the creator saves. */
-export function AiDraftButton({ courseId, lessonId, hasContent, onDraft }) {
+export function AiDraftButton(props) {
+  if (!FEATURE_FLAGS.AI_STUDIO) return null;
+  return <AiDraftButtonInner {...props} />;
+}
+
+function AiDraftButtonInner({ courseId, lessonId, hasContent, onDraft }) {
   const [open, setOpen] = useState(false);
   const [notes, setNotes] = useState('');
   const gen = useMutation({
@@ -34,7 +40,12 @@ export function AiDraftButton({ courseId, lessonId, hasContent, onDraft }) {
 }
 
 /** Generates multiple-choice questions from one of the course's text lessons, then adds the chosen ones. */
-export function AiQuizGenerator({ courseId, lessonId }) {
+export function AiQuizGenerator(props) {
+  if (!FEATURE_FLAGS.AI_STUDIO) return null;
+  return <AiQuizGeneratorInner {...props} />;
+}
+
+function AiQuizGeneratorInner({ courseId, lessonId }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [source, setSource] = useState('');

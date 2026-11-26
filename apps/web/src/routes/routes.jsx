@@ -6,6 +6,7 @@ import { AcademyCatalogLayout, GuestOnly, RequireAuth, SurfaceOnly } from './gua
 import { NotFoundPage } from '../pages/NotFoundPage.jsx';
 import { AffiliateLayout, CreatorLayout, FinanceLayout, StudentLayout, SuperAdminLayout, SupportLayout } from '../layouts/PanelLayouts.jsx';
 import { getSurface } from '../utils/host.js';
+import { FEATURE_FLAGS } from '../config/featureFlags.js';
 
 // Route-level code splitting: each screen loads only when visited.
 const lazyNamed = (loader, name) => lazy(() => loader().then((m) => ({ default: m[name] })));
@@ -231,7 +232,7 @@ const creatorWorkspaceRoutes = {
         { path: '/creator/reports', element: page(ReportsPage) },
         { path: '/creator/reports/webinars', element: page(WebinarsReportPage) },
         { path: '/creator/settlements', element: page(SettlementsPage) },
-        { path: '/creator/ai', element: page(AiStudioPage) },
+        { path: '/creator/ai', element: FEATURE_FLAGS.AI_STUDIO ? page(AiStudioPage) : <Navigate to="/creator" replace /> },
         { path: '/creator/discussions', element: page(DiscussionsPage) },
         { path: '/creator/certificates', element: page(CertificatesAdminPage) },
         { path: '/creator/website', element: page(WebsitePage) },

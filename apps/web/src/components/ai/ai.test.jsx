@@ -8,6 +8,7 @@ import { AiStudioPage } from '../../pages/creator/AiStudioPage.jsx';
 import { aiApi } from '../../services/api/ai.js';
 import { creatorLearnApi } from '../../services/api/learn.js';
 
+vi.mock('../../config/featureFlags.js', () => ({ FEATURE_FLAGS: { AI_STUDIO: true } }));
 vi.mock('../../services/api/ai.js', () => ({ aiApi: { usage: vi.fn(), settings: vi.fn(), saveSettings: vi.fn(), outline: vi.fn(), applyOutline: vi.fn(), lessonDraft: vi.fn(), quizQuestions: vi.fn(), tutorStatus: vi.fn(), ask: vi.fn() } }));
 vi.mock('../../services/api/creator.js', () => ({ coursesApi: {
   list: vi.fn(async () => ({ items: [{ id: 'c1', title: 'Investing 101' }] })),

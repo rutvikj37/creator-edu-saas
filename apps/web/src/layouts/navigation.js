@@ -4,6 +4,7 @@ import {
   KeyRound, Layers, Library, Link2, Package, Mail, Megaphone, MessagesSquare, Palette, Percent, Plug, Radio, Receipt, ScrollText, Settings, ShieldCheck,
   ShoppingCart, Sparkles, Star, Tag, Ticket, UserCog, Users, Video, Wallet,
 } from 'lucide-react';
+import { FEATURE_FLAGS } from '../config/featureFlags.js';
 
 /**
  * Navigation per panel (docs/UI_UX_NAVIGATION.md). `phase` = delivery phase; items are
@@ -76,7 +77,8 @@ export const NAV = {
         item('Batches', '/creator/batches', Boxes, 9, { available: true, perm: 'students.read' }),
         item('Certificates', '/creator/certificates', Award, 5, { available: true, perm: 'certificates.manage' }),
         item('Ratings & reviews', '/creator/reviews', Star, 5, { available: true, perm: 'courses.read' }),
-        item('AI studio', '/creator/ai', Sparkles, 10, { available: true, perm: 'courses.manage' }),
+        // Hidden while FEATURE_FLAGS.AI_STUDIO is false — keep the entry for easy re-enable.
+        ...(FEATURE_FLAGS.AI_STUDIO ? [item('AI studio', '/creator/ai', Sparkles, 10, { available: true, perm: 'courses.manage' })] : []),
       ],
     },
     {
