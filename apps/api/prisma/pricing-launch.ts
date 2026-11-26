@@ -10,9 +10,9 @@ const SHARED = {
   'students.max': null,
   'contacts.max': null,
   'staff.max': null,
-  'storage.gb': 1000,
-  'bandwidth.gb': 5000,
-  'domains.custom': null,
+  'storage.gb': null,
+  'bandwidth.gb': null,
+  'domains.custom': 1,
   'marketing.emails': 5000,
   website_builder: true,
   marketing: true,
@@ -20,7 +20,8 @@ const SHARED = {
   live_classes: true,
   integrations: true,
   'analytics.advanced': true,
-  'ai.credits': 5000,
+  // Disabled on launch plans — keep the key so Usage/plan UIs can omit it cleanly.
+  'ai.credits': false,
   'commission.percent': 0,
   white_label: true,
 } as const;
@@ -76,6 +77,38 @@ function featureRows(features: FeatureMap) {
   );
 }
 
+function snapshotFromFeatures(features: FeatureMap) {
+  return Object.fromEntries(
+    featureRows(features).map((f) => [f.featureKey, { enabled: f.enabled, limit: f.limitValue === null ? null : f.limitValue.toString() }]),
+  );
+}
+
+/** Replace a plan's feature rows with the shared launch map. */
+async function applySharedFeatures(client: PrismaClient, planId: string) {
+  await client.planFeature.deleteMany({ where: { planId } });
+  await client.planFeature.createMany({
+    data: featureRows(SHARED).map((f) => ({ ...f, planId })),
+  });
+}
+
+/**
+ * Refresh featureSnapshot on current subscriptions so Billing Usage picks up plan
+ * entitlement changes without waiting for a re-assign. Complimentary Pro (no price)
+ * and all Grow/Rise currents are included.
+ */
+async function refreshLaunchSnapshots(client: PrismaClient, planIds: string[]) {
+  if (!planIds.length) return;
+  const snapshot = snapshotFromFeatures(SHARED);
+  await client.subscription.updateMany({
+    where: {
+      currentKey: 'current',
+      planId: { in: planIds },
+      status: { in: ['TRIALING', 'ACTIVE', 'PAST_DUE', 'GRACE'] },
+    },
+    data: { featureSnapshot: snapshot as never },
+  });
+}
+
 /** Upsert Grow/Rise with distinct intervals, shared features, and hide legacy public catalogue plans. */
 export async function syncPricingLaunch(client: PrismaClient) {
   await client.subscriptionPlan.updateMany({
@@ -89,6 +122,8 @@ export async function syncPricingLaunch(client: PrismaClient) {
       data: { isPublic: false, isDefault: true, status: 'ACTIVE' },
     });
   }
+
+  const syncedPlanIds: string[] = [];
 
   for (const p of LAUNCH_PLANS) {
     const existing = await client.subscriptionPlan.findUnique({ where: { code: p.code } });
@@ -119,10 +154,8 @@ export async function syncPricingLaunch(client: PrismaClient) {
           },
         });
 
-    await client.planFeature.deleteMany({ where: { planId: plan.id } });
-    await client.planFeature.createMany({
-      data: featureRows(p.features).map((f) => ({ ...f, planId: plan.id })),
-    });
+    await applySharedFeatures(client, plan.id);
+    syncedPlanIds.push(plan.id);
 
     // Only this plan's launch price(s) stay active; deactivate month / other currencies / old intervals.
     await client.planPrice.updateMany({
@@ -146,5 +179,14 @@ export async function syncPricingLaunch(client: PrismaClient) {
     }
   }
 
-  console.log('Synced pricing launch: Grow ₹16,999 / 6 mo · Rise ₹19,999 / year (same features, GST extra)');
+  // Complimentary Pro (and other legacy Pro assigns) should show the same Usage entitlements.
+  const pro = await client.subscriptionPlan.findUnique({ where: { code: 'pro' } });
+  if (pro) {
+    await applySharedFeatures(client, pro.id);
+    syncedPlanIds.push(pro.id);
+  }
+
+  await refreshLaunchSnapshots(client, syncedPlanIds);
+
+  console.log('Synced pricing launch: Grow ₹16,999 / 6 mo · Rise ₹19,999 / year (unlimited storage/bandwidth, 1 domain, 5k emails, no AI credits)');
 }

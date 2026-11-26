@@ -11,7 +11,7 @@ export const LAUNCH_MODULES = [
   '5,000 Marketing Emails/Month',
   'Third Party Integrations',
   'Unlimited Products',
-  'Custom domains',
+  '1 custom domain',
   'White label',
 ];
 

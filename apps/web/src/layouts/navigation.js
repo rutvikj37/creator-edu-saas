@@ -44,7 +44,8 @@ export const NAV = {
   ],
 
   // Grouped like Graphy's creator dashboard: Home / Inbox / Community up top, then one rail
-  // icon per section (Products, Learning, Users, Reports, Website, Marketing, Settings).
+  // icon per section (Products, Learning, Users, Reports, Marketing, Settings).
+  // Website builder stays at /creator/website (deep link) when WEBSITE_SIDEBAR is off.
   // Branding, Domains, Payments, Live integrations live under My academy → SettingsTabs.
   creator: [
     {
@@ -103,13 +104,13 @@ export const NAV = {
         item('Traffic', '/creator/analytics', Activity, 10, { available: true, perm: 'analytics.read' }),
       ],
     },
-    {
-      // Branding & Domains are My academy tabs (SettingsTabs / academy?tab=branding), not sidebar items.
+    // Hidden while FEATURE_FLAGS.WEBSITE_SIDEBAR is false — route `/creator/website` remains.
+    ...(FEATURE_FLAGS.WEBSITE_SIDEBAR ? [{
       label: 'Website', icon: Globe,
       items: [
         item('Website builder', '/creator/website', Brush, 8, { available: true, perm: 'website.manage' }),
       ],
-    },
+    }] : []),
     {
       label: 'Marketing', icon: Megaphone,
       items: [

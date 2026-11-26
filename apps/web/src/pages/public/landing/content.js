@@ -17,7 +17,7 @@ export const LAUNCH_STRIP = [
   { icon: Megaphone, title: '5,000 Marketing Emails/Month' },
   { icon: Plug, title: 'Third Party Integrations' },
   { icon: Download, title: 'Unlimited Products' },
-  { icon: Globe, title: 'Custom domains' },
+  { icon: Globe, title: '1 custom domain' },
   { icon: Award, title: 'White label' },
 ];
 
@@ -44,7 +44,7 @@ export function faqs({ name }) {
     { q: 'How does pricing work?', a: 'Grow is ₹16,999 for 6 months. Rise is ₹19,999 for 12 months. Both include the same modules (including white label). 18% GST is charged extra. Agency accounts are provisioned by our team — talk to us to get started.' },
     { q: 'What is included in every plan?', a: 'Unlimited contacts, unlimited admin accounts, unlimited live classes & webinars, 5,000 marketing emails per month, third-party integrations, unlimited products, custom domains, and white-label branding. Grow and Rise differ only by billing period and price.' },
     { q: 'How do I get paid?', a: 'You connect your own Razorpay account. Learners pay with UPI, cards, net banking or wallets and the money settles directly to your bank account on Razorpay’s schedule.' },
-    { q: 'Can I use my own domain name?', a: 'Yes. Custom domains are included on Grow and Rise. We help you point DNS and go live on your brand URL.' },
+    { q: 'Can I use my own domain name?', a: 'Yes. One custom domain is included on Grow and Rise. We help you point DNS and go live on your brand URL.' },
     { q: 'Is my content protected?', a: 'Videos are streamed rather than offered as downloads, you can limit how many devices a learner signs in on, and videos and PDFs can carry the learner’s details as a watermark.' },
     { q: 'Can I issue GST invoices?', a: 'Yes. Add your GSTIN and business details once, and every sale generates a tax invoice in your own number series.' },
   ];

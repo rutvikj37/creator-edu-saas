@@ -110,7 +110,8 @@ export function BillingPage() {
   if (billing.isError) return <Card><ErrorState error={billing.error} onRetry={() => billing.refetch()} /></Card>;
   if (billing.isLoading) return <Skeleton className="h-96" />;
   const { subscription: s, entitlements: e, usage, catalog } = billing.data;
-  const limits = catalog.filter((f) => f.kind === 'limit' && f.key !== 'commission.percent');
+  // Hide metered AI credits and commission from the Usage grid (commission stays in Current plan).
+  const limits = catalog.filter((f) => f.kind === 'limit' && f.key !== 'commission.percent' && f.key !== 'ai.credits');
   const open = (invoices.data ?? []).filter((i) => i.status === 'OPEN');
   const renewal = open.find((i) => i.kind === 'RENEWAL');
   const currency = plans.data?.currency ?? 'INR';
@@ -192,7 +193,7 @@ export function BillingPage() {
                   <p className="mt-1 text-2xl font-semibold">{price ? formatMoney(price.amount, price.currency) : p.trialDays ? 'Free' : '—'}<span className="text-sm font-normal text-muted">{price ? ` / ${period}` : p.trialDays ? ` for ${p.trialDays} days` : ''}</span></p>
                   {p.description && <p className="mt-1 text-sm text-muted">{p.description}</p>}
                   <ul className="mt-4 flex-1 space-y-2 text-sm">
-                    {catalog.map((f) => {
+                    {catalog.filter((f) => f.key !== 'ai.credits').map((f) => {
                       const t = f.key === 'commission.percent' ? `${values[f.key]?.limit ?? 0}%` : featureText(f, values[f.key]);
                       return (
                         <li key={f.key} className="flex items-center gap-2">
