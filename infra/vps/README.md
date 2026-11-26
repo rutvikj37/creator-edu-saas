@@ -10,6 +10,22 @@ Set in `/opt/lms/shared/.env` (and rebuild the web app after changing `VITE_*`):
 `ADMIN_HOST=lmsadmin.techxsolutions.io`, matching `VITE_PLATFORM_ROOT_DOMAIN` / `VITE_APP_HOST` /
 `VITE_ADMIN_HOST`.
 
+**Transactional email (Resend SMTP):** point the worker at Resend so student invites and other
+mail leave via `smtp.resend.com`. Set (or update) these keys in `/opt/lms/shared/.env`, then
+`pm2 restart lms-api lms-worker`:
+
+```
+SMTP_HOST=smtp.resend.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=resend
+SMTP_PASS=<resend_api_key>
+MAIL_FROM="LMS Notifications <lmsnotifications@techxsolutions.io>"
+```
+
+The From domain (`techxsolutions.io`) must be verified in the Resend dashboard. Do not commit
+the API key; keep it only in the shared env file on the server.
+
 | Piece | Where |
 |---|---|
 | Code (one folder per release) | `/opt/lms/releases/<commit>`, current → `/opt/lms/current` |

@@ -104,7 +104,7 @@ export function StudentHomePage() {
         key: `live-${s.id}`,
         icon: Radio,
         title: s.liveClass?.title ?? 'Live class',
-        meta: s.status === 'LIVE' ? 'Live now' : formatDate(s.startsAt, { withTime: true }),
+        meta: s.status === 'LIVE' ? 'Live now' : formatDate(s.startsAt, { withTime: true, timeZone: s.liveClass?.timezone }),
         to: '/learn/live',
         accent: s.status === 'LIVE',
       });

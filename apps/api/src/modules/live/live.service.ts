@@ -822,7 +822,11 @@ export class LiveService {
     const out = [];
     for (const s of sessions) {
       if (!(await this.mayAttend(s.liveClass, userId, null))) continue;
-      out.push({ ...this.sessionView(s), liveClass: { id: s.liveClass.id, title: s.liveClass.title, kind: s.liveClass.kind, provider: s.liveClass.provider, description: s.liveClass.description }, joinOpensAt: new Date(s.startsAt.getTime() - JOIN_OPENS_MIN * 60_000) });
+      out.push({
+        ...this.sessionView(s),
+        liveClass: { id: s.liveClass.id, title: s.liveClass.title, kind: s.liveClass.kind, provider: s.liveClass.provider, description: s.liveClass.description, timezone: s.liveClass.timezone },
+        joinOpensAt: new Date(s.startsAt.getTime() - JOIN_OPENS_MIN * 60_000),
+      });
       if (out.length >= 50) break;
     }
     return out;
@@ -831,7 +835,9 @@ export class LiveService {
   async recordingsFor(userId: string) {
     const sessions = await this.db.liveSession.findMany({ where: { recordingStatus: 'READY', videoAssetId: { not: null } }, include: { liveClass: true }, orderBy: { startsAt: 'desc' }, take: 100 });
     const out = [];
-    for (const s of sessions) if (await this.mayAttend(s.liveClass, userId, null)) out.push({ ...this.sessionView(s), liveClass: { id: s.liveClass.id, title: s.liveClass.title } });
+    for (const s of sessions) if (await this.mayAttend(s.liveClass, userId, null)) {
+      out.push({ ...this.sessionView(s), liveClass: { id: s.liveClass.id, title: s.liveClass.title, timezone: s.liveClass.timezone } });
+    }
     return out;
   }
 

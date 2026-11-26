@@ -197,6 +197,19 @@ export class CreatorBatchesController {
   archive(@Param('id') id: string, @CurrentAuth() auth: AuthContext) { return this.batches.archive(id, auth.userId); }
 }
 
+@ApiTags('Student · Batches')
+@ApiBearerAuth()
+@RequireRealm('TENANT')
+@TenantScoped('academy')
+@Controller({ path: 'learn/batches', version: '1' })
+export class LearnBatchesController {
+  constructor(private readonly batches: BatchesService) {}
+
+  @Get()
+  @ApiOperation({ summary: 'Batches this student belongs to' })
+  list(@CurrentAuth() auth: AuthContext) { return this.batches.listForStudent(auth.userId); }
+}
+
 // ── Student ─────────────────────────────────────────────────
 @ApiTags('Student · Live')
 @ApiBearerAuth()

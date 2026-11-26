@@ -1,16 +1,18 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { FEATURES } from '@ce/shared';
 import { AppException } from '../../common/errors/app-exception.js';
 import { Paginated } from '../../common/interceptors/response-envelope.interceptor.js';
 import { toSkipTake, type PaginationQueryDto } from '../../common/dto/pagination.dto.js';
+import { AppConfig } from '../../config/app-config.service.js';
 import { PrismaService } from '../../core/prisma/prisma.service.js';
 import { AuditService } from '../../core/audit/audit.service.js';
 import { MailService } from '../../core/mail/mail.service.js';
-import { escapeHtml } from '../../core/mail/templates.js';
+import { emailTemplates, escapeHtml } from '../../core/mail/templates.js';
 import { randomToken, sha256 } from '../../core/crypto/crypto.service.js';
 import { TENANT_PRISMA } from '../../core/tenancy/tenancy.module.js';
 import type { TenantPrismaClient } from '../../core/tenancy/tenant-prisma.js';
 import { TenantContext } from '../../core/tenancy/tenant-context.service.js';
+import { academyOrigin } from '../tenants/academy-origin.js';
 import { EntitlementsService } from '../subscriptions/entitlements.service.js';
 import { LearningService } from './learning.service.js';
 
@@ -27,9 +29,12 @@ export function normalizePhone(raw: string | null | undefined): string | null | 
 
 @Injectable()
 export class CreatorLearningService {
+  private readonly logger = new Logger(CreatorLearningService.name);
+
   constructor(
     @Inject(TENANT_PRISMA) private readonly db: TenantPrismaClient,
     private readonly prisma: PrismaService,
+    private readonly config: AppConfig,
     private readonly ctx: TenantContext,
     private readonly learning: LearningService,
     private readonly entitlements: EntitlementsService,
@@ -68,7 +73,7 @@ export class CreatorLearningService {
   }
 
   /** Grants a course to a student by email; new students get an account and a set-password email. */
-  async enroll(courseId: string, email: string, actorUserId: string, origin: string) {
+  async enroll(courseId: string, email: string, actorUserId: string) {
     const tenantId = this.ctx.requireTenantId();
     const course = await this.db.course.findFirst({ where: { id: courseId, deletedAt: null } });
     if (!course) throw AppException.notFound('Course not found');
@@ -81,25 +86,29 @@ export class CreatorLearningService {
       invited = true;
     }
     const enrollment = await this.learning.grant(user.id, courseId, 'MANUAL', actorUserId);
-    const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { name: true } });
+    const { origin, name: brand } = await academyOrigin(this.prisma, this.config, tenantId);
     let link = `${origin}/learn`;
     if (invited) {
       const token = randomToken(32);
       await this.prisma.passwordReset.create({ data: { userId: user.id, tokenHash: sha256(token), expiresAt: new Date(Date.now() + 7 * 86_400_000) } });
       link = `${origin}/reset-password?token=${encodeURIComponent(token)}`;
     }
-    await this.mail.send({
-      to: email, tenantId, tag: 'enrolled',
-      subject: `You're enrolled in ${course.title}`,
-      html: `<p>You now have access to <strong>${escapeHtml(course.title)}</strong> at ${escapeHtml(tenant.name)}.</p><p><a href="${escapeHtml(link)}">${invited ? 'Set your password and start learning' : 'Start learning'}</a></p>`,
-      text: `You now have access to ${course.title} at ${tenant.name}: ${link}`,
-    });
+    try {
+      await this.mail.send({
+        to: email, tenantId, tag: 'enrolled',
+        subject: `You're enrolled in ${course.title}`,
+        html: `<p>You now have access to <strong>${escapeHtml(course.title)}</strong> at ${escapeHtml(brand)}.</p><p><a href="${escapeHtml(link)}">${invited ? 'Set your password and start learning' : 'Start learning'}</a></p>`,
+        text: `You now have access to ${course.title} at ${brand}: ${link}`,
+      });
+    } catch (e) {
+      this.logger.warn({ err: (e as Error).message, email, tenantId }, 'enrollment email failed to enqueue');
+    }
     await this.audit.record({ action: 'enrollment.grant', tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'Enrollment', targetId: enrollment.id, after: { courseId, email } });
     return { enrollmentId: enrollment.id, invited };
   }
 
   /** Creates one student account, optionally enrols it in courses and emails a set-password link. */
-  async addStudent(input: StudentInput & { courseIds?: string[]; sendInvite?: boolean }, actorUserId: string, origin: string) {
+  async addStudent(input: StudentInput & { courseIds?: string[]; sendInvite?: boolean }, actorUserId: string) {
     const tenantId = this.ctx.requireTenantId();
     const courses = await this.coursesById(input.courseIds ?? []);
     const email = input.email.trim().toLowerCase();
@@ -112,9 +121,10 @@ export class CreatorLearningService {
     }
     const count = await this.prisma.user.count({ where: { tenantId, deletedAt: null } });
     await this.entitlements.assertWithinLimit(tenantId, FEATURES.STUDENTS_MAX.key, count);
-    const user = await this.prisma.user.create({ data: { realm: 'TENANT', realmKey: tenantId, tenantId, email, phone, fullName: input.fullName.trim().slice(0, 120) } });
+    const fullName = input.fullName.trim().slice(0, 120);
+    const user = await this.prisma.user.create({ data: { realm: 'TENANT', realmKey: tenantId, tenantId, email, phone, fullName } });
     for (const c of courses) await this.learning.grant(user.id, c.id, 'MANUAL', actorUserId);
-    if (input.sendInvite !== false) await this.sendWelcome(tenantId, user.id, email, courses, origin);
+    if (input.sendInvite !== false) await this.sendWelcome(tenantId, user.id, email, fullName, courses);
     await this.audit.record({ action: 'student.create', tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'User', targetId: user.id, after: { email, courseIds: courses.map((c) => c.id) } });
     return { id: user.id, invited: input.sendInvite !== false, enrolled: courses.length };
   }
@@ -123,7 +133,7 @@ export class CreatorLearningService {
    * Bulk import from a parsed CSV. Rows are validated one by one so a bad row never blocks the rest:
    * new emails get an account, existing students are only enrolled in the chosen courses.
    */
-  async importStudents(rows: StudentInput[], opts: { courseIds?: string[]; sendInvite?: boolean }, actorUserId: string, origin: string) {
+  async importStudents(rows: StudentInput[], opts: { courseIds?: string[]; sendInvite?: boolean }, actorUserId: string) {
     const tenantId = this.ctx.requireTenantId();
     const courses = await this.coursesById(opts.courseIds ?? []);
     const sendInvite = opts.sendInvite !== false;
@@ -159,7 +169,7 @@ export class CreatorLearningService {
         count++;
         created++;
         for (const c of courses) await this.learning.grant(user.id, c.id, 'MANUAL', actorUserId);
-        if (sendInvite) await this.sendWelcome(tenantId, user.id, email, courses, origin);
+        if (sendInvite) await this.sendWelcome(tenantId, user.id, email, user.fullName, courses);
       } catch (e) {
         fail(e instanceof AppException ? e.message : 'Could not create this student');
       }
@@ -176,19 +186,24 @@ export class CreatorLearningService {
     return courses;
   }
 
-  /** Emails a new student a 7-day set-password link, listing any courses they were given. */
-  private async sendWelcome(tenantId: string, userId: string, email: string, courses: { title: string }[], origin: string) {
-    const tenant = await this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { name: true } });
+  /**
+   * Emails a new student a 7-day set-password link on the academy portal.
+   * Enqueue failures are logged so student creation still succeeds.
+   */
+  private async sendWelcome(tenantId: string, userId: string, email: string, fullName: string, courses: { title: string }[]) {
+    const { origin, name: brand } = await academyOrigin(this.prisma, this.config, tenantId);
     const token = randomToken(32);
     await this.prisma.passwordReset.create({ data: { userId, tokenHash: sha256(token), expiresAt: new Date(Date.now() + 7 * 86_400_000) } });
-    const link = `${origin}/reset-password?token=${encodeURIComponent(token)}`;
-    const list = courses.map((c) => c.title).join(', ');
-    await this.mail.send({
-      to: email, tenantId, tag: 'student-invite',
-      subject: `Your account at ${tenant.name}`,
-      html: `<p>An account has been created for you at <strong>${escapeHtml(tenant.name)}</strong>.</p>${list ? `<p>You have access to: ${escapeHtml(list)}.</p>` : ''}<p><a href="${escapeHtml(link)}">Set your password and start learning</a></p><p>This link expires in 7 days.</p>`,
-      text: `An account has been created for you at ${tenant.name}.${list ? ` You have access to: ${list}.` : ''} Set your password: ${link} (expires in 7 days)`,
-    });
+    const url = `${origin}/reset-password?token=${encodeURIComponent(token)}`;
+    const coursesBlock = courses.length ? `You have access to:\n\n${courses.map((c) => `- ${c.title}`).join('\n')}` : '';
+    try {
+      await this.mail.send({
+        to: email, tenantId, tag: 'student-invite',
+        ...emailTemplates.studentInvite({ brand, name: fullName, url, courses: coursesBlock }),
+      });
+    } catch (e) {
+      this.logger.warn({ err: (e as Error).message, email, tenantId }, 'student invite email failed to enqueue');
+    }
   }
 
   async revoke(enrollmentId: string, actorUserId: string) {

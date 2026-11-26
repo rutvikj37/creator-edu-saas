@@ -55,6 +55,9 @@ export const emailTemplates = {
   passwordReset(p: { brand: string; name: string; url: string }): RenderedEmail {
     return fromTemplate('passwordReset', p);
   },
+  studentInvite(p: { brand: string; name: string; url: string; courses?: string }): RenderedEmail {
+    return fromTemplate('studentInvite', { ...p, courses: p.courses ?? '' });
+  },
   otp(p: { brand: string; code: string; purpose: string }): RenderedEmail {
     return fromTemplate('otp', p);
   },

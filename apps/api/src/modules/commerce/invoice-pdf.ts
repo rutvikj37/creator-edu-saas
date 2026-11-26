@@ -12,8 +12,11 @@ interface InvoiceData {
 }
 
 /** Standard PDF fonts are WinAnsi-only: replace characters they cannot encode. */
-const safe = (s: string) => s.replace(/₹/g, 'Rs.').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-').replace(/[^\x20-\x7E\xA0-\xFF]/g, '?');
-const money = (v: string, c: string) => `${c} ${Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const safe = (s: unknown) => String(s ?? '').replace(/₹/g, 'Rs.').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-').replace(/[^\x20-\x7E\xA0-\xFF]/g, '?');
+const money = (v: string, c: string) => {
+  const n = Number(v);
+  return `${c} ${(Number.isFinite(n) ? n : 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
 
 export async function renderInvoicePdf(inv: InvoiceData): Promise<Buffer> {
   const doc = await PDFDocument.create();

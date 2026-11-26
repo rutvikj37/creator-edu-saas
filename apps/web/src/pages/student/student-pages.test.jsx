@@ -20,7 +20,7 @@ afterEach(() => vi.clearAllMocks());
 
 it('student orders: totals, item type, filter by status and search', async () => {
   checkoutApi.orders.mockResolvedValue([
-    { id: 'o1', number: 'ORD-000001', status: 'PAID', currency: 'INR', totalAmount: '999', refundedAmount: '0', createdAt: '2026-11-05T10:00:00Z', paidAt: '2026-11-05T10:00:00Z', items: [{ title: 'GST Basics', courseId: 'c1' }] },
+    { id: 'o1', number: 'ORD-000001', status: 'PAID', currency: 'INR', totalAmount: '999', refundedAmount: '0', invoiceNumber: 'INV/2026-27/00001', createdAt: '2026-11-05T10:00:00Z', paidAt: '2026-11-05T10:00:00Z', items: [{ title: 'GST Basics', courseId: 'c1' }] },
     { id: 'o2', number: 'ORD-000002', status: 'PAYMENT_INITIATED', currency: 'INR', totalAmount: '499', refundedAmount: '0', createdAt: '2026-11-06T10:00:00Z', items: [{ title: 'Tally pack', bundleId: 'b1' }] },
   ]);
   wrap(<StudentOrdersPage />);

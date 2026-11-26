@@ -1,6 +1,6 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { PrismaService } from '../src/core/prisma/prisma.service.js';
-import { api, authed, createTestApp, lastEmail, registerCreator, resetDatabase, uniqueEmail } from './helpers.js';
+import { api, authed, createTestApp, lastEmail, registerCreator, resetDatabase, tenantHost, tokenFromEmail, uniqueEmail } from './helpers.js';
 
 describe('Creator student management (e2e)', () => {
   let app: NestExpressApplication;
@@ -24,6 +24,10 @@ describe('Creator student management (e2e)', () => {
     expect(await prisma.enrollment.count({ where: { userId: r.id, courseId: course.id, status: 'ACTIVE' } })).toBe(1);
     const mail = await lastEmail(app, email);
     expect(mail?.tag).toBe('student-invite');
+    expect(mail?.subject).toContain(c.tenant.name);
+    expect(mail?.text).toMatch(new RegExp(`https?://${tenantHost(c.tenant.slug)}(:\\d+)?/reset-password\\?token=`));
+    expect(tokenFromEmail(mail!.text)).toBeTruthy();
+    expect(mail?.html).toContain('Algebra');
     expect(await prisma.passwordReset.count({ where: { userId: r.id } })).toBe(1);
 
     const list = (await authed(app, c.session).get('/api/v1/creator/students').query({ q: 'Asha' }).expect(200)).body.data;

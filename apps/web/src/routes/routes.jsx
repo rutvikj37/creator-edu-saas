@@ -103,6 +103,7 @@ const BatchesPage = lazyNamed(() => import('../pages/creator/BatchesPage.jsx'), 
 const HostRoomPage = lazyNamed(() => import('../pages/live/LivePages.jsx'), 'HostRoomPage');
 const StudentRoomPage = lazyNamed(() => import('../pages/live/LivePages.jsx'), 'StudentRoomPage');
 const StudentLivePage = lazyNamed(() => import('../pages/live/LivePages.jsx'), 'StudentLivePage');
+const MyBatchesPage = lazyNamed(() => import('../pages/student/MyBatchesPage.jsx'), 'MyBatchesPage');
 const WebinarPage = lazyNamed(() => import('../pages/live/LivePages.jsx'), 'WebinarPage');
 const TicketPage = lazyNamed(() => import('../pages/live/LivePages.jsx'), 'TicketPage');
 const NotificationSettingsPage = lazyNamed(() => import('../pages/account/NotificationSettingsPage.jsx'), 'NotificationSettingsPage');
@@ -349,7 +350,8 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/learn/support/:id', element: page(StudentTicketPage) },
             { path: '/learn/orders/:id', element: page(OrderStatusPage) },
             { path: '/learn/live', element: page(StudentLivePage) },
-            { path: '/learn/affiliate', element: page(StudentAffiliatePage) },
+            { path: '/learn/batches', element: page(MyBatchesPage) },
+            { path: '/learn/affiliate', element: page(StudentAffiliatePage) }
             { path: '/learn/communities', element: page(StudentCommunitiesPage) },
             { path: '/learn/communities/:id', element: page(CommunityFeedPage) },
             { path: '/learn/communities/:id/posts/:postId', element: page(CommunityPostPage) },

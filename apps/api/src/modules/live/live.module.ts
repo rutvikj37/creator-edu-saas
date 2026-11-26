@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { LearningModule } from '../learning/learning.module.js';
 import { BatchesService } from './batches.service.js';
 import { LiveInteractionService } from './interaction.service.js';
-import { CreatorBatchesController, CreatorLiveController, LearnLiveController, LiveKitWebhookController, LiveIntegrationsCallbackController, LiveIntegrationsController, PlugNmeetWebhookController, PublicWebinarController, ZoomWebhookController } from './live.controller.js';
+import { CreatorBatchesController, CreatorLiveController, LearnBatchesController, LearnLiveController, LiveKitWebhookController, LiveIntegrationsCallbackController, LiveIntegrationsController, PlugNmeetWebhookController, PublicWebinarController, ZoomWebhookController } from './live.controller.js';
 import { LiveJobs, LiveProcessor, LiveScheduler, PlugNmeetJobs } from './live.processor.js';
 import { LiveRecordingsService } from './live-recordings.service.js';
 import { PlugNmeetService } from './plugnmeet.service.js';
@@ -19,7 +19,7 @@ const SERVICES = [LiveKitService, PlugNmeetService, ZoomService, GoogleMeetServi
 
 @Module({
   imports: [LearningModule, BunnyModule],
-  controllers: [CreatorLiveController, CreatorBatchesController, LearnLiveController, PublicWebinarController, LiveKitWebhookController, PlugNmeetWebhookController, ZoomWebhookController, LiveIntegrationsController, LiveIntegrationsCallbackController],
+  controllers: [CreatorLiveController, CreatorBatchesController, LearnBatchesController, LearnLiveController, PublicWebinarController, LiveKitWebhookController, PlugNmeetWebhookController, ZoomWebhookController, LiveIntegrationsController, LiveIntegrationsCallbackController],
   providers: SERVICES,
   exports: [LiveService, LiveKitService, PlugNmeetService, LiveJobs],
 })

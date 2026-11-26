@@ -528,7 +528,9 @@ export class OrdersService {
 
   async listForUser(userId: string) {
     const rows = await this.db.order.findMany({ where: { userId, status: { notIn: ['CANCELLED'] } }, include: { items: true }, orderBy: { createdAt: 'desc' }, take: 100 });
-    return rows.map((o) => this.view(o));
+    const invoices = await this.db.invoice.findMany({ where: { orderId: { in: rows.map((r) => r.id) } }, select: { orderId: true, number: true } });
+    const byOrder = new Map(invoices.map((i) => [i.orderId, i.number]));
+    return rows.map((o) => ({ ...this.view(o), invoiceNumber: byOrder.get(o.id) ?? null }));
   }
 
   /** Opens a Razorpay order for an unpaid order and returns what Checkout.js needs. */
@@ -774,9 +776,49 @@ export class OrdersService {
       const b = await this.prisma.tenantBusinessProfile.findUnique({ where: { tenantId: o.tenantId }, select: { invoicesEnabled: true } });
       throw AppException.notFound(b && !b.invoicesEnabled && ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(o.status) ? 'This academy does not issue invoices for purchases.' : 'An invoice is issued once the order is paid');
     }
+    const seller = (inv.seller ?? {}) as Record<string, unknown>;
+    const buyer = (inv.buyer ?? {}) as Record<string, unknown>;
+    const totals = (inv.totals ?? {}) as Record<string, unknown>;
+    const lines = Array.isArray(inv.lines) ? (inv.lines as Record<string, unknown>[]) : [];
     const pdf = await renderInvoicePdf({
-      number: inv.number, issuedAt: inv.issuedAt, orderNumber: o.number, seller: inv.seller as never, buyer: inv.buyer as never,
-      lines: inv.lines as never, totals: inv.totals as never, refunded: o.refundedAmount.toString(),
+      number: inv.number,
+      issuedAt: inv.issuedAt,
+      orderNumber: o.number,
+      seller: {
+        name: String(seller.name ?? 'Seller'),
+        address: seller.address != null ? String(seller.address) : undefined,
+        gstin: seller.gstin != null ? String(seller.gstin) : null,
+        pan: seller.pan != null ? String(seller.pan) : null,
+        details: seller.details != null ? String(seller.details) : null,
+        note: seller.note != null ? String(seller.note) : null,
+      },
+      buyer: {
+        name: buyer.name != null ? String(buyer.name) : null,
+        email: buyer.email != null ? String(buyer.email) : null,
+        phone: buyer.phone != null ? String(buyer.phone) : null,
+        state: buyer.state != null ? String(buyer.state) : null,
+        gstin: buyer.gstin != null ? String(buyer.gstin) : null,
+      },
+      lines: lines.map((l) => ({
+        description: String(l.description ?? 'Item'),
+        quantity: Number(l.quantity) || 1,
+        unitAmount: String(l.unitAmount ?? '0'),
+        discountAmount: String(l.discountAmount ?? '0'),
+        totalAmount: String(l.totalAmount ?? '0'),
+      })),
+      totals: {
+        currency: String(totals.currency ?? o.currency),
+        subtotal: String(totals.subtotal ?? o.subtotalAmount),
+        discount: String(totals.discount ?? o.discountAmount),
+        tax: String(totals.tax ?? o.taxAmount),
+        taxRate: totals.taxRate != null ? String(totals.taxRate) : null,
+        taxInclusive: Boolean(totals.taxInclusive ?? o.taxInclusive),
+        total: String(totals.total ?? o.totalAmount),
+        zeroRated: Boolean(totals.zeroRated),
+        paidVia: String(totals.paidVia ?? 'Paid'),
+        paymentId: totals.paymentId != null ? String(totals.paymentId) : null,
+      },
+      refunded: o.refundedAmount.toString(),
     });
     return { pdf, filename: `${inv.number.replace(/[^A-Za-z0-9-]+/g, '-')}.pdf` };
   }

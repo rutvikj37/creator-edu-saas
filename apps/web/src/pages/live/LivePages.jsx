@@ -94,10 +94,10 @@ export function StudentLivePage() {
             const open = s.status === 'LIVE' || new Date(s.joinOpensAt).getTime() <= Date.now();
             return (
               <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
-                <div className="flex items-center gap-3"><CalendarClock className="size-5 text-muted" /><div><p className="font-medium">{s.liveClass.title}</p><p className="text-sm text-muted">{formatDate(s.startsAt, { withTime: true })}</p></div></div>
+                <div className="flex items-center gap-3"><CalendarClock className="size-5 text-muted" /><div><p className="font-medium">{s.liveClass.title}</p><p className="text-sm text-muted">{formatDate(s.startsAt, { withTime: true, timeZone: s.liveClass.timezone })}{s.liveClass.timezone ? ` · ${s.liveClass.timezone.replace(/_/g, ' ')}` : ''}</p></div></div>
                 <div className="flex items-center gap-2">
                   {s.status === 'LIVE' && <StatusBadge status="LIVE" label="Live now" />}
-                  <Button size="sm" leftIcon={Video} disabled={!open} loading={join.isPending && join.variables === s.id} onClick={() => join.mutate(s.id)}>{open ? 'Join' : `Opens ${formatDate(s.joinOpensAt, { withTime: true })}`}</Button>
+                  <Button size="sm" leftIcon={Video} disabled={!open} loading={join.isPending && join.variables === s.id} onClick={() => join.mutate(s.id)}>{open ? 'Join' : `Opens ${formatDate(s.joinOpensAt, { withTime: true, timeZone: s.liveClass.timezone })}`}</Button>
                 </div>
               </div>
             );
@@ -109,7 +109,7 @@ export function StudentLivePage() {
         <CardBody className="divide-y divide-line p-0">
           {(recordings.data ?? []).length === 0 ? <p className="p-5 text-sm text-muted">No recordings yet.</p> : recordings.data.map((s) => (
             <div key={s.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
-              <div><p className="font-medium">{s.liveClass.title}</p><p className="text-muted">{formatDate(s.startsAt)}</p></div>
+              <div><p className="font-medium">{s.liveClass.title}</p><p className="text-muted">{formatDate(s.startsAt, { withTime: true, timeZone: s.liveClass.timezone })}</p></div>
               <Button size="sm" variant="secondary" leftIcon={PlayCircle} loading={play.isPending && play.variables === s.id} onClick={() => play.mutate(s.id)}>Watch</Button>
             </div>
           ))}
@@ -156,7 +156,7 @@ export function WebinarPage() {
               <p className="text-sm font-medium" style={{ color }}>{w.priceAmount ? 'Live webinar' : 'Free live webinar'}</p>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight">{w.title}</h1>
               {w.description && <p className="mt-4 whitespace-pre-line text-fg-2">{w.description}</p>}
-              <ul className="mt-6 space-y-2">{w.sessions.map((s) => <li key={s.id} className="flex items-center gap-2 text-sm"><CalendarClock className="size-4 text-muted" />{new Intl.DateTimeFormat(undefined, { dateStyle: 'full', timeStyle: 'short' }).format(new Date(s.startsAt))} · {w.durationMinutes} min</li>)}</ul>
+              <ul className="mt-6 space-y-2">{w.sessions.map((s) => <li key={s.id} className="flex items-center gap-2 text-sm"><CalendarClock className="size-4 text-muted" />{formatDate(s.startsAt, { withTime: true, timeZone: w.timezone })}{w.timezone ? ` · ${w.timezone.replace(/_/g, ' ')}` : ''} · {w.durationMinutes} min</li>)}</ul>
             </section>
             <Card className="h-fit">
               <CardBody className="space-y-4">
@@ -215,7 +215,7 @@ export function TicketPage() {
                 const open = s.status === 'LIVE' || new Date(s.startsAt).getTime() - 15 * 60_000 <= Date.now();
                 return (
                   <div key={s.id} className="flex items-center justify-between gap-3 rounded-lg border border-line p-3 text-sm">
-                    <span>{formatDate(s.startsAt, { withTime: true })}</span>
+                    <span>{formatDate(s.startsAt, { withTime: true, timeZone: t.data.webinar.timezone })}{t.data.webinar.timezone ? ` · ${t.data.webinar.timezone.replace(/_/g, ' ')}` : ''}</span>
                     <Button size="sm" disabled={!open} loading={join.isPending} onClick={() => join.mutate(s.id)}>{open ? 'Join now' : 'Opens 15 min before'}</Button>
                   </div>
                 );

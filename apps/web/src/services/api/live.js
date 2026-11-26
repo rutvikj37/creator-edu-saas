@@ -37,6 +37,11 @@ export const batchesApi = {
   archive: (id) => http.post(`/creator/batches/${id}/archive`).then(d),
 };
 
+/** Student: batches they belong to. */
+export const learnBatchesApi = {
+  list: () => http.get('/learn/batches').then(d),
+};
+
 /** Student side. */
 export const learnLiveApi = {
   upcoming: () => http.get('/learn/live/upcoming').then(d),

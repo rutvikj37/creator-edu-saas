@@ -12,16 +12,47 @@ export class ApiError extends Error {
   }
 }
 
+function parseErrorPayload(data) {
+  if (!data) return null;
+  if (typeof data === 'object' && data.error) return data.error;
+  if (typeof data === 'string') {
+    try {
+      const parsed = JSON.parse(data);
+      return parsed?.error ?? null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 export function toApiError(error) {
   if (error instanceof ApiError) return error;
   const res = error?.response;
-  if (res?.data?.error) {
-    return new ApiError({ status: res.status, ...res.data.error });
+  const payload = parseErrorPayload(res?.data);
+  if (payload) {
+    return new ApiError({ status: res.status, ...payload });
   }
   if (res) {
     return new ApiError({ status: res.status, code: 'INTERNAL', message: 'Something went wrong. Please try again.' });
   }
   return new ApiError({ status: 0, code: 'NETWORK', message: 'Cannot reach the server. Check your connection.' });
+}
+
+/** Blob downloads return error JSON as a Blob; parse it before building ApiError. */
+async function errorFromResponse(error) {
+  const res = error?.response;
+  const data = res?.data;
+  if (typeof Blob !== 'undefined' && data instanceof Blob) {
+    try {
+      const text = await data.text();
+      const parsed = JSON.parse(text);
+      if (parsed?.error) return new ApiError({ status: res.status, ...parsed.error });
+    } catch {
+      // fall through
+    }
+  }
+  return toApiError(error);
 }
 
 const baseURL = import.meta.env.VITE_API_URL || '/api/v1';
@@ -58,7 +89,7 @@ http.interceptors.response.use(
     return { data: body, meta: undefined, status: response.status };
   },
   async (error) => {
-    const apiError = toApiError(error);
+    const apiError = await errorFromResponse(error);
     const config = error.config;
     // Expired access token: refresh once, then replay the original request.
     if (

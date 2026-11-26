@@ -94,7 +94,17 @@ export const EDITABLE_TEMPLATES: EditableTemplate[] = [
       body: 'Hi {{name}},\n\nYou started checking out but didn’t finish:\n\n{{items}}\n\nTotal: **{{total}}**\n\n{{offer}}\n\nYour place is saved — pick up right where you left off.',
     },
   },
+  {
+    key: 'studentInvite', name: 'Student invitation', description: 'Sent when a creator adds a student and invites them to set a password.',
+    variables: [brand, name, { name: 'courses', description: 'Courses they can access, one "- title" per line (empty if none)', sample: '- Algebra\n- Geometry' }, { name: 'url', description: 'Set-password link (valid 7 days)', sample: 'https://acme.example.com/reset-password?token=abc' }],
+    required: [], ctaVar: 'url',
+    defaults: {
+      subject: 'Your account at {{brand}}', heading: 'Welcome — set your password', ctaLabel: 'Set your password',
+      body: 'Hi {{name}},\n\nAn account has been created for you at **{{brand}}**.\n\n{{courses}}\n\nSet your password to start learning. This link expires in 7 days.',
+    },
+  },
 ];
+
 
 export const editableTemplate = (key: string) => EDITABLE_TEMPLATES.find((t) => t.key === key);
 

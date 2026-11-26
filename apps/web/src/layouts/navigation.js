@@ -107,6 +107,7 @@ export const NAV = {
         item('My learning', '/learn', LayoutDashboard, 2, { end: true, available: true }),
         item('Browse courses', '/courses', BookOpen, 5, { available: true }),
         item('Live classes', '/learn/live', Video, 9, { available: true }),
+        item('My batches', '/learn/batches', Boxes, 9, { available: true }),
         item('Certificates', '/learn/certificates', Award, 5, { available: true }),
       ],
     },

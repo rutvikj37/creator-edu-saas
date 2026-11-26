@@ -72,22 +72,21 @@ export class CreatorLearningController {
   student(@Param('id') id: string) { return this.svc.student(id); }
 
   @Post('students') @RequirePermissions(PERMISSIONS.STUDENTS_MANAGE)
-  addStudent(@Body() dto: CreateStudentDto, @CurrentAuth() auth: AuthContext, @Req() req: AppRequest) {
-    return this.svc.addStudent(dto, auth.userId, req.get('origin') ?? apiOrigin(req));
+  addStudent(@Body() dto: CreateStudentDto, @CurrentAuth() auth: AuthContext) {
+    return this.svc.addStudent(dto, auth.userId);
   }
 
   @Post('students/import') @HttpCode(200) @RequirePermissions(PERMISSIONS.STUDENTS_MANAGE)
-  importStudents(@Body() dto: ImportStudentsDto, @CurrentAuth() auth: AuthContext, @Req() req: AppRequest) {
-    return this.svc.importStudents(dto.rows.map((r) => ({ email: r.email, fullName: r.fullName ?? '', phone: r.phone })), { courseIds: dto.courseIds, sendInvite: dto.sendInvite }, auth.userId, req.get('origin') ?? apiOrigin(req));
+  importStudents(@Body() dto: ImportStudentsDto, @CurrentAuth() auth: AuthContext) {
+    return this.svc.importStudents(dto.rows.map((r) => ({ email: r.email, fullName: r.fullName ?? '', phone: r.phone })), { courseIds: dto.courseIds, sendInvite: dto.sendInvite }, auth.userId);
   }
 
   @Get('courses/:id/enrollments') @RequirePermissions(PERMISSIONS.STUDENTS_READ)
   enrollments(@Param('id') id: string) { return this.svc.courseEnrollments(id); }
 
   @Post('courses/:id/enrollments') @RequirePermissions(PERMISSIONS.STUDENTS_MANAGE)
-  enroll(@Param('id') id: string, @Body() dto: EnrollDto, @CurrentAuth() auth: AuthContext, @Req() req: AppRequest) {
-    const tenantHost = req.get('origin') ?? apiOrigin(req);
-    return this.svc.enroll(id, dto.email, auth.userId, tenantHost);
+  enroll(@Param('id') id: string, @Body() dto: EnrollDto, @CurrentAuth() auth: AuthContext) {
+    return this.svc.enroll(id, dto.email, auth.userId);
   }
 
   @Delete('enrollments/:enrollmentId') @RequirePermissions(PERMISSIONS.STUDENTS_MANAGE)

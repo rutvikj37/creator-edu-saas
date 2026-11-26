@@ -159,7 +159,7 @@ export function StudentOrdersPage() {
             { key: 'items', header: 'Item', cell: (r) => <div className="max-w-72"><p className="line-clamp-1 text-fg">{r.items.map((i) => i.title).join(', ')}</p><p className="text-xs text-muted">{Number(r.totalAmount) === 0 ? 'FREE' : 'Paid'} | {r.items[0] ? KIND(r.items[0]) : ''}{r.items.length > 1 ? ` +${r.items.length - 1}` : ''}</p></div> },
             { key: 'totalAmount', header: 'Amount', cell: (r) => <span className="font-medium tabular-nums">{formatMoney(r.totalAmount, r.currency)}</span> },
             { key: 'status', header: 'Status', cell: (r) => (WAITING.includes(r.status) ? <Link to={`/learn/orders/${r.id}`} className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline"><Clock className="size-3.5" />Complete payment</Link> : r.status === 'PAID' ? <Badge tone="success">Success</Badge> : <StatusBadge status={r.status} />) },
-            { key: 'invoice', header: '', align: 'right', cell: (r) => (PAID.includes(r.status) && Number(r.totalAmount) > 0 ? <InvoiceButton order={r} /> : null) },
+            { key: 'invoice', header: '', align: 'right', cell: (r) => (PAID.includes(r.status) && Number(r.totalAmount) > 0 && r.invoiceNumber ? <InvoiceButton order={r} /> : null) },
           ]} />
       </Card>
     </>

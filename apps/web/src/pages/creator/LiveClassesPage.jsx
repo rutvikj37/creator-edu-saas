@@ -215,8 +215,12 @@ export function LiveClassCreatePage() {
 }
 
 const AUDIENCE = { ALL_STUDENTS: 'All students', COURSE: 'Course students', BATCH: 'Batch', REGISTRANTS: 'Registrants' };
-const dayLabel = (d) => { const x = new Date(d); return `${x.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })} (${x.toLocaleDateString('en-IN', { weekday: 'short' })})`; };
-const timeLabel = (d) => new Date(d).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+const dayLabel = (d, timeZone) => {
+  const opts = { day: '2-digit', month: 'short', ...(timeZone ? { timeZone } : {}) };
+  const x = new Date(d);
+  return `${x.toLocaleDateString('en-IN', opts)} (${x.toLocaleDateString('en-IN', { weekday: 'short', ...(timeZone ? { timeZone } : {}) })})`;
+};
+const timeLabel = (d, timeZone) => new Date(d).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', ...(timeZone ? { timeZone } : {}) });
 
 /** Which list a class belongs in: live right now, still has sessions ahead, or finished. */
 export function liveBucket(c) {
@@ -228,7 +232,7 @@ export function liveBucket(c) {
 function SessionWhen({ c }) {
   const s = c.nextSession ?? c.lastSession;
   if (!s) return <span className="text-muted">No sessions</span>;
-  return <div className="leading-tight"><p className="text-fg-2">{dayLabel(s.startsAt)}</p><p className="text-xs text-muted">{timeLabel(s.startsAt)}</p></div>;
+  return <div className="leading-tight"><p className="text-fg-2">{dayLabel(s.startsAt, c.timezone)}</p><p className="text-xs text-muted">{timeLabel(s.startsAt, c.timezone)}</p></div>;
 }
 
 function LiveStatus({ c }) {
@@ -252,7 +256,7 @@ function WebinarCard({ c, onOpen }) {
         </div>
         <div className="space-y-1 p-4">
           <p className="line-clamp-2 font-semibold text-fg group-hover:text-primary-700">{c.title}</p>
-          <p className="text-sm text-muted">{s ? `${dayLabel(s.startsAt)} · ${timeLabel(s.startsAt)}` : 'No sessions'}{c.recurrence ? ' · weekly' : ''}</p>
+          <p className="text-sm text-muted">{s ? `${dayLabel(s.startsAt, c.timezone)} · ${timeLabel(s.startsAt, c.timezone)}` : 'No sessions'}{c.recurrence ? ' · weekly' : ''}</p>
           <p className="text-xs text-muted">{providerLabel(c.provider)}</p>
         </div>
       </Card>
@@ -369,7 +373,7 @@ export function LiveClassDetailPage() {
               const canHost = c.status === 'ACTIVE' && (s.status === 'LIVE' || (s.status === 'SCHEDULED' && startsIn < 30 * 60_000 && new Date(s.endsAt).getTime() > Date.now() - 3 * 3600_000));
               return (
                 <div key={s.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-sm">
-                  <div className="flex items-center gap-3"><CalendarClock className="size-4 text-muted" /><div><p className="font-medium">{formatDate(s.startsAt, { withTime: true })}</p><p className="text-xs text-muted">{c.durationMinutes} min{s.recordingStatus !== 'NONE' ? ` · recording ${s.recordingStatus.toLowerCase()}` : ''}</p></div></div>
+                  <div className="flex items-center gap-3"><CalendarClock className="size-4 text-muted" /><div><p className="font-medium">{formatDate(s.startsAt, { withTime: true, timeZone: c.timezone })}</p><p className="text-xs text-muted">{c.durationMinutes} min{s.recordingStatus !== 'NONE' ? ` · recording ${s.recordingStatus.toLowerCase()}` : ''}</p></div></div>
                   <div className="flex items-center gap-2">
                     <StatusBadge status={s.status} />
                     {canHost && <Button size="sm" leftIcon={s.status === 'LIVE' ? Radio : Video} loading={hostSession.isPending && hostSession.variables === s.id} onClick={() => hostSession.mutate(s.id)}>{s.status === 'LIVE' ? 'Rejoin' : 'Start'}</Button>}

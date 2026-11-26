@@ -40,6 +40,34 @@ export class BatchesService {
     return rows.map(({ _count, ...b }) => ({ ...b, memberCount: _count.members }));
   }
 
+  /** Batches the student belongs to (not archived), with linked course title when present. */
+  async listForStudent(userId: string) {
+    const memberships = await this.db.batchMember.findMany({ where: { userId }, select: { batchId: true, addedAt: true }, orderBy: { addedAt: 'desc' } });
+    if (!memberships.length) return [];
+    const batches = await this.db.batch.findMany({
+      where: { id: { in: memberships.map((m) => m.batchId) }, archivedAt: null },
+      include: { _count: { select: { members: true } } },
+    });
+    const courseIds = [...new Set(batches.map((b) => b.courseId).filter(Boolean))] as string[];
+    const courses = courseIds.length
+      ? await this.db.course.findMany({ where: { id: { in: courseIds }, deletedAt: null }, select: { id: true, title: true, slug: true } })
+      : [];
+    const courseById = new Map(courses.map((c) => [c.id, c]));
+    const addedAt = new Map(memberships.map((m) => [m.batchId, m.addedAt]));
+    return batches
+      .map(({ _count, ...b }) => ({
+        id: b.id,
+        name: b.name,
+        description: b.description,
+        startsAt: b.startsAt,
+        endsAt: b.endsAt,
+        memberCount: _count.members,
+        joinedAt: addedAt.get(b.id) ?? null,
+        course: b.courseId ? courseById.get(b.courseId) ?? null : null,
+      }))
+      .sort((a, b) => (b.joinedAt?.getTime() ?? 0) - (a.joinedAt?.getTime() ?? 0));
+  }
+
   async create(input: BatchInput & { name: string }, actorUserId: string) {
     await this.validate(input);
     const b = await this.db.batch.create({

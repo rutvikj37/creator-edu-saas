@@ -92,7 +92,9 @@ describe('Live learning (e2e)', () => {
     const st = await student(c.tenant.slug);
     await authed(app, st.s).post(`/api/v1/learn/live/sessions/${s1.id}/join`).expect(403);
     await authed(app, st.s).post(`/api/v1/learn/courses/${course.id}/enroll`).expect(201);
-    expect((await authed(app, st.s).get('/api/v1/learn/live/upcoming')).body.data.map((u: any) => u.id)).toContain(s1.id);
+    const upcoming = (await authed(app, st.s).get('/api/v1/learn/live/upcoming')).body.data;
+    expect(upcoming.map((u: any) => u.id)).toContain(s1.id);
+    expect(upcoming.find((u: any) => u.id === s1.id).liveClass.timezone).toEqual(expect.any(String));
     await authed(app, st.s).post(`/api/v1/learn/live/sessions/${s2.id}/join`).expect(409);
 
     // Waiting room: first join gets a token without publish/subscribe rights.
@@ -169,6 +171,9 @@ describe('Live learning (e2e)', () => {
     const added = (await authed(app, cs).post(`/api/v1/creator/batches/${batch.id}/members`).send({ emails: [member.email, 'nobody@example.test'] }).expect(200)).body.data;
     expect(added).toMatchObject({ added: 1, notFound: ['nobody@example.test'] });
     expect(await prisma.enrollment.findFirst({ where: { userId: member.id, courseId: course.id } })).toMatchObject({ source: 'BATCH', status: 'ACTIVE' });
+    const mine = (await authed(app, member.s).get('/api/v1/learn/batches').expect(200)).body.data;
+    expect(mine).toEqual([expect.objectContaining({ id: batch.id, name: 'November cohort', course: expect.objectContaining({ id: course.id }) })]);
+    expect((await authed(app, outsider.s).get('/api/v1/learn/batches').expect(200)).body.data).toEqual([]);
 
     // Meeting-link class: link validation, batch-only access, click attendance.
     const start = new Date(Date.now() + 5 * 60_000);

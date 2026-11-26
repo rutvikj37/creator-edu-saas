@@ -8,4 +8,17 @@ describe('email templates', () => {
     expect(e.html).toContain('a=1&amp;b=2');
     expect(escapeHtml(`"'`)).toBe('&quot;&#39;');
   });
+
+  it('renders student invite with academy reset link and courses', () => {
+    const e = emailTemplates.studentInvite({
+      brand: 'Acme',
+      name: 'Asha',
+      url: 'https://acme.lvh.me:5173/reset-password?token=abc',
+      courses: 'You have access to:\n\n- Algebra',
+    });
+    expect(e.subject).toBe('Your account at Acme');
+    expect(e.html).toContain('https://acme.lvh.me:5173/reset-password?token=abc');
+    expect(e.html).toContain('Algebra');
+    expect(e.text).toContain('Set your password:');
+  });
 });
