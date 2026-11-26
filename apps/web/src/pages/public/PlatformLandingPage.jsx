@@ -11,7 +11,7 @@ import { demoVideo } from './landing/video.js';
 import { intervalLabel, planFeatureLines, planPrice, publicPlanPrice, priceLabel, pricingCurrency } from './landing/pricing.js';
 import { LAUNCH_STRIP, MORE, PILLARS, STEPS, faqs } from './landing/content.js';
 
-const NAV = [['Features', 'features'], ['Included', 'included'], ['Pricing', 'pricing'], ['FAQ', 'faq']];
+const NAV = [['Features', 'features'], ['Setup', 'how-it-works'], ['Included', 'included'], ['Pricing', 'pricing'], ['FAQ', 'faq']];
 const cta = 'inline-flex items-center justify-center gap-2 rounded-md font-semibold tracking-tight transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0f5c56]';
 const ctaPrimary = `${cta} bg-[#0f5c56] text-white hover:bg-[#0c4a45]`;
 const ctaSecondary = `${cta} border border-[#1e293b]/20 bg-white/80 text-[#0f172a] backdrop-blur hover:bg-white`;
@@ -103,45 +103,56 @@ function DemoVideo({ video, name }) {
   );
 }
 
-function Pricing({ plans, signupTo }) {
+function Pricing({ plans, signInTo }) {
   const currency = pricingCurrency(plans);
   const shown = plans.map((p) => ({ plan: p, price: publicPlanPrice(p, currency) })).filter((x) => x.price);
   if (!shown.length) return null;
   return (
     <section id="pricing" aria-labelledby="pricing-title" className="scroll-mt-20 bg-[#f1f5f4] py-20 sm:py-28">
       <div className="mx-auto max-w-6xl px-4">
-        <Heading id="pricing-title" eyebrow="Pricing" title="Grow and Rise — ₹19,999 / year" text="One yearly rate. Same core modules. Rise adds white label. Agency accounts are set up by our team." />
+        <Heading id="pricing-title" eyebrow="Pricing" title="Same academy. Two billing periods." text="Grow is billed every 6 months. Rise is billed yearly. Identical modules — including white label. Agency accounts are set up by our team." />
         <div className={`mx-auto mt-12 grid gap-6 ${shown.length === 1 ? 'max-w-md' : 'max-w-4xl md:grid-cols-2'}`}>
           {shown.map(({ plan, price }) => {
             const featured = plan.code === 'rise';
             const free = Number(price.amount) === 0;
+            const features = planFeatureLines(plan);
             return (
-              <Reveal as="article" key={plan.id} className={`relative flex flex-col bg-white p-8 ${featured ? 'ring-2 ring-[#0f5c56] shadow-xl shadow-[#0f5c56]/10' : 'ring-1 ring-[#0f172a]/10'}`}>
-                {featured && <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#0f5c56]">Recommended</p>}
-                <h3 style={display} className="text-2xl font-normal text-[#0f172a]">{plan.name}</h3>
-                {plan.description && <p className="mt-2 text-sm leading-relaxed text-[#64748b]">{plan.description}</p>}
-                <p className="mt-6 flex flex-wrap items-baseline gap-x-2">
-                  <span style={display} className="text-4xl font-normal tracking-tight text-[#0f172a] sm:text-5xl">{priceLabel(price)}</span>
-                  {!free && <span className="text-sm text-[#64748b]">/ {intervalLabel(price.interval)}</span>}
-                </p>
-                {!free && <p className="mt-2 text-sm font-semibold text-[#0f5c56]">+ 18% GST extra</p>}
-                <Link to={signupTo} className={`mt-7 h-11 text-sm ${featured ? ctaPrimary : ctaSecondary}`}>Get started</Link>
-                <ul className="mt-8 space-y-3 border-t border-[#0f172a]/8 pt-6 text-sm text-[#334155]">
-                  {planFeatureLines(plan).map((line) => (
-                    <li key={line} className="flex gap-2.5"><Check className="mt-0.5 size-4 shrink-0 text-[#0f5c56]" aria-hidden /><span>{line}</span></li>
-                  ))}
-                </ul>
+              <Reveal as="article" key={plan.id} className={`relative flex flex-col overflow-hidden bg-white ${featured ? 'ring-2 ring-[#0f5c56] shadow-xl shadow-[#0f5c56]/10' : 'ring-1 ring-[#0f172a]/10'}`}>
+                <div className="p-8 pb-6">
+                  {featured && <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#0f5c56]">Best value</p>}
+                  <h3 style={display} className="text-2xl font-normal text-[#0f172a]">{plan.name}</h3>
+                  {plan.description && <p className="mt-2 text-sm leading-relaxed text-[#64748b]">{plan.description}</p>}
+                  <p className="mt-6 flex flex-wrap items-baseline gap-x-2">
+                    <span style={display} className="text-4xl font-normal tracking-tight text-[#0f172a] sm:text-5xl">{priceLabel(price)}</span>
+                    {!free && <span className="text-sm font-medium text-[#475569]">/ {intervalLabel(price.interval)}</span>}
+                  </p>
+                  {!free && <p className="mt-2 text-sm font-semibold text-[#0f5c56]">+ 18% GST extra</p>}
+                  <Link to={signInTo} className={`mt-7 h-11 w-full text-sm ${featured ? ctaPrimary : ctaSecondary}`}>Sign in</Link>
+                </div>
+                <div className={`flex-1 border-t px-8 py-6 ${featured ? 'border-[#0f5c56]/15 bg-[#f0faf8]' : 'border-[#0f172a]/08 bg-[#f8faf9]'}`}>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#0f5c56]">Everything included</p>
+                  <ul className="mt-4 space-y-3">
+                    {features.map((line) => (
+                      <li key={line} className="flex gap-3 text-sm font-medium leading-snug text-[#0f172a]">
+                        <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-[#0f5c56] text-white" aria-hidden>
+                          <Check className="size-3 stroke-[3]" />
+                        </span>
+                        <span>{line}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </Reveal>
             );
           })}
         </div>
-        <p className="mt-8 text-center text-sm text-[#64748b]">Billed yearly. <span className="font-semibold text-[#0f172a]">18% GST is charged extra</span> on every plan.</p>
+        <p className="mt-8 text-center text-sm text-[#64748b]">Grow renews every 6 months · Rise renews yearly. <span className="font-semibold text-[#0f172a]">18% GST is charged extra</span> on every plan.</p>
       </div>
     </section>
   );
 }
 
-/** Brand-first sales landing for TechX LMS — Grow / Rise yearly. */
+/** Brand-first sales landing for TechX LMS — Grow (6 mo) / Rise (yearly). */
 export function PlatformLandingPage({ section }) {
   const auth = useAuth();
   const info = useQuery({ queryKey: ['system', 'info'], queryFn: systemApi.info, staleTime: 5 * 60_000 });
@@ -152,11 +163,11 @@ export function PlatformLandingPage({ section }) {
   const plans = useMemo(() => (plansQuery.data ?? []).filter((p) => (p.prices ?? []).some((x) => Number(x.amount) > 0)), [plansQuery.data]);
   const signedIn = auth.status === 'authenticated';
   const primaryTo = signedIn ? landingPath(auth.me, auth.surface) : '/login';
-  const primaryLabel = signedIn ? 'Go to dashboard' : 'Get started';
+  const primaryLabel = signedIn ? 'Go to dashboard' : 'Sign in';
   const video = demoVideo(branding.demoVideoUrl);
   const questions = useMemo(() => faqs({ name: name || 'the platform' }), [name]);
-  const support = 'Courses, live classes, marketing and payments — on your domain. Grow and Rise at ₹19,999 / year.';
-  const description = `${name} helps educators sell courses, live classes and digital products on their own domain — Grow and Rise at ₹19,999 / year (+ 18% GST).`;
+  const support = 'Courses, live classes, marketing and payments — on your domain. Grow ₹16,999 / 6 months · Rise ₹19,999 / year.';
+  const description = `${name} helps educators sell courses, live classes and digital products on their own domain — Grow ₹16,999 / 6 months or Rise ₹19,999 / year (+ 18% GST).`;
   const origin = typeof window === 'undefined' ? '' : window.location.origin;
 
   const jsonLd = useMemo(() => {
@@ -214,7 +225,6 @@ export function PlatformLandingPage({ section }) {
               {NAV.map(([label, id]) => <a key={id} href={`#${id}`} className="hover:text-[#0f172a]">{label}</a>)}
             </nav>
             <div className="flex items-center gap-2">
-              {!signedIn && <Link to="/login" className={`${ctaSecondary} hidden h-9 px-4 text-sm sm:inline-flex`}>Sign in</Link>}
               <Link to={primaryTo} className={`${ctaPrimary} h-9 px-4 text-sm`}>{primaryLabel}</Link>
               <button type="button" aria-label={menu ? 'Close menu' : 'Open menu'} aria-expanded={menu} onClick={() => setMenu((v) => !v)} className="grid size-9 place-items-center rounded-md hover:bg-[#0f172a]/5 md:hidden">
                 {menu ? <X className="size-5" /> : <Menu className="size-5" />}
@@ -224,7 +234,7 @@ export function PlatformLandingPage({ section }) {
           {menu && (
             <nav aria-label="Mobile" className="border-t border-[#0f172a]/08 px-4 py-3 md:hidden">
               {NAV.map(([label, id]) => <a key={id} href={`#${id}`} onClick={() => setMenu(false)} className="block rounded-md px-3 py-2.5 text-sm text-[#334155] hover:bg-white">{label}</a>)}
-              {!signedIn && <Link to="/login" className="block rounded-md px-3 py-2.5 text-sm text-[#334155] hover:bg-white">Sign in</Link>}
+              <Link to={primaryTo} onClick={() => setMenu(false)} className="mt-1 block rounded-md bg-[#0f5c56] px-3 py-2.5 text-center text-sm font-semibold text-white">{primaryLabel}</Link>
             </nav>
           )}
         </header>
@@ -279,7 +289,7 @@ export function PlatformLandingPage({ section }) {
             <div className="mx-auto max-w-2xl text-center">
               <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#5eead4]">Every plan</p>
               <h2 id="included-title" style={display} className="mt-3 text-3xl font-normal tracking-tight text-balance sm:text-4xl">Modules included with Grow and Rise</h2>
-              <p className="mt-4 text-[#94a3b8]">White label ships with Rise. Everything else below is on both yearly plans.</p>
+              <p className="mt-4 text-[#94a3b8]">Identical on Grow and Rise — including white label. Only the billing period and price change.</p>
             </div>
             <ul className="mx-auto mt-12 grid max-w-4xl gap-3 sm:grid-cols-2">
               {LAUNCH_STRIP.map((m) => (
@@ -292,15 +302,26 @@ export function PlatformLandingPage({ section }) {
           </div>
         </section>
 
-        <section id="how-it-works" aria-labelledby="how-title" className="scroll-mt-20 bg-[#f7f9f8] py-20 sm:py-28">
-          <div className="mx-auto max-w-6xl px-4">
-            <Heading id="how-title" eyebrow="How it works" title="From kickoff to your first sale" />
-            <ol className="mt-14 grid gap-6 md:grid-cols-3">
+        <section id="how-it-works" aria-labelledby="how-title" className="scroll-mt-20 relative overflow-hidden bg-[#0f5c56] py-20 text-white sm:py-28">
+          <div aria-hidden className="pointer-events-none absolute inset-0">
+            <div className="absolute -left-20 top-10 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
+            <div className="absolute -right-16 bottom-0 h-80 w-80 rounded-full bg-[#062e2b]/50 blur-3xl" />
+            <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(#ffffff33_1px,transparent_1px)] [background-size:20px_20px]" />
+          </div>
+          <div className="relative mx-auto max-w-6xl px-4">
+            <div className="mx-auto max-w-2xl text-center">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#99f6e4]">Guided setup</p>
+              <h2 id="how-title" style={display} className="mt-3 text-3xl font-normal tracking-tight text-balance sm:text-4xl">We launch your academy with you</h2>
+              <p className="mt-4 text-base leading-relaxed text-[#ccfbf1] sm:text-lg">Not a blank DIY install. Our team onboards, configures and trains you — then you go live on your brand.</p>
+            </div>
+            <ol className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
               {STEPS.map((s, i) => (
-                <Reveal as="li" key={s.title} className="bg-white p-7 ring-1 ring-[#0f172a]/10">
-                  <span className="grid size-10 place-items-center rounded-full bg-[#0f5c56] text-sm font-semibold text-white">{i + 1}</span>
-                  <h3 style={display} className="mt-5 text-lg font-normal text-[#0f172a]">{s.title}</h3>
-                  <p className="mt-2 text-[#475569]">{s.text}</p>
+                <Reveal as="li" key={s.title} className="relative flex flex-col border border-white/15 bg-white/10 p-5 backdrop-blur-sm sm:p-6">
+                  <span className="flex size-11 items-center justify-center rounded-full bg-white text-lg font-bold tabular-nums text-[#0f5c56]" aria-hidden>
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                  <h3 style={display} className="mt-5 text-lg font-normal leading-snug text-white">{s.title}</h3>
+                  <p className="mt-2 flex-1 text-sm leading-relaxed text-[#ccfbf1]">{s.text}</p>
                 </Reveal>
               ))}
             </ol>
@@ -316,7 +337,7 @@ export function PlatformLandingPage({ section }) {
           </section>
         )}
 
-        {plans.length > 0 && <Pricing plans={plans} signupTo={primaryTo} />}
+        {plans.length > 0 && <Pricing plans={plans} signInTo={primaryTo} />}
 
         <section id="faq" aria-labelledby="faq-title" className="scroll-mt-20 bg-white py-20 sm:py-28">
           <div className="mx-auto max-w-3xl px-4">
@@ -336,12 +357,12 @@ export function PlatformLandingPage({ section }) {
         </section>
 
         <section aria-labelledby="cta-title" className="px-4 pb-20">
-          <div className="relative isolate mx-auto max-w-6xl overflow-hidden bg-[#0f5c56] px-6 py-16 text-center text-white sm:py-20">
-            <div aria-hidden className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.16),transparent_55%)]" />
+          <div className="relative isolate mx-auto max-w-6xl overflow-hidden bg-[#0f172a] px-6 py-16 text-center text-white sm:py-20">
+            <div aria-hidden className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,rgba(15,92,86,0.45),transparent_55%)]" />
             <h2 id="cta-title" style={display} className="mx-auto max-w-2xl text-3xl font-normal tracking-tight text-balance sm:text-5xl">Ready to sell on your own brand?</h2>
-            <p className="mx-auto mt-4 max-w-xl text-white/85 sm:text-lg">Grow or Rise at ₹19,999 / year. 18% GST extra. We’ll provision your academy and get you live.</p>
+            <p className="mx-auto mt-4 max-w-xl text-white/85 sm:text-lg">Grow ₹16,999 / 6 months or Rise ₹19,999 / year. Same features. 18% GST extra. We’ll provision your academy and get you live.</p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Link to={primaryTo} className={`${cta} h-12 bg-white px-8 text-base text-[#0f5c56] hover:bg-[#f0fdfa]`}>{primaryLabel} <ArrowRight className="size-4" aria-hidden /></Link>
+              <Link to={primaryTo} className={`${cta} h-12 bg-white px-8 text-base text-[#0f172a] hover:bg-[#f0fdfa]`}>{primaryLabel} <ArrowRight className="size-4" aria-hidden /></Link>
               <a href="#pricing" className={`${cta} h-12 border border-white/30 bg-transparent px-8 text-base text-white hover:bg-white/10`}>Compare plans</a>
             </div>
           </div>

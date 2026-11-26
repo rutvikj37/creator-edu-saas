@@ -3,7 +3,7 @@ import { formatNumber } from '../../../utils/format.js';
 
 const DEFS = Object.values(FEATURES);
 
-/** Launch marketing bullets for Grow / Rise pricing cards. */
+/** Launch marketing bullets — identical on Grow and Rise (period/price differ only). */
 export const LAUNCH_MODULES = [
   'Unlimited Contacts',
   'Unlimited Admin Accounts',
@@ -15,11 +15,10 @@ export const LAUNCH_MODULES = [
   'White label',
 ];
 
-/** Rise includes white label; Grow shows the rest. */
+/** Same module list for Grow and Rise; other plans fall back to catalogue features. */
 export function launchModulesFor(plan) {
   const code = plan?.code;
-  if (code === 'rise') return LAUNCH_MODULES;
-  if (code === 'grow') return LAUNCH_MODULES.filter((m) => m !== 'White label');
+  if (code === 'rise' || code === 'grow') return LAUNCH_MODULES;
   return null;
 }
 
@@ -39,20 +38,34 @@ export function planPrice(plan, interval, currency) {
   return plan.prices.find((x) => x.interval === interval && x.currency === currency) ?? null;
 }
 
-/** Public launch pricing uses yearly only. */
+/** Each launch plan exposes one active interval (Grow = 6 months, Rise = year). */
 export function publicPlanPrice(plan, currency) {
-  return planPrice(plan, 'YEAR', currency) ?? plan.prices.find((x) => x.currency === currency && Number(x.amount) > 0) ?? null;
+  const priced = (plan.prices ?? []).filter((x) => x.currency === currency && Number(x.amount) > 0);
+  return (
+    priced.find((x) => x.interval === 'SIX_MONTH')
+    ?? priced.find((x) => x.interval === 'YEAR')
+    ?? priced.find((x) => x.interval === 'MONTH')
+    ?? priced[0]
+    ?? null
+  );
 }
 
 export function preferredIntervals(plans, currency) {
   const has = (iv) => plans.some((p) => planPrice(p, iv, currency));
-  if (has('YEAR')) return [['YEAR', 'Yearly']];
+  if (has('SIX_MONTH') || has('YEAR')) {
+    return [
+      has('SIX_MONTH') && ['SIX_MONTH', '6 months'],
+      has('YEAR') && ['YEAR', 'Yearly'],
+    ].filter(Boolean);
+  }
   return [has('MONTH') && ['MONTH', 'Monthly']].filter(Boolean);
 }
 
 export function yearlySaving(plan, currency) {
-  const m = Number(planPrice(plan, 'MONTH', currency)?.amount ?? 0);
+  const six = Number(planPrice(plan, 'SIX_MONTH', currency)?.amount ?? 0);
   const y = Number(planPrice(plan, 'YEAR', currency)?.amount ?? 0);
+  if (six > 0 && y > 0 && y < six * 2) return Math.round((1 - y / (six * 2)) * 100);
+  const m = Number(planPrice(plan, 'MONTH', currency)?.amount ?? 0);
   if (!(m > 0 && y > 0) || y >= m * 12) return null;
   return Math.round((1 - y / (m * 12)) * 100);
 }

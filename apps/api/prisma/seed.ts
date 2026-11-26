@@ -9,7 +9,7 @@ import argon2 from 'argon2';
 import { PERMISSIONS, ROLE_PERMISSIONS, PLATFORM_ROLES, TENANT_ROLES, permissionScope } from '@ce/shared';
 import { PrismaClient } from '../src/generated/prisma/client.js';
 import { poolOptionsFromUrl } from '../src/core/prisma/prisma.service.js';
-import { LAUNCH_PLANS, LAUNCH_PRICES, syncPricingLaunch } from './pricing-launch.js';
+import { LAUNCH_PLANS, syncPricingLaunch } from './pricing-launch.js';
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error('DATABASE_URL is required');
@@ -77,7 +77,7 @@ export async function seed(client: PrismaClient = prisma) {
       await client.subscriptionPlan.create({
         data: {
           code: p.code, name: p.name, description: p.description, status: 'ACTIVE', isPublic: p.isPublic, isDefault: false, trialDays: p.trialDays, sortOrder: p.sortOrder,
-          prices: { create: LAUNCH_PRICES.map((x) => ({ interval: x.interval, currency: x.currency, amount: x.amount })) },
+          prices: { create: p.prices.map((x) => ({ interval: x.interval, currency: x.currency, amount: x.amount })) },
           features: {
             create: Object.entries(p.features).map(([featureKey, v]) =>
               typeof v === 'boolean' ? { featureKey, enabled: v } : { featureKey, enabled: true, limitValue: v === null ? null : BigInt(v) },

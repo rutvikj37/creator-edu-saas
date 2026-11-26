@@ -1,12 +1,8 @@
 /**
- * Pricing launch: Grow + Rise at ₹19,999 / year (GST extra).
+ * Pricing launch: Grow (₹16,999 / 6 months) + Rise (₹19,999 / year). Same features; GST extra.
  * Idempotent — safe to run on every deploy after migrate.
  */
 import type { PrismaClient } from '../src/generated/prisma/client.js';
-
-export const LAUNCH_PRICES = [
-  { interval: 'YEAR' as const, currency: 'INR', amount: 19999 },
-];
 
 const SHARED = {
   'courses.max': null,
@@ -26,10 +22,13 @@ const SHARED = {
   'analytics.advanced': true,
   'ai.credits': 5000,
   'commission.percent': 0,
+  white_label: true,
 } as const;
 
 /** Feature map: boolean = flag, number|null = limit (null = unlimited). */
 export type FeatureMap = Record<string, boolean | number | null>;
+
+export type LaunchPrice = { interval: 'MONTH' | 'SIX_MONTH' | 'YEAR'; currency: string; amount: number };
 
 export const LAUNCH_PLANS: Array<{
   code: string;
@@ -40,28 +39,34 @@ export const LAUNCH_PLANS: Array<{
   sortOrder: number;
   isPublic: boolean;
   features: FeatureMap;
+  prices: LaunchPrice[];
 }> = [
   {
     code: 'grow',
     name: 'Grow',
-    description: 'For creators ready to sell courses, live classes and digital products under their own brand.',
+    description: 'Same full academy toolkit billed every 6 months — courses, live classes, marketing and white label.',
     isDefault: false,
     trialDays: 0,
     sortOrder: 1,
     isPublic: true,
-    features: { ...SHARED, white_label: false },
+    features: { ...SHARED },
+    prices: [{ interval: 'SIX_MONTH', currency: 'INR', amount: 16999 }],
   },
   {
     code: 'rise',
     name: 'Rise',
-    description: 'White-label academy for established educators and institutes that need full brand control.',
+    description: 'The same modules as Grow, billed yearly — best value for established educators and institutes.',
     isDefault: false,
     trialDays: 0,
     sortOrder: 2,
     isPublic: true,
-    features: { ...SHARED, white_label: true },
+    features: { ...SHARED },
+    prices: [{ interval: 'YEAR', currency: 'INR', amount: 19999 }],
   },
 ];
+
+/** Flattened launch prices (for tests / callers that only need amounts). */
+export const LAUNCH_PRICES: LaunchPrice[] = LAUNCH_PLANS.flatMap((p) => p.prices);
 
 function featureRows(features: FeatureMap) {
   return Object.entries(features).map(([featureKey, v]) =>
@@ -71,7 +76,7 @@ function featureRows(features: FeatureMap) {
   );
 }
 
-/** Upsert Grow/Rise, activate yearly launch prices, and hide legacy public catalogue plans. */
+/** Upsert Grow/Rise with distinct intervals, shared features, and hide legacy public catalogue plans. */
 export async function syncPricingLaunch(client: PrismaClient) {
   await client.subscriptionPlan.updateMany({
     where: { code: { in: ['growth', 'pro', 'campus'] } },
@@ -119,15 +124,15 @@ export async function syncPricingLaunch(client: PrismaClient) {
       data: featureRows(p.features).map((f) => ({ ...f, planId: plan.id })),
     });
 
-    // Only YEAR ₹19,999 is active for the launch; deactivate month / 6-month / other currencies.
+    // Only this plan's launch price(s) stay active; deactivate month / other currencies / old intervals.
     await client.planPrice.updateMany({
       where: {
         planId: plan.id,
-        NOT: { OR: LAUNCH_PRICES.map((x) => ({ interval: x.interval, currency: x.currency })) },
+        NOT: { OR: p.prices.map((x) => ({ interval: x.interval, currency: x.currency })) },
       },
       data: { active: false },
     });
-    for (const price of LAUNCH_PRICES) {
+    for (const price of p.prices) {
       const row = await client.planPrice.findUnique({
         where: { planId_interval_currency: { planId: plan.id, interval: price.interval, currency: price.currency } },
       });
@@ -141,5 +146,5 @@ export async function syncPricingLaunch(client: PrismaClient) {
     }
   }
 
-  console.log('Synced pricing launch: Grow + Rise (₹19,999 / year, GST extra)');
+  console.log('Synced pricing launch: Grow ₹16,999 / 6 mo · Rise ₹19,999 / year (same features, GST extra)');
 }

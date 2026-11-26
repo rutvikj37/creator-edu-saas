@@ -29,17 +29,20 @@ export const MORE = [
   { icon: MessagesSquare, title: 'Chat & community', text: 'One inbox for learners plus discussion spaces.' },
 ];
 
+/** Done-for-you onboarding — sold as a guided agency launch, not self-serve DIY. */
 export const STEPS = [
-  { title: 'We set up your academy', text: 'Tell us about your brand. Our team provisions your workspace, domain and payments.' },
-  { title: 'Add what you sell', text: 'Upload courses, schedule live classes, publish products and AI custom pages.' },
-  { title: 'Go live and get paid', text: 'Share your link. Learners pay with UPI or cards; money settles to your bank.' },
+  { title: 'Onboard configured for you', text: 'Share your brand, courses and goals. We provision your academy workspace so you start ready, not blank.' },
+  { title: 'Create your landing page', text: 'We help you customize a high-converting academy site in your colours — or bring your own design direction.' },
+  { title: 'Configure your agency', text: 'Domains, payments, staff roles, GST and products get wired correctly before learners ever see a checkout.' },
+  { title: 'Training & support', text: 'Your team gets a walkthrough of courses, live classes, marketing and billing — plus ongoing help when you need it.' },
+  { title: 'Go live and sell', text: 'Point DNS, publish, and take your first payment. Money settles to your bank through your own Razorpay account.' },
 ];
 
 export function faqs({ name }) {
   return [
     { q: `What is ${name}?`, a: `${name} is an all-in-one academy platform for teachers, coaches and institutes: host courses, run unlimited live classes and webinars, sell digital products, market to unlimited contacts, and collect payments under your own brand.` },
-    { q: 'How does pricing work?', a: 'Choose Grow or Rise. Both are ₹19,999 per year. 18% GST is charged extra. Agency accounts are provisioned by our team — talk to us to get started.' },
-    { q: 'What is included in every plan?', a: 'Unlimited contacts, unlimited admin accounts, unlimited live classes & webinars, 5,000 marketing emails per month, third-party integrations, unlimited products, and custom domains. Rise adds white-label branding.' },
+    { q: 'How does pricing work?', a: 'Grow is ₹16,999 for 6 months. Rise is ₹19,999 for 12 months. Both include the same modules (including white label). 18% GST is charged extra. Agency accounts are provisioned by our team — talk to us to get started.' },
+    { q: 'What is included in every plan?', a: 'Unlimited contacts, unlimited admin accounts, unlimited live classes & webinars, 5,000 marketing emails per month, third-party integrations, unlimited products, custom domains, and white-label branding. Grow and Rise differ only by billing period and price.' },
     { q: 'How do I get paid?', a: 'You connect your own Razorpay account. Learners pay with UPI, cards, net banking or wallets and the money settles directly to your bank account on Razorpay’s schedule.' },
     { q: 'Can I use my own domain name?', a: 'Yes. Custom domains are included on Grow and Rise. We help you point DNS and go live on your brand URL.' },
     { q: 'Is my content protected?', a: 'Videos are streamed rather than offered as downloads, you can limit how many devices a learner signs in on, and videos and PDFs can carry the learner’s details as a watermark.' },
