@@ -347,7 +347,7 @@ export class BillingService {
     return true;
   }
 
-  private async applyEffect(tx: Tx, inv: { id: string; tenantId: string; kind: string; planId: string | null; planPriceId: string | null; subscriptionId: string | null; periodStart: Date | null; interval: 'MONTH' | 'YEAR' | null }, now: Date) {
+  private async applyEffect(tx: Tx, inv: { id: string; tenantId: string; kind: string; planId: string | null; planPriceId: string | null; subscriptionId: string | null; periodStart: Date | null; interval: 'MONTH' | 'SIX_MONTH' | 'YEAR' | null }, now: Date) {
     if (inv.kind === 'COMMISSION') return;
     const sub = inv.subscriptionId ? await tx.subscription.findUnique({ where: { id: inv.subscriptionId } }) : null;
     if (inv.kind === 'RENEWAL' && sub && sub.currentKey === 'current' && sub.planPriceId === inv.planPriceId && inv.interval && inv.periodStart) {
