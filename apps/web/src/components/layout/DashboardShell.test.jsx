@@ -33,12 +33,12 @@ describe('DashboardShell', () => {
   it('remembers the collapsed sidebar preference', async () => {
     setup();
     await userEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
-    expect(JSON.parse(localStorage.getItem('ce.sidebar.test.collapsed.v2'))).toBe(true);
+    expect(JSON.parse(localStorage.getItem('ce.sidebar.test.collapsed.v3'))).toBe(true);
     expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeInTheDocument();
   });
 
   it('collapsed rail shows one icon per section with a flyout of its pages', async () => {
-    localStorage.setItem('ce.sidebar.rail.collapsed.v2', 'true');
+    localStorage.setItem('ce.sidebar.rail.collapsed.v3', 'true');
     const railNav = [
       { label: null, items: [{ label: 'Overview', to: '/', icon: LayoutDashboard, available: true, end: true }] },
       { label: 'Content', icon: BookOpen, items: [{ label: 'Courses', to: '/courses', icon: BookOpen, available: true }, { label: 'Videos', to: '/videos', icon: BookOpen, available: true }] },
@@ -54,6 +54,32 @@ describe('DashboardShell', () => {
     expect(section).toHaveAttribute('aria-expanded', 'true');
     await userEvent.keyboard('{Escape}');
     expect(screen.queryByRole('menu', { name: 'Content' })).toBeNull();
+  });
+
+  it('pins footer sections to the bottom of the rail', () => {
+    localStorage.setItem('ce.sidebar.pin.collapsed.v3', 'true');
+    const pinNav = [
+      { label: null, items: [{ label: 'Home', to: '/', icon: LayoutDashboard, available: true, end: true }] },
+      { label: 'Account', icon: BookOpen, footer: true, items: [{ label: 'Security', to: '/sec', icon: BookOpen, available: true }, { label: 'Alerts', to: '/alerts', icon: BookOpen, available: true }] },
+    ];
+    renderWithApp([{ path: '/', element: <DashboardShell nav={pinNav} brand={{ key: 'pin', mark: 'P', name: 'Pin' }} />, children: [{ index: true, element: <p>Home</p> }] }]);
+    const lists = screen.getAllByRole('navigation', { name: 'Main' })[0].querySelectorAll('ul');
+    expect(lists).toHaveLength(2);
+    expect(lists[1].querySelector('button[aria-label="Account"]')).not.toBeNull();
+  });
+
+  it('shows a bottom tab bar with flagged items and a More button that opens the menu', async () => {
+    const tabNav = [
+      { label: null, items: [{ label: 'Home', to: '/', icon: LayoutDashboard, available: true, end: true, tab: true }, { label: 'Inbox', to: '/inbox', icon: BookOpen, available: true, tab: true }] },
+      { label: 'Products', icon: BookOpen, items: [{ label: 'Courses', to: '/courses', icon: BookOpen, available: true }] },
+    ];
+    renderWithApp([{ path: '/', element: <DashboardShell nav={tabNav} brand={{ key: 'tabs', mark: 'T', name: 'Tabs' }} />, children: [{ index: true, element: <p>Home</p> }] }]);
+    const quick = screen.getByRole('navigation', { name: 'Quick' });
+    expect(quick.querySelector('a[href="/"]')).toHaveTextContent('Home');
+    expect(quick.querySelector('a[href="/inbox"]')).toHaveTextContent('Inbox');
+    expect(quick.querySelector('a[href="/courses"]')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'More' }));
+    expect(screen.getByRole('button', { name: 'Close menu' })).toBeInTheDocument();
   });
 
   it('uses the panel default when no preference is saved', () => {

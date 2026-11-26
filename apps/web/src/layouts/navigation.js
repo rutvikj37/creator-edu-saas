@@ -1,5 +1,5 @@
 import {
-  Activity, CalendarClock, MessageCircle, Award, Banknote, BarChart3, BookOpen, Boxes, Brush, Building2, ClipboardCheck, Component,
+  Activity, Bell, CircleUser, Home, ShoppingBag, CalendarClock, MessageCircle, Award, Banknote, BarChart3, BookOpen, Boxes, Brush, Building2, ClipboardCheck, Component,
   CreditCard, Crown, FileText, FolderTree, Globe, GraduationCap, Handshake, HeartPulse, Inbox, LayoutDashboard, LifeBuoy,
   KeyRound, Layers, Library, Link2, Package, Mail, Megaphone, MessagesSquare, Palette, Percent, Plug, Radio, Receipt, ScrollText, Settings, ShieldCheck,
   ShoppingCart, Sparkles, Star, Tag, Ticket, UserCog, Users, Video, Wallet,
@@ -42,60 +42,101 @@ export const NAV = {
     },
   ],
 
+  // Grouped like Graphy's creator dashboard: Home / Inbox / Community up top, then one rail
+  // icon per section (Products, Learning, Users, Reports, Website, Marketing, Integrations, Settings).
   creator: [
-    { label: null, items: [item('Dashboard', '/creator', LayoutDashboard, 2, { end: true, available: true }), item('My academy', '/creator/academy', Palette, 4, { available: true, perm: 'academy.manage' })] },
     {
-      label: 'Content', icon: BookOpen,
+      label: null,
+      items: [
+        item('Home', '/creator', Home, 2, { end: true, available: true, tab: true }),
+        item('Inbox', '/creator/chat', Inbox, 10, { available: true, perm: 'support.manage', tab: true }),
+        item('Community', '/creator/communities', MessagesSquare, 10, { available: true, perm: 'community.manage', tab: true }),
+      ],
+    },
+    {
+      label: 'Products', icon: Package,
       items: [
         item('Courses', '/creator/courses', BookOpen, 4, { available: true, perm: 'courses.read' }),
-        item('Asset library', '/creator/videos', Video, 6, { available: true, perm: 'courses.read' }),
-        item('Discussions', '/creator/discussions', MessagesSquare, 5, { available: true, perm: 'courses.read' }),
-        item('Certificates', '/creator/certificates', Award, 5, { available: true, perm: 'certificates.manage' }),
-        item('Bundles', '/creator/bundles', Layers, 7, { available: true, perm: 'courses.read' }),
-        item('Digital products', '/creator/products', Package, 7, { available: true, perm: 'courses.read' }),
+        item('Packages', '/creator/bundles', Layers, 7, { available: true, perm: 'courses.read' }),
         item('Coaching', '/creator/coaching', CalendarClock, 10, { available: true, perm: 'courses.read' }),
-        item('Ratings & reviews', '/creator/reviews', Star, 5, { available: true, perm: 'courses.read' }),
-        item('Question bank', '/creator/question-bank', Library, 5, { available: true, perm: 'courses.read' }),
         item('Memberships', '/creator/memberships', Crown, 10, { available: true, perm: 'courses.manage' }),
+        item('Webinars & live', '/creator/live', Radio, 9, { available: true, perm: 'live.manage' }),
+        item('Digital products', '/creator/products', ShoppingBag, 7, { available: true, perm: 'courses.read' }),
       ],
     },
-    { label: 'Students', icon: GraduationCap, items: [item('Students', '/creator/students', GraduationCap, 5, { available: true, perm: 'students.read' }), item('Batches', '/creator/batches', Boxes, 9, { available: true, perm: 'students.read' }), item('Chat inbox', '/creator/chat', MessageCircle, 10, { available: true, perm: 'support.manage' }), item('Help desk', '/creator/helpdesk', LifeBuoy, 10, { available: true, perm: 'support.manage' })] },
     {
-      label: 'Sales', icon: ShoppingCart,
+      label: 'Learning', icon: GraduationCap,
       items: [
-        item('Orders', '/creator/orders', ShoppingCart, 7, { available: true, perm: 'orders.read' }),
-        item('Transactions', '/creator/transactions', Receipt, 7, { available: true, perm: 'orders.read' }),
-        item('Settlements', '/creator/settlements', Wallet, 10, { available: true, perm: 'orders.read' }),
-        item('Promo codes', '/creator/coupons', Tag, 7, { available: true, perm: 'coupons.manage' }),
-        item('Upsells & bumps', '/creator/upsells', Sparkles, 11, { available: true, perm: 'coupons.manage' }),
-        item('Payment links', '/creator/payment-links', Link2, 11, { available: true, perm: 'coupons.manage' }),
-        item('Cart recovery', '/creator/cart-recovery', Mail, 11, { available: true, perm: 'coupons.manage' }),
-      ],
-    },
-    { label: 'Live', icon: Radio, items: [item('Live classes & webinars', '/creator/live', Radio, 9, { available: true, perm: 'live.manage' }), item('Integrations', '/creator/integrations', Plug, 9, { available: true, perm: 'live.manage' })] },
-    { label: 'Website', icon: Globe, items: [item('Website', '/creator/website', Brush, 8, { available: true, perm: 'website.manage' }), item('Domains', '/creator/domains', Globe, 2, { available: true, perm: 'domains.manage' })] },
-    {
-      label: 'Growth', icon: Megaphone,
-      items: [
-        item('Marketing', '/creator/marketing', Megaphone, 10, { available: true, perm: 'marketing.manage' }),
-        item('Affiliates', '/creator/affiliates', Handshake, 10, { available: true, perm: 'affiliates.manage' }),
-        item('Communities', '/creator/communities', MessagesSquare, 10, { available: true, perm: 'community.manage' }),
-        item('Reports', '/creator/reports', BarChart3, 10, { available: true, perm: 'analytics.read' }),
-        item('Analytics', '/creator/analytics', Activity, 10, { available: true, perm: 'analytics.read' }),
-        item('Tracking pixels', '/creator/tracking', Activity, 11, { available: true, perm: 'marketing.manage' }),
+        item('Asset library', '/creator/videos', Video, 6, { available: true, perm: 'courses.read' }),
+        item('Course discussions', '/creator/discussions', MessagesSquare, 5, { available: true, perm: 'courses.read' }),
+        item('Question bank', '/creator/question-bank', Library, 5, { available: true, perm: 'courses.read' }),
+        item('Batches', '/creator/batches', Boxes, 9, { available: true, perm: 'students.read' }),
+        item('Certificates', '/creator/certificates', Award, 5, { available: true, perm: 'certificates.manage' }),
+        item('Ratings & reviews', '/creator/reviews', Star, 5, { available: true, perm: 'courses.read' }),
         item('AI studio', '/creator/ai', Sparkles, 10, { available: true, perm: 'courses.manage' }),
       ],
     },
     {
-      label: 'Workspace', icon: Settings,
+      label: 'Users', icon: Users,
       items: [
-        item('Staff', '/creator/staff', UserCog, 4, { available: true, perm: 'staff.manage' }),
-        item('Payments', '/creator/payments', Plug, 7, { available: true, perm: 'integrations.manage' }),
-        item('Settings', '/creator/academy?tab=business', Settings, 4, { available: true, perm: 'academy.manage' }),
-        item('Billing', '/creator/billing', CreditCard, 3, { available: true, perm: 'billing.manage' }),
-        item('Support', '/creator/support', LifeBuoy, 3, { end: true, available: true, perm: 'settings.manage' }),
-        item('Chat with support', '/creator/support-chat', MessageCircle, 10, { available: true, perm: 'settings.manage' }),
+        item('Learners', '/creator/students', GraduationCap, 5, { available: true, perm: 'students.read' }),
+        item('Admins & instructors', '/creator/staff', UserCog, 4, { available: true, perm: 'staff.manage' }),
+        item('Affiliates', '/creator/affiliates', Handshake, 10, { available: true, perm: 'affiliates.manage' }),
+        item('Help desk', '/creator/helpdesk', LifeBuoy, 10, { available: true, perm: 'support.manage' }),
+      ],
+    },
+    {
+      label: 'Reports', icon: BarChart3,
+      items: [
+        item('Overview', '/creator/reports', BarChart3, 10, { available: true, perm: 'analytics.read' }),
+        item('Orders', '/creator/orders', ShoppingCart, 7, { available: true, perm: 'orders.read' }),
+        item('Transactions', '/creator/transactions', Receipt, 7, { available: true, perm: 'orders.read' }),
+        item('Settlements', '/creator/settlements', Wallet, 10, { available: true, perm: 'orders.read' }),
+        item('Traffic', '/creator/analytics', Activity, 10, { available: true, perm: 'analytics.read' }),
+      ],
+    },
+    {
+      label: 'Website', icon: Globe,
+      items: [
+        item('Website builder', '/creator/website', Brush, 8, { available: true, perm: 'website.manage' }),
+        item('Branding', '/creator/academy', Palette, 4, { available: true, perm: 'academy.manage' }),
+        item('Domains', '/creator/domains', Globe, 2, { available: true, perm: 'domains.manage' }),
+      ],
+    },
+    {
+      label: 'Marketing', icon: Megaphone,
+      items: [
+        item('Campaigns', '/creator/marketing', Megaphone, 10, { available: true, perm: 'marketing.manage' }),
+        item('Promo codes', '/creator/coupons', Tag, 7, { available: true, perm: 'coupons.manage' }),
+        item('Upsells & bumps', '/creator/upsells', Sparkles, 11, { available: true, perm: 'coupons.manage' }),
+        item('Payment links', '/creator/payment-links', Link2, 11, { available: true, perm: 'coupons.manage' }),
+        item('Cart recovery', '/creator/cart-recovery', Mail, 11, { available: true, perm: 'coupons.manage' }),
+        item('Tracking pixels', '/creator/tracking', Activity, 11, { available: true, perm: 'marketing.manage' }),
+      ],
+    },
+    {
+      label: 'Integrations', icon: Plug,
+      items: [
+        item('Payment gateway', '/creator/payments', CreditCard, 7, { available: true, perm: 'integrations.manage' }),
+        item('Live class apps', '/creator/integrations', Radio, 9, { available: true, perm: 'live.manage' }),
+      ],
+    },
+    {
+      label: 'Settings', icon: Settings,
+      items: [
+        item('Business details', '/creator/academy?tab=business', Building2, 4, { available: true, perm: 'academy.manage' }),
+        item('Tax & invoicing', '/creator/settings/tax-invoicing', Receipt, 7, { available: true, perm: 'academy.manage' }),
+        item('Security', '/creator/settings/security', ShieldCheck, 2, { available: true, perm: 'academy.manage' }),
+        item('Billing & plan', '/creator/billing', Wallet, 3, { available: true, perm: 'billing.manage' }),
+      ],
+    },
+    {
+      label: 'Account', icon: CircleUser, footer: true,
+      items: [
         item('Account security', '/creator/account/security', KeyRound, 2, { available: true }),
+        item('Notifications', '/creator/account/notifications', Bell, 2, { available: true }),
+        item('Help center', '/creator/support', LifeBuoy, 3, { end: true, available: true, perm: 'settings.manage' }),
+        item('Chat with support', '/creator/support-chat', MessageCircle, 10, { available: true, perm: 'settings.manage' }),
       ],
     },
   ],

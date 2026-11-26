@@ -120,9 +120,20 @@ function RailGroup({ group, pathname }) {
 /** Collapsed sidebar: an icon rail. Unlabelled sections show their pages directly; others open a flyout. */
 function RailNav({ nav }) {
   const { pathname } = useLocation();
+  const main = nav.filter((g) => !g.footer);
+  const pinned = nav.filter((g) => g.footer);
   return (
-    <nav aria-label="Main" className="flex-1 overflow-y-auto py-3">
-      <ul className="flex flex-col items-center gap-1">
+    <nav aria-label="Main" className="flex min-h-0 flex-1 flex-col py-3">
+      <RailList nav={main} pathname={pathname} className="flex-1 overflow-y-auto" />
+      {pinned.length > 0 && <RailList nav={pinned} pathname={pathname} className="border-t border-line pt-3" />}
+    </nav>
+  );
+}
+
+/** One column of rail icons; footer sections get their own list pinned under the main one. */
+function RailList({ nav, pathname, className }) {
+  return (
+    <ul className={cn('flex flex-col items-center gap-1', className)}>
         {nav.flatMap((group) => (!group.label || group.items.length === 1 ? group.items.map((item) => {
           const Icon = item.icon;
           return (
@@ -138,7 +149,36 @@ function RailNav({ nav }) {
             </li>
           );
         }) : [<RailGroup key={group.label} group={group} pathname={pathname} />]))}
-      </ul>
+    </ul>
+  );
+}
+
+/**
+ * Phone-only bottom tab bar (Graphy style): nav items flagged `tab: true`, plus "More",
+ * which opens the full menu drawer.
+ */
+function BottomTabs({ tabs, onMore, moreLabel }) {
+  const { pathname } = useLocation();
+  const tabActive = tabs.some((i) => isItemActive(i, pathname));
+  const cell = 'relative flex flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium tracking-wide uppercase';
+  return (
+    <nav aria-label="Quick" className="fixed inset-x-0 bottom-0 z-30 flex h-16 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden">
+      {tabs.map((item) => (
+        <NavLink key={item.to} to={item.to} end={item.end} className={({ isActive }) => cn(cell, isActive ? 'text-primary-700' : 'text-muted hover:text-fg')}>
+          {({ isActive }) => (
+            <>
+              {isActive && <span className="absolute inset-x-0 top-0 h-0.5 bg-primary-600" aria-hidden />}
+              <item.icon className="size-5" aria-hidden />
+              {item.label}
+            </>
+          )}
+        </NavLink>
+      ))}
+      <button type="button" onClick={onMore} className={cn(cell, !tabActive ? 'text-primary-700' : 'text-muted hover:text-fg')}>
+        {!tabActive && <span className="absolute inset-x-0 top-0 h-0.5 bg-primary-600" aria-hidden />}
+        <Menu className="size-5" aria-hidden />
+        {moreLabel}
+      </button>
     </nav>
   );
 }
@@ -151,11 +191,13 @@ export function DashboardShell({ nav, brand, user, footer, onSignOut, notificati
   const { t, i18n } = useTranslation();
   const { theme, toggle } = useTheme();
   const location = useLocation();
-  // v2 key: older builds defaulted panels to collapsed and persisted that preference.
-  const [collapsed, setCollapsed] = usePersistentState(`sidebar.${brand.key}.collapsed.v2`, defaultCollapsed);
+  // v3 key: the creator panel switched to the Graphy-style icon rail by default; older
+  // builds persisted "expanded" under v2, which would otherwise hide the new default.
+  const [collapsed, setCollapsed] = usePersistentState(`sidebar.${brand.key}.collapsed.v3`, defaultCollapsed);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const items = useMemo(() => flatten(nav), [nav]);
+  const tabs = useMemo(() => items.filter((i) => i.tab && i.available), [items]);
 
   useEffect(() => setMobileOpen(false), [location.pathname]);
   useEffect(() => {
@@ -303,11 +345,12 @@ export function DashboardShell({ nav, brand, user, footer, onSignOut, notificati
             )}
           </div>
         </header>
-        <main id="main" className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        <main id="main" className={cn('flex-1 px-4 py-6 sm:px-6 lg:px-8', tabs.length > 0 && 'pb-24 lg:pb-6')}>
           {banner}
           <Outlet />
         </main>
       </div>
+      {tabs.length > 0 && <BottomTabs tabs={tabs} onMore={() => setMobileOpen(true)} moreLabel={t('shell.more')} />}
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} items={items} />
     </div>
   );
