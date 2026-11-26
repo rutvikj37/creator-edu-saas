@@ -55,3 +55,15 @@ on the current status, and every change is written to `VideoStatusHistory` with 
 `DELETE /api/v1/videos/:id` — refused while the video is used in a lesson or while its original is
 being backed up (`PENDING`/`IN_PROGRESS`/`RETRYING`). Playback sessions are revoked, the video moves
 to `DELETING`, the Bunny entry is deleted (or retried by the worker), then `DELETED`.
+
+## External links (YouTube / Google Drive)
+
+Creators can also add videos without uploading a file:
+
+1. **Choose source** in the asset library or lesson editor: Upload · YouTube · Google Drive.
+2. **Paste URL** → `POST /api/v1/videos/from-link` `{ url, title?, courseId?, lessonId? }`.
+3. The API validates the host, stores a READY `VideoAsset` (`provider=YOUTUBE|GOOGLE_DRIVE`, `externalUrl`, `providerAssetId`), and attaches to the lesson when `lessonId` is set.
+4. **Thumbnails**
+   - YouTube: oEmbed + `img.youtube.com/vi/{id}/hqdefault.jpg` (reliable for public videos).
+   - Google Drive: `drive.google.com/thumbnail?id=…` — **best-effort only**. Works when the file is shared as “Anyone with the link”; private/restricted files often have no fetchable poster. Playback uses Drive’s `/preview` embed and similarly requires the viewer (or link sharing) to have access.
+5. Playback returns an iframe embed (`external: true`); progress/resume via Bunny player.js does not apply — learners can still Mark complete.

@@ -5,6 +5,7 @@ const d = (r) => r.data;
 export const videosApi = {
   list: () => http.get('/creator/videos').then(d),
   create: (body) => http.post('/creator/videos', body).then(d),
+  fromLink: (body) => http.post('/videos/from-link', body).then(d),
   update: (id, body) => http.patch(`/creator/videos/${id}`, body).then(d),
   preview: (id) => http.get(`/creator/videos/${id}/preview`).then(d),
   remove: (id) => http.delete(`/creator/videos/${id}`).then(d),
@@ -84,4 +85,27 @@ export async function uploadVideo(file, onProgress) {
     }
   }
   return http.post(`/creator/files/${begin.fileId}/complete`, { parts }).then(d);
+}
+
+/** Client-side URL checks mirroring the API (for instant form feedback). */
+export function parseVideoLink(raw) {
+  let url;
+  try { url = new URL(String(raw || '').trim()); } catch { return null; }
+  if (!/^https?:$/i.test(url.protocol)) return null;
+  const host = url.hostname.replace(/^www\./i, '');
+  if (/^(?:m\.|music\.)?youtube\.com$/i.test(host) || /^youtu\.be$/i.test(host) || /^youtube-nocookie\.com$/i.test(host)) {
+    let id = url.searchParams.get('v');
+    if (!id && /^youtu\.be$/i.test(host)) id = url.pathname.split('/').filter(Boolean)[0];
+    if (!id) {
+      const parts = url.pathname.split('/').filter(Boolean);
+      if (parts.length >= 2 && ['embed', 'shorts', 'live', 'v'].includes(parts[0].toLowerCase())) id = parts[1];
+    }
+    if (id && /^[\w-]{6,}$/.test(id)) return { provider: 'YOUTUBE', id, thumbnailUrl: `https://img.youtube.com/vi/${id}/hqdefault.jpg` };
+  }
+  if (/^(?:drive|docs)\.google\.com$/i.test(host)) {
+    const m = /\/file\/d\/([a-zA-Z0-9_-]{10,})/.exec(url.pathname);
+    const id = m?.[1] || url.searchParams.get('id');
+    if (id && /^[a-zA-Z0-9_-]{10,}$/.test(id)) return { provider: 'GOOGLE_DRIVE', id, thumbnailUrl: `https://drive.google.com/thumbnail?id=${id}&sz=w1280` };
+  }
+  return null;
 }

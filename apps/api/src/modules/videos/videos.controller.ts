@@ -9,7 +9,7 @@ import { Public } from '../../common/decorators/public.decorator.js';
 import type { AppRequest, AuthContext } from '../../core/tenancy/request-context.js';
 import type { ClientMeta } from '../auth/services/session.service.js';
 import { apiOrigin } from '../files/files.controller.js';
-import { CompleteUploadDto, HeartbeatDto, InitiateUploadDto, ListVideosQuery, PlaybackAuthorizeDto, UpdateVideoDto } from './dto/videos.dto.js';
+import { CompleteUploadDto, HeartbeatDto, ImportFromLinkDto, InitiateUploadDto, ListVideosQuery, PlaybackAuthorizeDto, UpdateVideoDto } from './dto/videos.dto.js';
 import { VideoPlaybackService } from './services/video-playback.service.js';
 import { VideoProcessingService } from './services/video-processing.service.js';
 import { VideoUploadService } from './services/video-upload.service.js';
@@ -33,6 +33,10 @@ export class VideosController {
     private readonly upload: VideoUploadService,
     private readonly processing: VideoProcessingService,
   ) {}
+
+  @Post('from-link') @HttpCode(201) @Throttle(uploadLimit) @RequirePermissions(PERMISSIONS.COURSES_MANAGE)
+  @ApiOperation({ summary: 'Add a YouTube or Google Drive video to the library (READY immediately; thumbnail fetched when possible)' })
+  fromLink(@Body() dto: ImportFromLinkDto, @CurrentAuth() a: AuthContext) { return this.videos.createFromLink(dto, a.userId); }
 
   @Post('upload/initiate') @HttpCode(201) @Throttle(uploadLimit) @RequirePermissions(PERMISSIONS.COURSES_MANAGE)
   @ApiOperation({ summary: 'Create a video and return short-lived credentials for a direct browser → Bunny (TUS) upload' })
@@ -119,6 +123,10 @@ export class CreatorVideosController {
   @Post() @RequirePermissions(PERMISSIONS.COURSES_MANAGE)
   @ApiOperation({ summary: 'Add an uploaded VIDEO_SOURCE file to the video library (storage delivery)' })
   create(@Body() dto: CreateVideoDto, @CurrentAuth() auth: AuthContext) { return this.videos.create(dto, auth.userId); }
+
+  @Post('from-link') @HttpCode(201) @RequirePermissions(PERMISSIONS.COURSES_MANAGE)
+  @ApiOperation({ summary: 'Add a YouTube or Google Drive video to the library' })
+  fromLink(@Body() dto: ImportFromLinkDto, @CurrentAuth() auth: AuthContext) { return this.videos.createFromLink(dto, auth.userId); }
 
   @Patch(':id') @RequirePermissions(PERMISSIONS.COURSES_MANAGE)
   update(@Param('id') id: string, @Body() dto: UpdateVideoDto, @CurrentAuth() auth: AuthContext) { return this.videos.update(id, dto, auth.userId); }

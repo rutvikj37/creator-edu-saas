@@ -10,6 +10,7 @@ import { Alert } from '../../components/auth/Alert.jsx';
 import { Badge, Button, Card, ConfirmDialog, DataTable, Drawer, Dropdown, DropdownItem, EmptyState, Input, Modal, Select, Skeleton, StatusBadge, toast } from '../../components/ui/index.js';
 import { readVideoDuration, uploadVideo, videosApi } from '../../services/api/videos.js';
 import { startTusUpload } from '../../services/api/tusUpload.js';
+import { VideoSourcePanel } from '../../components/video/VideoSourcePanel.jsx';
 import { coursesApi } from '../../services/api/creator.js';
 import { formatDate } from '../../utils/format.js';
 
@@ -42,7 +43,7 @@ function Preview({ id, onClose }) {
     <Modal open={Boolean(id)} onClose={onClose} title="Preview" size="xl">
       {q.isLoading ? <Skeleton className="aspect-video w-full" /> : q.isError ? <Alert tone="error">{q.error.message}</Alert> : q.data && (
         q.data.kind === 'iframe'
-          ? <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black"><iframe title="Video preview" src={q.data.url} className="absolute inset-0 size-full" allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen /></div>
+          ? <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black"><iframe title="Video preview" src={q.data.url} className="absolute inset-0 size-full border-0" allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" /></div>
           : <video controls autoPlay src={q.data.url} className="aspect-video w-full rounded-lg bg-black" />
       )}
     </Modal>
@@ -164,7 +165,7 @@ function useUploads(config, onChanged) {
 
 const PHASE_TEXT = { queued: 'Queued', authorizing: 'Preparing…', uploading: 'Uploading', confirming: 'Confirming with the video host…', processing: 'Processing', ready: 'Ready', failed: 'Failed', cancelled: 'Cancelled', invalid: 'Not uploaded' };
 
-function UploadPanel({ config, uploads, courses, target }) {
+function UploadPanel({ config, uploads, courses, target, onLibraryChanged }) {
   const input = useRef(null);
   const [over, setOver] = useState(false);
   const [courseId, setCourseId] = useState(target?.courseId ?? '');
@@ -173,20 +174,26 @@ function UploadPanel({ config, uploads, courses, target }) {
   const onFiles = (list) => list?.length && uploads.add([...list], lockedLesson ? target.courseId : courseId, target?.lessonId || undefined);
   return (
     <Card className="mb-6 p-5">
-      <div
-        role="button" tabIndex={0} aria-label="Upload videos: drop files here or press Enter to choose"
-        onClick={() => input.current?.click()} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && input.current?.click()}
-        onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
-        onDrop={(e) => { e.preventDefault(); setOver(false); onFiles(e.dataTransfer.files); }}
-        className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-8 text-center transition-colors ${over ? 'border-primary-500 bg-primary-50 dark:bg-primary-950' : 'border-line hover:border-line-strong'}`}
+      <VideoSourcePanel
+        courseId={lockedLesson ? target.courseId : courseId || undefined}
+        lessonId={target?.lessonId || undefined}
+        onAttached={() => onLibraryChanged?.()}
       >
-        <Upload className="size-6 text-muted" aria-hidden />
-        <p className="font-medium">{lockedLesson ? 'Upload a video for this lesson' : 'Drag videos here or click to choose'}</p>
-        <p className="text-xs text-muted">{config ? `${config.extensions.map((e) => e.toUpperCase()).join(', ')} · up to ${fmtSize(config.maxUploadBytes)}` : ' '}{config?.provider === 'BUNNY' ? ' · uploads go straight to the video host and resume if interrupted' : ''}</p>
-        <input ref={input} type="file" multiple={!lockedLesson} accept={config ? [...config.mimeTypes, ...config.extensions.map((e) => `.${e}`)].join(',') : 'video/*'} className="hidden" data-testid="video-file-input" onChange={(e) => { onFiles(e.target.files); e.target.value = ''; }} />
-      </div>
-      {config?.provider === 'BUNNY' && !lockedLesson && (
-        <div className="mt-3 max-w-sm"><Select label="Course for new uploads (optional)" value={courseId} onChange={(e) => setCourseId(e.target.value)} placeholder="No course" options={(courses ?? []).map((c) => ({ value: c.id, label: c.title }))} /></div>
+        <div
+          role="button" tabIndex={0} aria-label="Upload videos: drop files here or press Enter to choose"
+          onClick={() => input.current?.click()} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && input.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
+          onDrop={(e) => { e.preventDefault(); setOver(false); onFiles(e.dataTransfer.files); }}
+          className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-8 text-center transition-colors ${over ? 'border-primary-500 bg-primary-50 dark:bg-primary-950' : 'border-line hover:border-line-strong'}`}
+        >
+          <Upload className="size-6 text-muted" aria-hidden />
+          <p className="font-medium">{lockedLesson ? 'Upload a video for this lesson' : 'Drag videos here or click to choose'}</p>
+          <p className="text-xs text-muted">{config ? `${config.extensions.map((e) => e.toUpperCase()).join(', ')} · up to ${fmtSize(config.maxUploadBytes)}` : ' '}{config?.provider === 'BUNNY' ? ' · uploads go straight to the video host and resume if interrupted' : ''}</p>
+          <input ref={input} type="file" multiple={!lockedLesson} accept={config ? [...config.mimeTypes, ...config.extensions.map((e) => `.${e}`)].join(',') : 'video/*'} className="hidden" data-testid="video-file-input" onChange={(e) => { onFiles(e.target.files); e.target.value = ''; }} />
+        </div>
+      </VideoSourcePanel>
+      {!lockedLesson && (
+        <div className="mt-3 max-w-sm"><Select label="Course for new videos (optional)" value={courseId} onChange={(e) => setCourseId(e.target.value)} placeholder="No course" options={(courses ?? []).map((c) => ({ value: c.id, label: c.title }))} /></div>
       )}
       {uploads.items.length > 0 && (
         <ul className="mt-4 divide-y divide-line" aria-label="Uploads">
@@ -288,8 +295,10 @@ function Details({ id, onClose, onPreview }) {
               <Row label="Status"><VideoStatus status={v.status} progress={v.encodeProgress} /></Row>
               <Row label="Backup"><BackupStatus backup={v.backup} />{v.backup?.completedAt && <span className="ml-2 text-xs text-muted">{formatDate(v.backup.completedAt, { withTime: true })}</span>}</Row>
               <Row label="Internal ID"><code className="text-xs">{v.id}</code></Row>
-              <Row label="Provider">{v.provider === 'BUNNY' ? 'Bunny Stream' : 'Private storage'}</Row>
-              {v.providerVideoId && <Row label="Bunny video ID"><code className="text-xs">{v.providerVideoId}</code></Row>}
+              <Row label="Provider">{v.provider === 'BUNNY' ? 'Bunny Stream' : v.provider === 'YOUTUBE' ? 'YouTube' : v.provider === 'GOOGLE_DRIVE' ? 'Google Drive' : 'Private storage'}</Row>
+              {v.externalUrl && <Row label="Source link"><a className="text-primary-600 underline break-all" href={v.externalUrl} target="_blank" rel="noreferrer noopener">{v.externalUrl}</a></Row>}
+              {v.provider === 'BUNNY' && v.providerVideoId && <Row label="Bunny video ID"><code className="text-xs">{v.providerVideoId}</code></Row>}
+              {(v.provider === 'YOUTUBE' || v.provider === 'GOOGLE_DRIVE') && v.providerVideoId && <Row label="External ID"><code className="text-xs">{v.providerVideoId}</code></Row>}
               <Row label="Course">{v.course?.title}</Row>
               <Row label="Lessons">{v.usedIn?.length ? v.usedIn.map((l) => `${l.course.title} › ${l.title}`).join(', ') : null}</Row>
               <Row label="Original file">{v.originalFilename ?? v.file?.fileName}</Row>
@@ -373,7 +382,7 @@ export function VideosPage() {
         </Alert>
       )}
       {config.data?.provider === 'STORAGE' && <Alert tone="info" className="mb-4">The video host (Bunny Stream) is not configured, so uploads are stored privately and played without adaptive streaming.</Alert>}
-      <UploadPanel config={config.data} uploads={uploads} courses={courseList} target={uploadTarget} />
+      <UploadPanel config={config.data} uploads={uploads} courses={courseList} target={uploadTarget} onLibraryChanged={changed} />
       <Card>
         <ListToolbar search={filters.q} onSearch={(v) => setFilters({ ...filters, q: v })} placeholder="Search by title or asset ID" count={rows.length} noun="file"
           filtered={filtered} onReset={() => { setFilters({ status: '', q: '' }); setCourseF(undefined); setPeriodF(undefined); setCreatedF(undefined); setWebinarF(undefined); setTypeF(undefined); setTagF(undefined); }}

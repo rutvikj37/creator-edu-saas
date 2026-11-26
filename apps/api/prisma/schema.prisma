@@ -1279,6 +1279,10 @@ enum VideoProviderType {
   STORAGE
   /// Bunny Stream (encoding, HLS, CDN).
   BUNNY
+  /// YouTube watch/share link — played via embed; not hosted by us.
+  YOUTUBE
+  /// Google Drive file link — played via Drive preview embed when sharing allows it.
+  GOOGLE_DRIVE
 }
 
 enum VideoStatus {
@@ -1337,8 +1341,10 @@ model VideoAsset {
   /// STORAGE videos only (the uploaded FileAsset). Null for provider-hosted videos.
   sourceFileId         String?                @db.Char(25)
   provider             VideoProviderType
-  /// Provider's video id (Bunny video GUID).
+  /// Provider's video id (Bunny video GUID, YouTube video id, or Drive file id).
   providerAssetId      String?                @db.VarChar(191)
+  /// Canonical watch/share URL for YOUTUBE / GOOGLE_DRIVE assets.
+  externalUrl          String?                @db.VarChar(1000)
   playbackId           String?                @db.VarChar(191)
   status               VideoStatus            @default(UPLOADED)
   protection           VideoProtection        @default(SIGNED)
@@ -1378,10 +1384,12 @@ model VideoAsset {
   usageRecords         VideoUsageRecord[]
 
   @@unique([tenantId, id])
-  @@unique([provider, providerAssetId])
+  /// Scoped per academy so two tenants can link the same YouTube/Drive video.
+  @@unique([tenantId, provider, providerAssetId])
   @@index([tenantId, status, createdAt])
   @@index([status, updatedAt])
   @@index([tenantId, courseId])
+  @@index([provider, providerAssetId])
 }
 
 /// Every status change of a video, with who/what caused it.

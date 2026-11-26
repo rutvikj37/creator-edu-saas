@@ -10,10 +10,12 @@ import { TenantContext } from '../../core/tenancy/tenant-context.service.js';
 import { LearningService } from '../learning/learning.service.js';
 import { isEnrollmentUsable } from '../learning/access.js';
 import { VIDEO_PROVIDER, type VideoProvider } from './providers/video-provider.interface.js';
+import { fetchYouTubeMeta, isExternalProvider, parseExternalVideoUrl, probeDriveThumbnail } from './external-video.js';
 import { VideosRepository } from './videos.repository.js';
 import { VideoPlaybackService, MAX_CONCURRENT_STREAMS, playbackTtlSeconds } from './services/video-playback.service.js';
 import { VideoProcessingService, serializeVideo } from './services/video-processing.service.js';
 import { providerError } from './services/provider-error.js';
+import { PrismaService } from '../../core/prisma/prisma.service.js';
 
 export { MAX_CONCURRENT_STREAMS, playbackTtlSeconds };
 /** Lesson is auto-completed once this share of the video has been watched. */
@@ -21,16 +23,18 @@ export const COMPLETE_AT = 0.9;
 const ACTIVE_BACKUP = ['PENDING', 'IN_PROGRESS', 'RETRYING'] as const;
 
 /**
- * Video library and student playback for both delivery types:
+ * Video library and student playback:
  * - STORAGE (Phase 6): private storage, short-lived signed URLs, no transcoding.
  * - BUNNY: Bunny Stream encoding/HLS/CDN with token-authenticated embeds.
- * Neither is DRM: a determined viewer can still capture the stream.
+ * - YOUTUBE / GOOGLE_DRIVE: external links played via embed (no hosting/transcoding).
+ * Bunny/storage are not DRM: a determined viewer can still capture the stream.
  */
 @Injectable()
 export class VideosService {
   private readonly log = new Logger(VideosService.name);
   constructor(
     @Inject(TENANT_PRISMA) private readonly db: TenantPrismaClient,
+    private readonly prisma: PrismaService,
     private readonly ctx: TenantContext,
     private readonly storage: StorageService,
     private readonly learning: LearningService,
@@ -79,6 +83,106 @@ export class VideosService {
     return this.view(v);
   }
 
+  /**
+   * Adds a YouTube or Google Drive link to the library as a READY asset (no Bunny upload).
+   * Fetches a title/thumbnail when the remote host allows it.
+   */
+  async createFromLink(
+    dto: { url: string; title?: string; courseId?: string | null; lessonId?: string | null },
+    actorUserId: string,
+  ) {
+    const parsed = parseExternalVideoUrl(dto.url);
+    if (!parsed) {
+      throw AppException.validation([{ field: 'url', message: 'Paste a YouTube or Google Drive link (https://…)' }]);
+    }
+    await this.assertLinkTargets(actorUserId, dto.courseId, dto.lessonId);
+
+    const existing = await this.db.videoAsset.findFirst({
+      where: { provider: parsed.provider, providerAssetId: parsed.providerAssetId, deletedAt: null },
+    });
+    if (existing) throw AppException.conflict('This video is already in your library.');
+
+    let title = dto.title?.trim() || null;
+    let thumbnailUrl = parsed.thumbnailUrl;
+    if (parsed.provider === 'YOUTUBE') {
+      const meta = await fetchYouTubeMeta(parsed.externalUrl);
+      if (!title && meta.title) title = meta.title;
+      if (meta.thumbnailUrl) thumbnailUrl = meta.thumbnailUrl;
+    } else if (parsed.provider === 'GOOGLE_DRIVE' && thumbnailUrl) {
+      thumbnailUrl = await probeDriveThumbnail(thumbnailUrl);
+    }
+    if (!title) title = parsed.provider === 'YOUTUBE' ? `YouTube ${parsed.providerAssetId}` : `Drive video ${parsed.providerAssetId.slice(0, 8)}`;
+
+    const v = await this.db.videoAsset.create({
+      data: {
+        title: title.slice(0, 200),
+        provider: parsed.provider,
+        providerAssetId: parsed.providerAssetId,
+        externalUrl: parsed.externalUrl,
+        status: 'READY',
+        protection: 'SIGNED',
+        thumbnailUrl: thumbnailUrl?.slice(0, 1024) ?? null,
+        courseId: dto.courseId ?? null,
+        lessonId: dto.lessonId ?? null,
+        readyAt: new Date(),
+        createdById: actorUserId,
+      } as never,
+    });
+
+    if (dto.lessonId) {
+      await this.db.courseLesson.update({
+        where: { id: dto.lessonId },
+        data: { videoAssetId: v.id, isPublished: true },
+      });
+    }
+
+    await this.audit.record({
+      action: 'video.create', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM',
+      targetType: 'VideoAsset', targetId: v.id,
+      after: { title: v.title, provider: parsed.provider, externalUrl: parsed.externalUrl },
+    });
+    return this.view(v);
+  }
+
+  /** Course/lesson must belong to this academy; instructors may only use courses they teach. */
+  private async assertLinkTargets(userId: string, courseId?: string | null, lessonId?: string | null) {
+    if (lessonId && !courseId) throw AppException.validation([{ field: 'courseId', message: 'Choose the course of this lesson' }]);
+    if (!courseId) return;
+    const course = await this.db.course.findFirst({ where: { id: courseId, deletedAt: null }, select: { id: true } });
+    if (!course) throw AppException.notFound('Course not found');
+    const member = await this.prisma.tenantMember.findUnique({
+      where: { tenantId_userId: { tenantId: this.ctx.requireTenantId(), userId } },
+      include: { role: { select: { key: true } } },
+    });
+    if (member?.role.key === 'INSTRUCTOR' && !(await this.db.courseInstructor.findFirst({ where: { courseId, userId } }))) {
+      throw AppException.forbidden('You can only add videos to courses you teach.');
+    }
+    if (lessonId) {
+      const lesson = await this.db.courseLesson.findFirst({ where: { id: lessonId, courseId }, select: { type: true } });
+      if (!lesson) throw AppException.notFound('Lesson not found in this course');
+      if (lesson.type !== 'VIDEO') throw AppException.validation([{ field: 'lessonId', message: 'Only video lessons take a video' }]);
+    }
+  }
+
+  private externalEmbed(v: { provider: string; providerAssetId: string | null; externalUrl: string | null; durationSeconds: number | null }) {
+    if (!isExternalProvider(v.provider) || !v.providerAssetId) return null;
+    const parsed = parseExternalVideoUrl(v.externalUrl ?? (v.provider === 'YOUTUBE'
+      ? `https://www.youtube.com/watch?v=${v.providerAssetId}`
+      : `https://drive.google.com/file/d/${v.providerAssetId}/view`));
+    if (!parsed) return null;
+    return {
+      kind: 'iframe' as const,
+      url: parsed.embedUrl,
+      external: true as const,
+      provider: v.provider,
+      durationSeconds: v.durationSeconds,
+      expiresAt: null as Date | null,
+      drm: false,
+      drmTier: null as string | null,
+      drmLabel: null as string | null,
+    };
+  }
+
   async get(id: string) {
     const v = await this.repo.find(id);
     if (!v || v.status === 'DELETED') throw AppException.notFound('Video not found');
@@ -117,9 +221,15 @@ export class VideosService {
     return this.view(updated);
   }
 
-  /** Creator preview: storage → signed URL; Bunny → short-lived token embed. */
+  /** Creator preview: storage → signed URL; Bunny → short-lived token embed; YT/Drive → public embed. */
   async preview(id: string, apiOrigin: string) {
     const v = await this.get(id);
+    if (isExternalProvider(v.provider)) {
+      if (v.status !== 'READY') throw AppException.conflict('The video is not ready yet.');
+      const embed = this.externalEmbed(v);
+      if (!embed) throw AppException.conflict('This external video link is invalid.');
+      return embed;
+    }
     if (v.provider === 'BUNNY') {
       if (v.status !== 'READY' || !v.providerAssetId) throw AppException.conflict('The video is not ready yet.');
       try {
@@ -147,7 +257,8 @@ export class VideosService {
     const backup = await this.db.videoBackup.findFirst({ where: { videoAssetId: id }, select: { status: true } });
     if (backup && (ACTIVE_BACKUP as readonly string[]).includes(backup.status)) throw AppException.conflict('The original is still being backed up. Try again when the backup has finished.');
     await this.db.videoPlaybackSession.updateMany({ where: { videoAssetId: id, revokedAt: null }, data: { revokedAt: new Date(), revokeReason: 'video_deleted' } });
-    if (v.provider === 'STORAGE') {
+    if (v.provider === 'STORAGE' || isExternalProvider(v.provider)) {
+      // No remote host entry to delete for storage or linked YouTube/Drive assets.
       await this.db.videoAsset.update({ where: { id }, data: { deletedAt: new Date(), status: 'DELETED' } });
     } else {
       if (v.status !== 'DELETING') await this.repo.transition(id, 'DELETING', 'USER', 'Deleted by user', { deletedAt: new Date() });
@@ -166,7 +277,7 @@ export class VideosService {
   }
 
   // ── student playback ───────────────────────────────────────
-  /** Authorises playback of a lesson's video: signed storage URL, or provider token embed. */
+  /** Authorises playback of a lesson's video: signed storage URL, provider token embed, or YT/Drive embed. */
   async startPlayback(userId: string, lessonId: string, meta: { ip?: string; userAgent?: string }, apiOrigin: string) {
     const { lesson, enrollment } = await this.learning.accessibleLesson(userId, lessonId);
     if (lesson.type !== 'VIDEO' || !lesson.videoAssetId) throw AppException.notFound('No video in this lesson');
@@ -175,6 +286,29 @@ export class VideosService {
     if (video.provider === 'BUNNY') {
       const r = await this.playback.authorize(userId, lessonId, video.id, meta);
       return { ...r, kind: 'iframe', url: r.player.url, mimeType: null };
+    }
+    if (isExternalProvider(video.provider)) {
+      const embed = this.externalEmbed(video);
+      if (!embed) throw AppException.notFound('This video is unavailable');
+      await this.playback.assertConcurrency(userId);
+      const ttl = playbackTtlSeconds(video.durationSeconds ?? lesson.durationSeconds);
+      const session = await this.db.videoPlaybackSession.create({
+        data: {
+          videoAssetId: video.id, lessonId: lesson.id, userId, enrollmentId: enrollment?.id ?? 'preview',
+          ipHash: meta.ip ? createHash('sha256').update(meta.ip).digest('hex') : null, userAgent: meta.userAgent?.slice(0, 512),
+          expiresAt: new Date(Date.now() + ttl * 1000),
+        } as never,
+      });
+      const progress = enrollment ? await this.db.lessonProgress.findFirst({ where: { enrollmentId: enrollment.id, lessonId: lesson.id } }) : null;
+      return {
+        ...embed,
+        sessionId: session.id,
+        mimeType: null,
+        expiresAt: session.expiresAt,
+        durationSeconds: video.durationSeconds ?? lesson.durationSeconds,
+        resumeAt: progress?.completedAt ? 0 : (progress?.positionSeconds ?? 0),
+        preview: !enrollment,
+      };
     }
     await this.playback.assertConcurrency(userId);
     const ttl = playbackTtlSeconds(video.durationSeconds ?? lesson.durationSeconds);

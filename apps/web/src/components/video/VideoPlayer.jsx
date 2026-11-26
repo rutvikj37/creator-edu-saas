@@ -119,6 +119,18 @@ export function VideoPlayer({ lessonId, onCompleted }) {
     </p>
   ) : null;
   if (play.kind === 'iframe') {
+    // YouTube / Drive embeds do not speak Bunny player.js — plain iframe only.
+    if (play.external) {
+      return (
+        <div className="relative">
+          <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-black">
+            <iframe title="Lesson video" src={play.url} className="absolute inset-0 size-full border-0" loading="lazy"
+              allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" data-testid="lesson-video-external" />
+          </div>
+          <Watermark />
+        </div>
+      );
+    }
     return (
       <div className="relative">
         <ProviderEmbed url={play.url} resumeAt={play.resumeAt} onTime={onTime} onState={onState} />

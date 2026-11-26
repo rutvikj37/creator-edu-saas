@@ -1,8 +1,18 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsIn, IsInt, IsNumber, IsOptional, IsString, Length, Max, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsIn, IsInt, IsNumber, IsOptional, IsString, IsUrl, Length, Max, MaxLength, Min } from 'class-validator';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
+
+/** Import a YouTube or Google Drive video into the asset library (no file upload). */
+export class ImportFromLinkDto {
+  @ApiProperty({ example: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ' })
+  @Transform(trim) @IsUrl({ protocols: ['https', 'http'], require_protocol: true }) @MaxLength(1000) url: string;
+  @ApiPropertyOptional({ description: 'Override the title fetched from YouTube oEmbed' })
+  @IsOptional() @Transform(trim) @IsString() @Length(1, 200) title?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @Length(25, 25) courseId?: string | null;
+  @ApiPropertyOptional() @IsOptional() @IsString() @Length(25, 25) lessonId?: string | null;
+}
 
 export class InitiateUploadDto {
   @ApiProperty() @Transform(trim) @IsString() @Length(1, 200) title: string;

@@ -218,7 +218,7 @@ export class VideoProcessingService {
 
 export function serializeVideo(v: Record<string, any>, extra: Record<string, unknown> = {}) {
   return {
-    id: v.id, title: v.title, provider: v.provider, providerVideoId: v.providerAssetId, status: v.status, protection: v.protection,
+    id: v.id, title: v.title, provider: v.provider, providerVideoId: v.providerAssetId, externalUrl: v.externalUrl ?? null, status: v.status, protection: v.protection,
     courseId: v.courseId, lessonId: v.lessonId, originalFilename: v.originalFilename, mimeType: v.mimeType,
     originalSize: v.originalSize !== null && v.originalSize !== undefined ? Number(v.originalSize) : null,
     durationSeconds: v.durationSeconds, width: v.width, height: v.height, thumbnailUrl: v.thumbnailUrl,

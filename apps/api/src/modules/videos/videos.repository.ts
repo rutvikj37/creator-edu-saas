@@ -45,9 +45,9 @@ export class VideosRepository {
     return this.db.videoAsset.findFirst({ where: { id, deletedAt: null } });
   }
 
-  /** Unscoped lookup for provider callbacks (no tenant context yet). */
+  /** Unscoped lookup for provider callbacks (no tenant context yet). Bunny GUIDs are globally unique. */
   findByProviderId(provider: 'BUNNY', providerAssetId: string) {
-    return this.prisma.videoAsset.findUnique({ where: { provider_providerAssetId: { provider, providerAssetId } } });
+    return this.prisma.videoAsset.findFirst({ where: { provider, providerAssetId } });
   }
 
   /**

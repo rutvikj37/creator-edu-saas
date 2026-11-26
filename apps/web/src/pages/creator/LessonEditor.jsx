@@ -11,6 +11,7 @@ import { AiDraftButton } from '../../components/ai/AiTools.jsx';
 import { AssignmentEditor } from './AssignmentEditor.jsx';
 import { readVideoDuration, uploadVideo, videosApi } from '../../services/api/videos.js';
 import { startTusUpload } from '../../services/api/tusUpload.js';
+import { VideoSourcePanel } from '../../components/video/VideoSourcePanel.jsx';
 import { fmtDuration } from './VideosPage.jsx';
 
 const ACCEPT = {
@@ -111,35 +112,43 @@ function InlineVideoUpload({ courseId, lessonId, disabled, onAttached, pending }
   };
 
   return (
-    <div className="space-y-2 rounded-lg border border-dashed border-line-strong bg-surface-2/40 p-3">
-      <p className="text-sm font-medium text-fg">Upload a new video</p>
-      <p className="text-xs text-muted">
-        {phase === 'uploading'
-          ? 'Keep this page open until the upload finishes.'
-          : phase === 'processing'
-            ? 'Processing usually takes 1–3 minutes. You can close this page: the video attaches to this lesson automatically when it’s ready.'
-            : 'Stays on this lesson — no need to leave for the asset library.'}
-      </p>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="video/*,.mp4,.mov,.webm,.mkv"
-        className="hidden"
-        disabled={disabled || Boolean(phase)}
-        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onFile(f); }}
-      />
-      <Button
-        type="button"
-        variant="secondary"
-        size="sm"
-        leftIcon={Upload}
-        loading={Boolean(phase)}
-        disabled={disabled || config.isLoading}
-        onClick={() => inputRef.current?.click()}
-      >
-        {phase === 'uploading' ? `Uploading ${progress}%` : phase === 'processing' ? 'Processing…' : 'Choose video file'}
-      </Button>
-    </div>
+    <VideoSourcePanel
+      courseId={courseId}
+      lessonId={lessonId}
+      disabled={disabled || Boolean(phase)}
+      compact
+      onAttached={(v) => onAttached(v.id)}
+    >
+      <div className="space-y-2 rounded-lg border border-dashed border-line-strong bg-surface-2/40 p-3">
+        <p className="text-sm font-medium text-fg">Upload from this computer</p>
+        <p className="text-xs text-muted">
+          {phase === 'uploading'
+            ? 'Keep this page open until the upload finishes.'
+            : phase === 'processing'
+              ? 'Processing usually takes 1–3 minutes. You can close this page: the video attaches to this lesson automatically when it’s ready.'
+              : 'Stays on this lesson — no need to leave for the asset library.'}
+        </p>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="video/*,.mp4,.mov,.webm,.mkv"
+          className="hidden"
+          disabled={disabled || Boolean(phase)}
+          onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onFile(f); }}
+        />
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          leftIcon={Upload}
+          loading={Boolean(phase)}
+          disabled={disabled || config.isLoading}
+          onClick={() => inputRef.current?.click()}
+        >
+          {phase === 'uploading' ? `Uploading ${progress}%` : phase === 'processing' ? 'Processing…' : 'Choose video file'}
+        </Button>
+      </div>
+    </VideoSourcePanel>
   );
 }
 
