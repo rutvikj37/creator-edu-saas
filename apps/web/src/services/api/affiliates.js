@@ -7,6 +7,7 @@ export const affiliatesApi = {
   saveProgram: (body) => http.put('/creator/affiliates/program', body).then(d),
   list: () => http.get('/creator/affiliates').then(d),
   conversions: (affiliateId) => http.get('/creator/affiliates/conversions', { params: affiliateId ? { affiliateId } : {} }).then(d),
+  invite: (body) => http.post('/creator/affiliates/invite', body).then(d),
   update: (id, body) => http.patch(`/creator/affiliates/${id}`, body).then(d),
   payout: (id, payoutRef) => http.post(`/creator/affiliates/${id}/payouts`, { payoutRef }).then(d),
   me: () => http.get('/learn/affiliate').then(d),

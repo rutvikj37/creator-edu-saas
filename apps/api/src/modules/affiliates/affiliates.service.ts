@@ -58,7 +58,70 @@ export class AffiliatesService {
     }));
   }
 
-  async updateAffiliate(id: string, input: { status?: 'ACTIVE' | 'SUSPENDED'; commissionPercent?: number }, actorUserId: string) {
+  /**
+   * Creator invites an existing academy student/staff by email. Creates (or reactivates)
+   * their affiliate profile so they can share ?ref=CODE links without self-joining first.
+   */
+  async invite(email: string, actorUserId: string, commissionPercent?: number) {
+    const program = await this.program();
+    if (!program.enabled) throw AppException.conflict('Turn the affiliate program on before inviting people.');
+    const normalised = email.trim().toLowerCase();
+    if (!normalised || !normalised.includes('@')) throw AppException.validation([{ field: 'email', message: 'Enter a valid email' }]);
+    if (commissionPercent !== undefined && (commissionPercent < 1 || commissionPercent > 90)) {
+      throw AppException.validation([{ field: 'commissionPercent', message: '1–90%' }]);
+    }
+    const tenantId = this.ctx.requireTenantId();
+    const user = await this.prisma.user.findFirst({
+      where: {
+        email: normalised,
+        deletedAt: null,
+        status: 'ACTIVE',
+        OR: [
+          { tenantId },
+          { memberships: { some: { tenantId, status: 'ACTIVE' } } },
+        ],
+      },
+      select: { id: true, fullName: true, email: true },
+    });
+    if (!user) throw AppException.notFound('No active student or team member with that email in this academy.');
+    const existing = await this.db.affiliate.findFirst({ where: { userId: user.id } });
+    const rate = commissionPercent ?? program.defaultPercent;
+    if (existing) {
+      await this.db.affiliate.update({
+        where: { id: existing.id },
+        data: {
+          commissionPercent: rate,
+          ...(existing.status !== 'ACTIVE' ? { status: 'ACTIVE', approvedAt: existing.approvedAt ?? new Date() } : {}),
+        },
+      });
+      await this.audit.record({ action: 'affiliates.invite', tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'Affiliate', targetId: existing.id, after: { email: normalised, reactivated: true } });
+      return (await this.list()).find((x) => x.id === existing.id);
+    }
+    const base = user.fullName.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '').slice(0, 10) || 'ref';
+    let createdId: string | null = null;
+    for (let i = 0; i < 5; i++) {
+      try {
+        const row = await this.db.affiliate.create({
+          data: {
+            userId: user.id,
+            code: `${base}${randomBytes(3).toString('hex')}`.toUpperCase(),
+            commissionPercent: rate,
+            status: 'ACTIVE',
+            approvedAt: new Date(),
+          } as never,
+        });
+        createdId = row.id;
+        break;
+      } catch (e: any) {
+        if (e?.code !== 'P2002') throw e;
+      }
+    }
+    if (!createdId) throw AppException.conflict('Could not allocate an affiliate code. Try again.');
+    await this.audit.record({ action: 'affiliates.invite', tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'Affiliate', targetId: createdId, after: { email: normalised } });
+    return (await this.list()).find((x) => x.id === createdId);
+  }
+
+    async updateAffiliate(id: string, input: { status?: 'ACTIVE' | 'SUSPENDED'; commissionPercent?: number }, actorUserId: string) {
     const a = await this.db.affiliate.findFirst({ where: { id } });
     if (!a) throw AppException.notFound('Affiliate not found');
     if (input.commissionPercent !== undefined && (input.commissionPercent < 1 || input.commissionPercent > 90)) throw AppException.validation([{ field: 'commissionPercent', message: '1–90%' }]);

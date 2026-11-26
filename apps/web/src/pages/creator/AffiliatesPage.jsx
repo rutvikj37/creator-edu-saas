@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, Handshake, Wallet } from 'lucide-react';
+import { Copy, Handshake, UserPlus, Wallet } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
 import { Alert } from '../../components/auth/Alert.jsx';
 import { Avatar, Badge, Button, Card, CardBody, CardHeader, DataTable, EmptyState, ErrorState, Input, Modal, Skeleton, StatusBadge, Switch, Tabs, Textarea, toast } from '../../components/ui/index.js';
@@ -8,6 +8,65 @@ import { ListToolbar, MetricCard } from '../../components/common/ListToolbar.jsx
 import { FilterChip } from '../../components/common/FilterChip.jsx';
 import { affiliatesApi } from '../../services/api/affiliates.js';
 import { formatDate, formatMoney } from '../../utils/format.js';
+
+const HOW_STEPS = [
+  { title: 'Turn the program on', text: 'Set commission %, cookie window and approval rules in Program settings.' },
+  { title: 'Invite partners', text: 'Add an existing student or team member by email, or let them join from Earn by sharing.' },
+  { title: 'They share their link', text: 'Each affiliate gets a unique ?ref=CODE link. Clicks are tracked for the cookie window.' },
+  { title: 'Sales earn commission', text: 'Paid orders through their link create commissions (ex-GST). After the hold, mark them paid.' },
+];
+
+function HowItWorks() {
+  return (
+    <Card className="mb-6 overflow-hidden border-primary-200 bg-gradient-to-br from-primary-50/80 to-surface">
+      <CardHeader title="How affiliates work" description="A short path from setup to payout — so your partners know exactly what to do." />
+      <CardBody>
+        <ol className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {HOW_STEPS.map((s, i) => (
+            <li key={s.title} className="relative rounded-xl border border-line bg-surface p-4 shadow-xs">
+              <span className="mb-3 grid size-8 place-items-center rounded-full bg-primary-600 text-sm font-semibold text-on-primary">{i + 1}</span>
+              <p className="font-medium text-fg">{s.title}</p>
+              <p className="mt-1 text-sm text-muted">{s.text}</p>
+            </li>
+          ))}
+        </ol>
+        <p className="mt-4 text-xs text-muted">
+          Students find the program under <strong>Earn by sharing</strong> on the academy. Referral links look like{' '}
+          <code className="rounded bg-surface-2 px-1.5 py-0.5">https://your-academy/?ref=THEIRCODE</code>
+        </p>
+      </CardBody>
+    </Card>
+  );
+}
+
+function InviteModal({ open, onClose }) {
+  const qc = useQueryClient();
+  const [email, setEmail] = useState('');
+  const [rate, setRate] = useState('');
+  const invite = useMutation({
+    mutationFn: () => affiliatesApi.invite({ email: email.trim(), commissionPercent: rate === '' ? undefined : Number(rate) }),
+    onSuccess: (row) => {
+      qc.invalidateQueries({ queryKey: ['affiliates'] });
+      toast.success(`${row?.user?.fullName || email} is now an affiliate`);
+      setEmail('');
+      setRate('');
+      onClose();
+    },
+    onError: (e) => toast.error(e.details?.[0]?.message ?? e.message),
+  });
+  return (
+    <Modal open={open} onClose={onClose} title="Invite an affiliate" description="They must already have an account in this academy (student or team).">
+      <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); invite.mutate(); }}>
+        <Input label="Email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="partner@example.com" />
+        <Input label="Commission % (optional)" type="number" min={1} max={90} value={rate} onChange={(e) => setRate(e.target.value)} hint="Leave blank to use the program default" />
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button type="submit" leftIcon={UserPlus} loading={invite.isPending} disabled={!email.trim()}>Invite</Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
 
 function ProgramCard() {
   const qc = useQueryClient();
@@ -22,6 +81,7 @@ function ProgramCard() {
     <Card>
       <CardHeader title="Program" description="Students share your courses with their link and earn a share of each sale (excluding GST)." actions={<Switch label="Program on" checked={q.data.enabled} onChange={(enabled) => save.mutate({ enabled })} />} />
       <CardBody className="space-y-4">
+        {!q.data.enabled && <Alert tone="info">Turn the program on so partners can join and referral links start tracking.</Alert>}
         <div className="grid gap-4 sm:grid-cols-3">
           <Input label="Commission %" type="number" min={1} max={90} value={v.defaultPercent} onChange={(e) => set({ defaultPercent: Number(e.target.value) })} />
           <Input label="Link counts for (days)" type="number" min={1} max={365} value={v.cookieDays} onChange={(e) => set({ cookieDays: Number(e.target.value) })} />
@@ -56,8 +116,10 @@ function PayoutModal({ affiliate, onClose }) {
 
 export function AffiliatesPage() {
   const qc = useQueryClient();
+  const program = useQuery({ queryKey: ['affiliates', 'program'], queryFn: affiliatesApi.program });
   const q = useQuery({ queryKey: ['affiliates', 'list'], queryFn: affiliatesApi.list });
   const [paying, setPaying] = useState(null);
+  const [inviting, setInviting] = useState(false);
   const [tab, setTab] = useState('affiliates');
   const [search, setSearch] = useState('');
   const [statusF, setStatusF] = useState();
@@ -66,12 +128,26 @@ export function AffiliatesPage() {
   const term = search.trim().toLowerCase();
   const rows = all.filter((r) => (!term || `${r.user?.fullName ?? ''} ${r.user?.email ?? ''} ${r.code}`.toLowerCase().includes(term)) && (!statusF || r.status === statusF));
   const sum = (k) => all.reduce((n, r) => n + Number(r[k] ?? 0), 0);
+  const copyLink = (code) => navigator.clipboard?.writeText(`${window.location.origin}/?ref=${code}`).then(() => toast.success('Referral link copied'));
   return (
     <>
-      <PageHeader title="Affiliates" count={q.data ? all.length : undefined} description="Manage your reseller and affiliate team: students earn a share of each sale they bring." breadcrumbs={[{ label: 'Affiliates' }]} />
+      <PageHeader
+        title="Affiliates"
+        count={q.data ? all.length : undefined}
+        description="Manage your reseller and affiliate team: partners earn a share of each sale they bring."
+        breadcrumbs={[{ label: 'Affiliates' }]}
+        actions={tab === 'affiliates' ? <Button leftIcon={UserPlus} onClick={() => setInviting(true)} disabled={program.data && !program.data.enabled}>Invite affiliate</Button> : undefined}
+      />
+      <HowItWorks />
       <Tabs className="mb-6" value={tab} onChange={setTab} tabs={[{ value: 'affiliates', label: 'Affiliates', count: q.data ? all.length : undefined }, { value: 'settings', label: 'Program settings' }]} />
       {tab === 'settings' ? <ProgramCard /> : (
         <>
+          {program.data && !program.data.enabled && (
+            <Alert tone="warning" className="mb-4" title="Program is off">
+              Turn it on in Program settings before inviting partners or tracking referral links.{' '}
+              <button type="button" className="font-medium underline" onClick={() => setTab('settings')}>Open settings</button>
+            </Alert>
+          )}
           <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard label="Link clicks" value={sum('clicks').toLocaleString('en-IN')} loading={q.isLoading} />
             <MetricCard label="Sales by affiliates" value={sum('conversions').toLocaleString('en-IN')} loading={q.isLoading} />
@@ -84,9 +160,9 @@ export function AffiliatesPage() {
               filters={<FilterChip label="Status" value={statusF} onChange={setStatusF} options={[{ value: 'ACTIVE', label: 'Active' }, { value: 'PENDING', label: 'Waiting for approval' }, { value: 'SUSPENDED', label: 'Suspended' }]} />} />
             <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={rows}
               empty={all.length ? <EmptyState icon={Handshake} title="No affiliates match" description="Try a different search or clear the filters." />
-                : <EmptyState icon={Handshake} title="Nothing here yet!" description="Students join as affiliates from their account once your program is on." action={<Button size="sm" variant="secondary" onClick={() => setTab('settings')}>Program settings</Button>} />}
+                : <EmptyState icon={Handshake} title="No affiliates yet" description="Invite a student by email, or turn the program on so they can join from Earn by sharing on the academy." action={<div className="flex flex-wrap justify-center gap-2"><Button size="sm" leftIcon={UserPlus} onClick={() => setInviting(true)}>Invite affiliate</Button><Button size="sm" variant="secondary" onClick={() => setTab('settings')}>Program settings</Button></div>} />}
               columns={[
-                { key: 'user', header: 'Affiliate', cell: (r) => <div className="flex items-center gap-2.5"><Avatar name={r.user?.fullName || r.code} size="sm" /><div className="min-w-0"><p className="truncate font-medium text-fg">{r.user?.fullName}</p><p className="font-mono text-xs text-muted">{r.code}</p></div></div> },
+                { key: 'user', header: 'Affiliate', cell: (r) => <div className="flex items-center gap-2.5"><Avatar name={r.user?.fullName || r.code} size="sm" /><div className="min-w-0"><p className="truncate font-medium text-fg">{r.user?.fullName}</p><p className="truncate text-xs text-muted">{r.user?.email}</p><p className="font-mono text-xs text-muted">{r.code}</p></div></div> },
                 { key: 'commissionPercent', header: 'Rate %', cell: (r) => <Input aria-label={`Rate for ${r.user?.fullName}`} type="number" className="w-20" defaultValue={r.commissionPercent} onBlur={(e) => Number(e.target.value) !== r.commissionPercent && update.mutate({ id: r.id, commissionPercent: Number(e.target.value) })} /> },
                 { key: 'clicks', header: 'Clicks', align: 'right' },
                 { key: 'conversions', header: 'Sales', align: 'right' },
@@ -97,6 +173,7 @@ export function AffiliatesPage() {
                   key: 'actions', header: '', align: 'right',
                   cell: (r) => (
                     <div className="flex justify-end gap-1">
+                      <Button size="sm" variant="ghost" leftIcon={Copy} aria-label="Copy referral link" onClick={() => copyLink(r.code)} />
                       {r.status !== 'ACTIVE' ? <Button size="sm" onClick={() => update.mutate({ id: r.id, status: 'ACTIVE' })}>{r.status === 'PENDING' ? 'Approve' : 'Reactivate'}</Button> : <Button size="sm" variant="ghost" onClick={() => update.mutate({ id: r.id, status: 'SUSPENDED' })}>Suspend</Button>}
                       {Number(r.owed) > 0 && <Button size="sm" variant="secondary" leftIcon={Wallet} onClick={() => setPaying(r)}>Pay</Button>}
                     </div>
@@ -107,9 +184,11 @@ export function AffiliatesPage() {
         </>
       )}
       <PayoutModal affiliate={paying} onClose={() => setPaying(null)} />
+      <InviteModal open={inviting} onClose={() => setInviting(false)} />
     </>
   );
 }
+
 
 /** Student-side affiliate dashboard. */
 export function StudentAffiliatePage() {

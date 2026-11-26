@@ -22,6 +22,10 @@ class AffiliateUpdateDto {
   @IsOptional() @IsIn(['ACTIVE', 'SUSPENDED']) status?: 'ACTIVE' | 'SUSPENDED';
   @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(1) @Max(90) commissionPercent?: number;
 }
+class InviteAffiliateDto {
+  @ApiProperty({ example: 'partner@example.com' }) @Transform(trim) @IsString() @Length(3, 191) email: string;
+  @ApiPropertyOptional() @IsOptional() @IsNumber({ maxDecimalPlaces: 2 }) @Min(1) @Max(90) commissionPercent?: number;
+}
 class PayoutDto {
   @ApiProperty({ description: 'UTR / transaction reference' }) @Transform(trim) @IsString() @Length(3, 191) payoutRef: string;
 }
@@ -56,6 +60,11 @@ export class CreatorAffiliatesController {
 
   @Get('conversions') @RequirePermissions(PERMISSIONS.AFFILIATES_MANAGE)
   conversions(@Query('affiliateId') affiliateId?: string, @Query('status') status?: string) { return this.affiliates.conversions({ affiliateId: affiliateId?.slice(0, 25), status: status?.slice(0, 16) }); }
+
+  @Post('invite') @HttpCode(200) @RequirePermissions(PERMISSIONS.AFFILIATES_MANAGE)
+  invite(@Body() dto: InviteAffiliateDto, @CurrentAuth() auth: AuthContext) {
+    return this.affiliates.invite(dto.email, auth.userId, dto.commissionPercent);
+  }
 
   @Patch(':id') @RequirePermissions(PERMISSIONS.AFFILIATES_MANAGE)
   update(@Param('id') id: string, @Body() dto: AffiliateUpdateDto, @CurrentAuth() auth: AuthContext) { return this.affiliates.updateAffiliate(id, dto, auth.userId); }
