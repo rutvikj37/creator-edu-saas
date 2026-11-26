@@ -30,6 +30,16 @@ describe('DashboardShell', () => {
     expect(screen.getByText('Home content')).toBeInTheDocument();
   });
 
+  it('locks the shell to the viewport so the sidebar fills full height', () => {
+    const { container } = setup();
+    const shell = container.querySelector('.h-dvh.overflow-hidden');
+    expect(shell).not.toBeNull();
+    const aside = shell.querySelector('aside');
+    expect(aside.className).toMatch(/\bh-full\b/);
+    expect(aside.className).toMatch(/\bflex-col\b/);
+    expect(screen.getByRole('button', { name: 'Collapse sidebar' }).className).toMatch(/\bshrink-0\b/);
+  });
+
   it('remembers the collapsed sidebar preference', async () => {
     setup();
     await userEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));

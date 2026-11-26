@@ -16,7 +16,7 @@ function flatten(nav) {
 function SidebarNav({ nav, collapsed, onNavigate }) {
   const { t } = useTranslation();
   return (
-    <nav aria-label="Main" className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
+    <nav aria-label="Main" className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-4">
       {nav.map((group) => (
         <div key={group.label ?? 'root'}>
           {group.label && !collapsed && <p className="mb-1.5 px-2 text-[11px] font-semibold tracking-wider text-muted uppercase">{group.label}</p>}
@@ -212,7 +212,7 @@ export function DashboardShell({ nav, brand, user, footer, onSignOut, notificati
   }, []);
 
   const brandBlock = (
-    <div className={cn('flex h-14 items-center gap-2.5 border-b border-line px-4', collapsed && 'justify-center px-0')}>
+    <div className={cn('flex h-14 shrink-0 items-center gap-2.5 border-b border-line px-4', collapsed && 'justify-center px-0')}>
       <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary-600 text-sm font-bold text-on-primary">{brand.mark}</span>
       {!collapsed && (
         <div className="min-w-0">
@@ -224,21 +224,21 @@ export function DashboardShell({ nav, brand, user, footer, onSignOut, notificati
   );
 
   return (
-    <div className="flex min-h-dvh">
+    <div className="flex h-dvh overflow-hidden">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-surface focus:px-3 focus:py-2">
         Skip to content
       </a>
 
-      {/* Desktop sidebar */}
-      <aside className={cn('sticky top-0 z-30 hidden h-dvh shrink-0 flex-col border-r border-line bg-surface transition-[width] lg:flex', collapsed ? 'w-[68px]' : 'w-64')}>
+      {/* Desktop sidebar — full viewport height; nav scrolls, collapse stays pinned */}
+      <aside className={cn('z-30 hidden h-full min-h-0 shrink-0 flex-col border-r border-line bg-surface transition-[width] lg:flex', collapsed ? 'w-[68px]' : 'w-64')}>
         {brandBlock}
         {collapsed ? <RailNav nav={nav} /> : <SidebarNav nav={nav} collapsed={false} />}
-        {footer && !collapsed && <div className="border-t border-line p-3">{footer}</div>}
+        {footer && !collapsed && <div className="shrink-0 border-t border-line p-3">{footer}</div>}
         <button
           type="button"
           onClick={() => setCollapsed((c) => !c)}
           aria-label={collapsed ? t('shell.expand') : t('shell.collapse')}
-          className="flex h-10 items-center justify-center gap-2 border-t border-line text-xs text-muted hover:text-fg"
+          className="flex h-10 shrink-0 items-center justify-center gap-2 border-t border-line text-xs text-muted hover:text-fg"
         >
           {collapsed ? <ChevronsRight className="size-4" /> : <ChevronsLeft className="size-4" />}
           {!collapsed && t('shell.collapse')}
@@ -250,20 +250,20 @@ export function DashboardShell({ nav, brand, user, footer, onSignOut, notificati
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-slate-900/50" onClick={() => setMobileOpen(false)} aria-hidden />
           <aside className="absolute inset-y-0 left-0 flex w-72 flex-col bg-surface shadow-lg">
-            <div className="flex items-center justify-between pr-2">
+            <div className="flex shrink-0 items-center justify-between pr-2">
               <div className="flex-1">{brandBlock}</div>
               <Button variant="ghost" size="icon-sm" aria-label="Close menu" onClick={() => setMobileOpen(false)}>
                 <X className="size-4" />
               </Button>
             </div>
             <SidebarNav nav={nav} collapsed={false} onNavigate={() => setMobileOpen(false)} />
-            {footer && <div className="border-t border-line p-3">{footer}</div>}
+            {footer && <div className="shrink-0 border-t border-line p-3">{footer}</div>}
           </aside>
         </div>
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-line bg-surface/90 px-4 backdrop-blur sm:px-6">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
+        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-line bg-surface/90 px-4 backdrop-blur sm:px-6">
           <Button variant="ghost" size="icon-sm" className="lg:hidden" aria-label={t('shell.openMenu')} onClick={() => setMobileOpen(true)}>
             <Menu className="size-5" />
           </Button>
