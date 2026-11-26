@@ -38,8 +38,8 @@ export const TRUST = [
 export function faqs({ name }) {
   return [
     { q: `What is ${name}?`, a: `${name} is an all-in-one academy platform for teachers, coaches and institutes: host courses, run unlimited live classes and webinars, sell digital products, market to unlimited contacts, and collect payments under your own brand.` },
-    { q: 'How does pricing work?', a: 'Choose Grow or Rise. Both are billed for 6 months (₹15,999) or 12 months (₹19,999). Agency accounts are provisioned by our team — talk to us to get started.' },
-    { q: 'What is included in every plan?', a: 'Unlimited contacts, unlimited admin accounts, unlimited live classes & webinars, 5,000 marketing emails per month, third-party integrations, unlimited products, and custom domains. Rise adds white-label branding.' },
+    { q: 'How does pricing work?', a: 'Choose Grow or Rise. Both are ₹19,999 per year. 18% GST is charged extra. Agency accounts are provisioned by our team — talk to us to get started.' },
+    { q: 'What is included in every plan?', a: 'Unlimited contacts, unlimited admin accounts, unlimited live classes & webinars, 5,000 marketing emails per month, third-party integrations, unlimited products, custom domains, and AI custom pages. Rise adds white-label branding.' },
     { q: 'How do I get paid?', a: 'You connect your own Razorpay account. Learners pay with UPI, cards, net banking or wallets and the money settles directly to your bank account on Razorpay’s schedule.' },
     { q: 'Can I use my own domain name?', a: 'Yes. Custom domains are included on Grow and Rise. We help you point DNS and go live on your brand URL.' },
     { q: 'Is my content protected?', a: 'Videos are streamed rather than offered as downloads, you can limit how many devices a learner signs in on, and videos and PDFs can carry the learner’s details as a watermark.' },

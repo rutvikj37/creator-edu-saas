@@ -134,8 +134,8 @@ describe('Platform administration (e2e)', () => {
     expect(denied.body.error.code).toBe('PLAN_LIMIT_REACHED');
 
     const grow = await prisma.subscriptionPlan.findUniqueOrThrow({ where: { code: 'grow' }, include: { prices: true } });
-    const sixMonthInr = grow.prices.find((p) => p.interval === 'SIX_MONTH' && p.currency === 'INR')!;
-    const changed = await authed(app, root).post(`/api/v1/platform/tenants/${c.tenant.id}/subscription`).send({ planId: grow.id, planPriceId: sixMonthInr.id }).expect(200);
+    const yearInr = grow.prices.find((p) => p.interval === 'YEAR' && p.currency === 'INR')!;
+    const changed = await authed(app, root).post(`/api/v1/platform/tenants/${c.tenant.id}/subscription`).send({ planId: grow.id, planPriceId: yearInr.id }).expect(200);
     expect(changed.body.data).toMatchObject({ status: 'ACTIVE', plan: { code: 'grow' } });
     await authed(app, c.session).post('/api/v1/creator/domains').send({ hostname: 'learn.limit-example.com' }).expect(201);
     const second = await authed(app, c.session).post('/api/v1/creator/domains').send({ hostname: 'two.limit-example.com' }).expect(403);

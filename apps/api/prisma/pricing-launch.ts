@@ -1,11 +1,10 @@
 /**
- * Pricing launch: Grow + Rise at ₹15,999 / 6 months and ₹19,999 / 12 months.
+ * Pricing launch: Grow + Rise at ₹19,999 / year (GST extra).
  * Idempotent — safe to run on every deploy after migrate.
  */
 import type { PrismaClient } from '../src/generated/prisma/client.js';
 
 export const LAUNCH_PRICES = [
-  { interval: 'SIX_MONTH' as const, currency: 'INR', amount: 15999 },
   { interval: 'YEAR' as const, currency: 'INR', amount: 19999 },
 ];
 
@@ -72,14 +71,12 @@ function featureRows(features: FeatureMap) {
   );
 }
 
-/** Upsert Grow/Rise, activate launch prices, and hide legacy public catalogue plans. */
+/** Upsert Grow/Rise, activate yearly launch prices, and hide legacy public catalogue plans. */
 export async function syncPricingLaunch(client: PrismaClient) {
-  // Hide legacy public plans so the sales page only shows Grow + Rise.
   await client.subscriptionPlan.updateMany({
     where: { code: { in: ['growth', 'pro', 'campus'] } },
     data: { isPublic: false, isDefault: false },
   });
-  // Keep trial as the private signup default when it exists.
   const trial = await client.subscriptionPlan.findUnique({ where: { code: 'trial' } });
   if (trial) {
     await client.subscriptionPlan.update({
@@ -117,13 +114,12 @@ export async function syncPricingLaunch(client: PrismaClient) {
           },
         });
 
-    // Replace features with the launch set.
     await client.planFeature.deleteMany({ where: { planId: plan.id } });
     await client.planFeature.createMany({
       data: featureRows(p.features).map((f) => ({ ...f, planId: plan.id })),
     });
 
-    // Deactivate non-launch prices; upsert SIX_MONTH + YEAR INR.
+    // Only YEAR ₹19,999 is active for the launch; deactivate month / 6-month / other currencies.
     await client.planPrice.updateMany({
       where: {
         planId: plan.id,
@@ -145,6 +141,5 @@ export async function syncPricingLaunch(client: PrismaClient) {
     }
   }
 
-  // If growth/pro still exist with subscriptions, leave them; just keep them off the public page.
-  console.log('Synced pricing launch: Grow + Rise (₹15,999 / 6 mo, ₹19,999 / 12 mo)');
+  console.log('Synced pricing launch: Grow + Rise (₹19,999 / year, GST extra)');
 }

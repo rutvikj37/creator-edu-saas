@@ -12,6 +12,7 @@ export const LAUNCH_MODULES = [
   'Third Party Integrations',
   'Unlimited Products',
   'Custom domains',
+  'AI custom pages',
   'White label',
 ];
 
@@ -24,7 +25,7 @@ export function launchModulesFor(plan) {
 }
 
 export function intervalLabel(interval) {
-  if (interval === 'YEAR') return '12 months';
+  if (interval === 'YEAR') return 'year';
   if (interval === 'SIX_MONTH') return '6 months';
   if (interval === 'MONTH') return 'month';
   return String(interval || '').toLowerCase();
@@ -40,27 +41,25 @@ export function planPrice(plan, interval, currency) {
   return plan.prices.find((x) => x.interval === interval && x.currency === currency) ?? null;
 }
 
-/** Prefer 6-month / 12-month launch billing; fall back to month / year. */
+/** Public launch pricing uses yearly only. */
+export function publicPlanPrice(plan, currency) {
+  return planPrice(plan, 'YEAR', currency) ?? plan.prices.find((x) => x.currency === currency && Number(x.amount) > 0) ?? null;
+}
+
+/** @deprecated Kept for older callers; launch UI no longer toggles intervals. */
 export function preferredIntervals(plans, currency) {
   const has = (iv) => plans.some((p) => planPrice(p, iv, currency));
-  if (has('SIX_MONTH') || has('YEAR')) {
-    return [
-      has('SIX_MONTH') && ['SIX_MONTH', '6 months'],
-      has('YEAR') && ['YEAR', '12 months'],
-    ].filter(Boolean);
-  }
+  if (has('YEAR')) return [['YEAR', 'Yearly']];
   return [
     has('MONTH') && ['MONTH', 'Monthly'],
     has('YEAR') && ['YEAR', 'Yearly'],
   ].filter(Boolean);
 }
 
-/** Whole-percent saving of the yearly price against two 6-month payments (or 12 months). */
+/** Whole-percent saving of yearly vs twelve monthly payments when both exist. */
 export function yearlySaving(plan, currency) {
-  const six = Number(planPrice(plan, 'SIX_MONTH', currency)?.amount ?? 0);
-  const y = Number(planPrice(plan, 'YEAR', currency)?.amount ?? 0);
-  if (six > 0 && y > 0 && y < six * 2) return Math.round((1 - y / (six * 2)) * 100);
   const m = Number(planPrice(plan, 'MONTH', currency)?.amount ?? 0);
+  const y = Number(planPrice(plan, 'YEAR', currency)?.amount ?? 0);
   if (!(m > 0 && y > 0) || y >= m * 12) return null;
   return Math.round((1 - y / (m * 12)) * 100);
 }

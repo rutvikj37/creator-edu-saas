@@ -8,7 +8,7 @@ import { useAuth } from '../../context/AuthContext.jsx';
 import { landingPath } from '../../routes/guards.jsx';
 import { useSeo } from '../../utils/seo.js';
 import { demoVideo } from './landing/video.js';
-import { intervalLabel, planFeatureLines, planPrice, preferredIntervals, priceLabel, pricingCurrency, yearlySaving } from './landing/pricing.js';
+import { intervalLabel, planFeatureLines, planPrice, publicPlanPrice, priceLabel, pricingCurrency } from './landing/pricing.js';
 import { MORE, PILLARS, STEPS, TRUST, faqs } from './landing/content.js';
 
 const NAV = [['Features', 'features'], ['How it works', 'how-it-works'], ['Pricing', 'pricing'], ['FAQ', 'faq']];
@@ -108,26 +108,12 @@ function DemoVideo({ video, name }) {
 
 function Pricing({ plans, signupTo }) {
   const currency = pricingCurrency(plans);
-  const intervals = preferredIntervals(plans, currency);
-  const [interval, setInterval] = useState(intervals[0]?.[0] ?? 'YEAR');
-  const bestSaving = Math.max(0, ...plans.map((p) => yearlySaving(p, currency) ?? 0));
-  const shown = plans
-    .map((p) => ({ plan: p, price: planPrice(p, interval, currency) ?? intervals.map(([iv]) => planPrice(p, iv, currency)).find(Boolean) }))
-    .filter((x) => x.price);
+  const shown = plans.map((p) => ({ plan: p, price: publicPlanPrice(p, currency) })).filter((x) => x.price);
   if (!shown.length) return null;
   return (
     <section id="pricing" aria-labelledby="pricing-title" className="scroll-mt-20 bg-slate-50 py-20 sm:py-28">
       <div className="mx-auto max-w-6xl px-4">
-        <Heading id="pricing-title" eyebrow="Pricing" title="Grow and Rise — clear pricing to sell with" text="Same launch rates on both plans. Pick 6 or 12 months. Agency accounts are set up by our team." />
-        {intervals.length > 1 && (
-          <div role="group" aria-label="Billing period" className="mx-auto mt-8 flex w-fit rounded-lg border border-slate-200 bg-white p-1 text-sm font-medium shadow-sm">
-            {intervals.map(([v, label]) => (
-              <button key={v} type="button" aria-pressed={interval === v} onClick={() => setInterval(v)} className={`rounded-md px-4 py-1.5 transition ${interval === v ? 'bg-teal-700 text-white' : 'text-slate-600 hover:text-slate-900'}`}>
-                {label}{v === 'YEAR' && bestSaving > 0 && <span className={`ml-1.5 text-xs ${interval === v ? 'text-teal-100' : 'text-teal-700'}`}>save {bestSaving}%</span>}
-              </button>
-            ))}
-          </div>
-        )}
+        <Heading id="pricing-title" eyebrow="Pricing" title="Grow and Rise — clear yearly pricing" text="One rate for both plans. Agency accounts are set up by our team." />
         <div className={`mx-auto mt-10 grid gap-6 ${shown.length === 1 ? 'max-w-md' : 'max-w-4xl md:grid-cols-2'}`}>
           {shown.map(({ plan, price }) => {
             const featured = plan.code === 'rise' || plan.isDefault;
@@ -137,10 +123,11 @@ function Pricing({ plans, signupTo }) {
                 {featured && <span className="absolute -top-3 left-7 rounded-md bg-amber-500 px-3 py-1 text-xs font-semibold text-white">Most popular</span>}
                 <h3 style={display} className="text-xl font-semibold text-slate-900">{plan.name}</h3>
                 {plan.description && <p className="mt-1 text-sm text-slate-600">{plan.description}</p>}
-                <p className="mt-5 flex items-baseline gap-1.5">
+                <p className="mt-5 flex flex-wrap items-baseline gap-x-1.5 gap-y-1">
                   <span style={display} className="text-4xl font-semibold tracking-tight text-slate-900">{priceLabel(price)}</span>
                   {!free && <span className="text-sm text-slate-500">/ {intervalLabel(price.interval)}</span>}
                 </p>
+                {!free && <p className="mt-1 text-sm font-medium text-amber-800">+ 18% GST extra</p>}
                 <Link to={signupTo} className={`mt-6 h-11 text-sm ${featured ? ctaPrimary : ctaSecondary}`}>
                   Get started
                 </Link>
@@ -153,7 +140,7 @@ function Pricing({ plans, signupTo }) {
             );
           })}
         </div>
-        <p className="mt-8 text-center text-sm text-slate-500">Prices exclude applicable GST. White label is included on Rise.</p>
+        <p className="mt-8 text-center text-sm text-slate-500">All prices are yearly. <span className="font-medium text-slate-700">18% GST is charged extra</span>. White label is included on Rise.</p>
       </div>
     </section>
   );
@@ -173,17 +160,13 @@ export function PlatformLandingPage({ section }) {
   const primaryLabel = signedIn ? 'Go to dashboard' : 'Get started';
   const video = demoVideo(branding.demoVideoUrl);
   const questions = useMemo(() => faqs({ name: name || 'the platform' }), [name]);
-  const description = `${name} helps educators sell courses, live classes and digital products on their own domain — Grow and Rise plans from ₹15,999 for 6 months.`;
+  const description = `${name} helps educators sell courses, live classes and digital products on their own domain — Grow and Rise at ₹19,999 / year (+ 18% GST).`;
   const origin = typeof window === 'undefined' ? '' : window.location.origin;
 
   const jsonLd = useMemo(() => {
     if (!name) return null;
     const currency = pricingCurrency(plans);
-    const offers = plans.flatMap((p) => [
-      planPrice(p, 'SIX_MONTH', currency),
-      planPrice(p, 'YEAR', currency),
-      planPrice(p, 'MONTH', currency),
-    ]).filter(Boolean);
+    const offers = plans.map((p) => publicPlanPrice(p, currency) ?? planPrice(p, 'YEAR', currency)).filter(Boolean);
     return {
       '@context': 'https://schema.org',
       '@graph': [
@@ -345,7 +328,7 @@ export function PlatformLandingPage({ section }) {
           <div className="relative isolate mx-auto max-w-6xl overflow-hidden rounded-3xl bg-slate-900 px-6 py-16 text-center text-white sm:py-20">
             <div aria-hidden className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,rgba(13,148,136,0.45),transparent_60%)]" />
             <h2 id="cta-title" style={display} className="mx-auto max-w-2xl text-3xl font-semibold tracking-tight text-balance sm:text-5xl">Ready to sell on your own brand?</h2>
-            <p className="mx-auto mt-4 max-w-xl text-slate-300 sm:text-lg">Grow or Rise from ₹15,999 for 6 months. We’ll provision your academy and get you live.</p>
+            <p className="mx-auto mt-4 max-w-xl text-slate-300 sm:text-lg">Grow or Rise at ₹19,999 / year (+ 18% GST). We’ll provision your academy and get you live.</p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link to={primaryTo} className={`${ctaPrimary} h-12 px-8 text-base`}>{primaryLabel} <ArrowRight className="size-4" aria-hidden /></Link>
               <a href="#pricing" className={`${cta} h-12 border border-white/20 bg-white/5 px-8 text-base text-white hover:bg-white/10`}>Compare plans</a>

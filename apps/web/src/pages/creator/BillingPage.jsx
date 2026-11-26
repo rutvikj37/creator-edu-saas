@@ -88,7 +88,7 @@ export function BillingPage() {
   const billing = useQuery({ queryKey: ['creator', 'billing'], queryFn: creatorApi.billing });
   const plans = useQuery({ queryKey: ['creator', 'billing', 'plans'], queryFn: planBillingApi.plans });
   const invoices = useQuery({ queryKey: ['creator', 'billing', 'invoices'], queryFn: planBillingApi.invoices });
-  const [interval, setInterval] = useState('SIX_MONTH');
+  const [interval, setInterval] = useState('YEAR');
   const [choice, setChoice] = useState(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [paying, setPaying] = useState(null);
@@ -175,7 +175,7 @@ export function BillingPage() {
 
       <div className="mt-10 mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">Plans</h2>
-        <Tabs value={interval} onChange={setInterval} tabs={[{ value: 'SIX_MONTH', label: '6 months' }, { value: 'YEAR', label: '12 months' }, { value: 'MONTH', label: 'Monthly' }]} />
+        <Tabs value={interval} onChange={setInterval} tabs={[{ value: 'YEAR', label: 'Yearly' }, { value: 'MONTH', label: 'Monthly' }]} />
       </div>
       {plans.data && !plans.data.paymentsEnabled && <Alert tone="info" className="mb-4">Online plan payments are not enabled yet. To change plans now, <Link to="/creator/support?new=billing" className="font-semibold underline">contact support</Link>.</Alert>}
       {plans.isLoading ? <Skeleton className="h-64" /> : (
