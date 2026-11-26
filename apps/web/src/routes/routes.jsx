@@ -351,7 +351,7 @@ export function buildRoutes(surface = getSurface()) {
             { path: '/learn/orders/:id', element: page(OrderStatusPage) },
             { path: '/learn/live', element: page(StudentLivePage) },
             { path: '/learn/batches', element: page(MyBatchesPage) },
-            { path: '/learn/affiliate', element: page(StudentAffiliatePage) }
+            { path: '/learn/affiliate', element: page(StudentAffiliatePage) },
             { path: '/learn/communities', element: page(StudentCommunitiesPage) },
             { path: '/learn/communities/:id', element: page(CommunityFeedPage) },
             { path: '/learn/communities/:id/posts/:postId', element: page(CommunityPostPage) },
