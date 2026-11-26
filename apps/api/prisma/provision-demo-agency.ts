@@ -61,8 +61,8 @@ async function main() {
 
     const plan =
       (await prisma.subscriptionPlan.findFirst({ where: { code: 'pro', status: 'ACTIVE' } })) ??
-      (await prisma.subscriptionPlan.findFirst({ where: { code: 'growth', status: 'ACTIVE' } }));
-    if (!plan) throw new Error('No Pro/Growth plan found — run platform seed first');
+      (await prisma.subscriptionPlan.findFirst({ where: { code: 'grow', status: 'ACTIVE' } }));
+    if (!plan) throw new Error('No Rise/Grow plan found — run platform seed first');
 
     const ownerRole = await prisma.role.findUniqueOrThrow({ where: { uniqueKey: `system:${TENANT_ROLES.OWNER}` } });
     const features = await prisma.planFeature.findMany({ where: { planId: plan.id } });

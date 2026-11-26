@@ -14,12 +14,12 @@ vi.mock('../../services/api/platform.js', () => ({ creatorApi: { publicPlans: vi
 vi.mock('../../context/AuthContext.jsx', () => ({ useAuth: () => ({ status: 'anonymous' }) }));
 
 const PLANS = [
-  { id: 'p1', code: 'starter', name: 'Starter', description: 'For your first course', trialDays: 14, isDefault: true,
-    features: [{ featureKey: 'courses.max', enabled: true, limitValue: 5 }, { featureKey: 'students.max', enabled: true, limitValue: null }, { featureKey: 'live_classes', enabled: true, limitValue: null }, { featureKey: 'affiliates', enabled: false, limitValue: null }, { featureKey: 'commission.percent', enabled: true, limitValue: 5 }],
-    prices: [{ id: 'a', interval: 'MONTH', currency: 'INR', amount: '999' }, { id: 'b', interval: 'YEAR', currency: 'INR', amount: '9590.40' }] },
-  { id: 'p2', code: 'pro', name: 'Pro', description: null, trialDays: 0, isDefault: false,
-    features: [{ featureKey: 'commission.percent', enabled: true, limitValue: 0 }],
-    prices: [{ id: 'c', interval: 'MONTH', currency: 'INR', amount: '2999' }] },
+  { id: 'p1', code: 'grow', name: 'Grow', description: 'For creators ready to sell', trialDays: 0, isDefault: true,
+    features: [{ featureKey: 'white_label', enabled: false, limitValue: null }, { featureKey: 'live_classes', enabled: true, limitValue: null }],
+    prices: [{ id: 'a', interval: 'SIX_MONTH', currency: 'INR', amount: '15999' }, { id: 'b', interval: 'YEAR', currency: 'INR', amount: '19999' }] },
+  { id: 'p2', code: 'rise', name: 'Rise', description: 'White-label academy', trialDays: 0, isDefault: false,
+    features: [{ featureKey: 'white_label', enabled: true, limitValue: null }, { featureKey: 'commission.percent', enabled: true, limitValue: 0 }],
+    prices: [{ id: 'c', interval: 'SIX_MONTH', currency: 'INR', amount: '15999' }, { id: 'd', interval: 'YEAR', currency: 'INR', amount: '19999' }] },
 ];
 
 function show(props) {
@@ -27,57 +27,57 @@ function show(props) {
 }
 afterEach(() => vi.clearAllMocks());
 
-it('shows the trial offer, real plan prices and features, and search metadata', async () => {
-  systemApi.info.mockResolvedValue({ name: 'Acme Learn', branding: { demoVideoUrl: 'https://youtu.be/abcdefghijk' } });
+it('shows Grow/Rise launch pricing and modules without trial copy', async () => {
+  systemApi.info.mockResolvedValue({ name: 'TechX LMS', branding: { demoVideoUrl: 'https://youtu.be/abcdefghijk' } });
   creatorApi.publicPlans.mockResolvedValue(PLANS);
   show();
-  expect(await screen.findByRole('heading', { level: 1, name: /Launch your online academy/ })).toBeInTheDocument();
-  const starter = (await screen.findByRole('heading', { level: 3, name: 'Starter' })).closest('article');
-  expect(within(starter).getByText('₹999')).toBeInTheDocument();
-  expect(within(starter).getByText('14-day free trial')).toBeInTheDocument();
-  expect(within(starter).getByText('5 courses')).toBeInTheDocument();
-  expect(within(starter).getByText('Unlimited students')).toBeInTheDocument();
-  expect(within(starter).getByText('5% transaction commission')).toBeInTheDocument();
-  expect(within(starter).queryByText('Affiliate program')).not.toBeInTheDocument();
-  expect(within(starter).getByRole('link', { name: 'Get started' })).toHaveAttribute('href', '/login');
-  expect(screen.getAllByText('14-day free trial').length).toBeGreaterThan(1);
+  expect(await screen.findByRole('heading', { level: 1, name: /Sell your academy on your brand/ })).toBeInTheDocument();
+  expect(screen.queryByText(/free trial/i)).not.toBeInTheDocument();
 
-  await userEvent.click(screen.getByRole('button', { name: /Yearly/ }));
-  expect(screen.getByText(/save up to 20%/)).toBeInTheDocument();
-  expect(within(starter).getByText('₹9,590.40')).toBeInTheDocument();
-  // A plan with no yearly price keeps showing its monthly one.
-  expect(screen.getByText('₹2,999')).toBeInTheDocument();
+  const grow = (await screen.findByRole('heading', { level: 3, name: 'Grow' })).closest('article');
+  expect(within(grow).getByText('₹15,999')).toBeInTheDocument();
+  expect(within(grow).getByText('Unlimited Contacts')).toBeInTheDocument();
+  expect(within(grow).getByText('5,000 Marketing Emails/Month')).toBeInTheDocument();
+  expect(within(grow).queryByText('White label')).not.toBeInTheDocument();
+  expect(within(grow).getByRole('link', { name: 'Get started' })).toHaveAttribute('href', '/login');
 
-  // The video only loads once asked for.
+  const rise = screen.getByRole('heading', { level: 3, name: 'Rise' }).closest('article');
+  expect(within(rise).getByText('White label')).toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole('button', { name: /12 months/ }));
+  expect(screen.getByText(/save 38%/)).toBeInTheDocument();
+  expect(within(grow).getByText('₹19,999')).toBeInTheDocument();
+
   expect(document.querySelector('iframe')).toBeNull();
   await userEvent.click(screen.getByRole('button', { name: 'Play the demo' }));
-  expect(screen.getByTitle('Acme Learn product demo')).toHaveAttribute('src', expect.stringContaining('https://www.youtube-nocookie.com/embed/abcdefghijk'));
+  expect(screen.getByTitle('TechX LMS product demo')).toHaveAttribute('src', expect.stringContaining('https://www.youtube-nocookie.com/embed/abcdefghijk'));
 
-  expect(document.title).toBe('Acme Learn — Create & sell online courses, live classes and coaching');
-  expect(document.querySelector('meta[name="description"]').content).toContain('Acme Learn');
+  expect(document.title).toBe('TechX LMS — Sell courses, live classes and digital products');
+  expect(document.querySelector('meta[name="description"]').content).toContain('TechX LMS');
   expect(document.querySelector('link[rel="canonical"]').href).toBe(`${window.location.origin}/`);
   const graph = JSON.parse(document.querySelector('script[type="application/ld+json"]').textContent)['@graph'];
-  expect(graph.find((n) => n['@type'] === 'SoftwareApplication').offers).toMatchObject({ priceCurrency: 'INR', lowPrice: 999, highPrice: 2999, offerCount: 2 });
+  expect(graph.find((n) => n['@type'] === 'SoftwareApplication').offers).toMatchObject({ priceCurrency: 'INR', lowPrice: 15999, highPrice: 19999 });
   expect(graph.find((n) => n['@type'] === 'FAQPage').mainEntity.length).toBeGreaterThan(4);
 });
 
 it('hides pricing and the demo when there are no plans or video, and never promises a trial', async () => {
-  systemApi.info.mockResolvedValue({ name: 'Acme Learn', branding: {} });
+  systemApi.info.mockResolvedValue({ name: 'TechX LMS', branding: {} });
   creatorApi.publicPlans.mockResolvedValue([]);
   show();
-  expect((await screen.findAllByRole('link', { name: /Sign in to your portal/ })).length).toBeGreaterThan(0);
-  expect(screen.queryByText(/free trial/)).not.toBeInTheDocument();
-  expect(screen.queryByRole('heading', { name: /Simple plans/ })).not.toBeInTheDocument();
+  expect((await screen.findAllByRole('link', { name: /Get started/ })).length).toBeGreaterThan(0);
+  expect(screen.queryByText(/free trial/i)).not.toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: /Grow and Rise/ })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Play the demo' })).not.toBeInTheDocument();
 });
 
-it('only embeds video from allowed sources', () => {
+it('only embeds video from allowed sources and computes launch savings', () => {
   expect(demoVideo('https://www.youtube.com/watch?v=abcdefghijk').src).toContain('youtube-nocookie.com/embed/abcdefghijk');
   expect(demoVideo('https://vimeo.com/123456789').src).toBe('https://player.vimeo.com/video/123456789?autoplay=1');
   expect(demoVideo('https://cdn.example.com/demo.mp4')).toEqual({ kind: 'file', src: 'https://cdn.example.com/demo.mp4' });
   expect(demoVideo('http://youtu.be/abcdefghijk')).toBeNull();
   expect(demoVideo('https://evil.example.com/watch?v=abcdefghijk')).toBeNull();
   expect(demoVideo('javascript:alert(1)')).toBeNull();
-  expect(yearlySaving(PLANS[1], 'INR')).toBeNull();
-  expect(planFeatureLines(PLANS[1])).toEqual(['No transaction commission']);
+  expect(yearlySaving(PLANS[0], 'INR')).toBe(38);
+  expect(planFeatureLines(PLANS[0])).toContain('Unlimited Contacts');
+  expect(planFeatureLines(PLANS[1])).toContain('White label');
 });

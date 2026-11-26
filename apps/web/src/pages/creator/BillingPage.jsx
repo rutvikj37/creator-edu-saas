@@ -70,7 +70,7 @@ function QuoteModal({ price, plan, onClose, onPaid }) {
             {Number(d.tax) > 0 && <div className="flex justify-between"><dt className="text-muted">GST {d.taxRate}%</dt><dd className="tabular-nums">{m(d.tax)}</dd></div>}
             <div className="flex justify-between border-t border-line pt-2 text-base font-semibold"><dt>Total today</dt><dd className="tabular-nums">{m(d.total)}</dd></div>
           </dl>
-          <p className="text-xs text-muted">The new plan starts as soon as payment is confirmed and renews every {d.interval === 'YEAR' ? 'year' : 'month'}. You'll get a renewal invoice 7 days before each renewal.</p>
+          <p className="text-xs text-muted">The new plan starts as soon as payment is confirmed and renews every {d.interval === 'YEAR' ? '12 months' : d.interval === 'SIX_MONTH' ? '6 months' : 'month'}. You'll get a renewal invoice 7 days before each renewal.</p>
           {!d.paymentsEnabled ? <Alert tone="info">Online plan payments are not enabled yet. <Link className="font-semibold underline" to="/creator/support?new=billing">Contact support</Link> to switch plans.</Alert> : (
             <div className="flex justify-end gap-2 border-t border-line pt-4">
               <Button variant="secondary" onClick={() => onClose(false)}>Cancel</Button>
@@ -88,7 +88,7 @@ export function BillingPage() {
   const billing = useQuery({ queryKey: ['creator', 'billing'], queryFn: creatorApi.billing });
   const plans = useQuery({ queryKey: ['creator', 'billing', 'plans'], queryFn: planBillingApi.plans });
   const invoices = useQuery({ queryKey: ['creator', 'billing', 'invoices'], queryFn: planBillingApi.invoices });
-  const [interval, setInterval] = useState('MONTH');
+  const [interval, setInterval] = useState('SIX_MONTH');
   const [choice, setChoice] = useState(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [paying, setPaying] = useState(null);
@@ -175,7 +175,7 @@ export function BillingPage() {
 
       <div className="mt-10 mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">Plans</h2>
-        <Tabs value={interval} onChange={setInterval} tabs={[{ value: 'MONTH', label: 'Monthly' }, { value: 'YEAR', label: 'Yearly' }]} />
+        <Tabs value={interval} onChange={setInterval} tabs={[{ value: 'SIX_MONTH', label: '6 months' }, { value: 'YEAR', label: '12 months' }, { value: 'MONTH', label: 'Monthly' }]} />
       </div>
       {plans.data && !plans.data.paymentsEnabled && <Alert tone="info" className="mb-4">Online plan payments are not enabled yet. To change plans now, <Link to="/creator/support?new=billing" className="font-semibold underline">contact support</Link>.</Alert>}
       {plans.isLoading ? <Skeleton className="h-64" /> : (
@@ -184,11 +184,12 @@ export function BillingPage() {
             const price = priceFor(p);
             const current = s?.plan.id === p.id && (!price || s.planPrice?.id === price.id) && e.active;
             const values = Object.fromEntries(p.features.map((f) => [f.key, { enabled: f.enabled, limit: f.limit }]));
+            const period = interval === 'YEAR' ? '12 months' : interval === 'SIX_MONTH' ? '6 months' : 'month';
             return (
               <Card key={p.id} className={current ? 'ring-2 ring-primary-600' : ''}>
                 <CardBody className="flex h-full flex-col">
                   <p className="flex items-center gap-2 font-semibold">{p.name} {current && <Badge tone="primary">Current</Badge>}</p>
-                  <p className="mt-1 text-2xl font-semibold">{price ? formatMoney(price.amount, price.currency) : p.trialDays ? 'Free' : '—'}<span className="text-sm font-normal text-muted">{price ? ` / ${interval === 'YEAR' ? 'year' : 'month'}` : p.trialDays ? ` for ${p.trialDays} days` : ''}</span></p>
+                  <p className="mt-1 text-2xl font-semibold">{price ? formatMoney(price.amount, price.currency) : p.trialDays ? 'Free' : '—'}<span className="text-sm font-normal text-muted">{price ? ` / ${period}` : p.trialDays ? ` for ${p.trialDays} days` : ''}</span></p>
                   {p.description && <p className="mt-1 text-sm text-muted">{p.description}</p>}
                   <ul className="mt-4 flex-1 space-y-2 text-sm">
                     {catalog.map((f) => {

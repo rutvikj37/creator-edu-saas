@@ -206,7 +206,8 @@ export class BillingService {
       throw AppException.conflict(sub.status === 'PAST_DUE' ? 'Pay your renewal invoice to keep this plan.' : 'You are already on this plan.');
     }
     const cur = price.currency;
-    const lines: Line[] = [{ description: `${price.plan.name} plan — ${price.interval === 'YEAR' ? 'yearly' : 'monthly'}`, amount: toMinor(price.amount, cur) }];
+    const periodLabel = price.interval === 'YEAR' ? '12 months' : price.interval === 'SIX_MONTH' ? '6 months' : 'monthly';
+    const lines: Line[] = [{ description: `${price.plan.name} plan — ${periodLabel}`, amount: toMinor(price.amount, cur) }];
     // Credit the unused part of a period the academy actually paid for (same currency only).
     let credit = 0;
     let creditNote: string | null = null;
@@ -485,7 +486,8 @@ export class BillingService {
     const cur = price.currency;
     const seller = await this.seller();
     const taxRate = this.taxFor(cur, seller);
-    const lines: Line[] = [{ description: `${price.plan.name} plan — ${price.interval === 'YEAR' ? 'yearly' : 'monthly'} renewal`, amount: toMinor(price.amount, cur) }];
+    const renewLabel = price.interval === 'YEAR' ? '12 months' : price.interval === 'SIX_MONTH' ? '6 months' : 'monthly';
+    const lines: Line[] = [{ description: `${price.plan.name} plan — ${renewLabel} renewal`, amount: toMinor(price.amount, cur) }];
     const t = this.totals(lines, 0, taxRate);
     const f = (n: number) => fromMinor(n, cur);
     const inv = await this.prisma.billingInvoice.create({

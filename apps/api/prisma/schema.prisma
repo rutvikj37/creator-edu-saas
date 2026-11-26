@@ -411,6 +411,7 @@ enum PlanStatus {
 
 enum BillingInterval {
   MONTH
+  SIX_MONTH
   YEAR
 }
 
@@ -1048,6 +1049,10 @@ model Quiz {
   shuffleOptions    Boolean        @default(false)
   randomPickCount   Int?
   showResults       Boolean        @default(true)
+  /// Live test: everyone starts in a fixed window; results open once the last attempt can finish.
+  liveStartsAt      DateTime?      @db.DateTime(3)
+  /// Minutes after liveStartsAt that learners can still start (late entry).
+  liveJoinMinutes   Int?
   createdAt         DateTime       @default(now()) @db.DateTime(3)
   updatedAt         DateTime       @updatedAt @db.DateTime(3)
   questions         QuizQuestion[]
@@ -3308,4 +3313,67 @@ model CustomFieldValue {
   @@unique([tenantId, id])
   @@unique([tenantId, fieldId, userId])
   @@index([tenantId, userId])
+}
+
+// ───────────────────────────── Developer API & webhooks ─────────────────────────────
+
+/// Creator-issued API key for the open API. Only a SHA-256 hash is stored; the key is shown once.
+model ApiKey {
+  id          String    @id @default(cuid()) @db.Char(25)
+  tenantId    String    @db.Char(25)
+  name        String    @db.VarChar(80)
+  /// First characters of the key, shown so creators can tell keys apart.
+  prefix      String    @db.VarChar(16)
+  keyHash     String    @unique @db.Char(64)
+  scopes      Json
+  lastUsedAt  DateTime? @db.DateTime(3)
+  createdById String    @db.Char(25)
+  revokedAt   DateTime? @db.DateTime(3)
+  createdAt   DateTime  @default(now()) @db.DateTime(3)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, createdAt])
+}
+
+/// Outgoing webhook: academy events are POSTed here, signed with the endpoint secret.
+model WebhookEndpoint {
+  id          String            @id @default(cuid()) @db.Char(25)
+  tenantId    String            @db.Char(25)
+  url         String            @db.VarChar(500)
+  description String?           @db.VarChar(200)
+  events      Json
+  /// AES-256-GCM encrypted signing secret.
+  secretEnc   String            @db.Text
+  active      Boolean           @default(true)
+  createdById String            @db.Char(25)
+  createdAt   DateTime          @default(now()) @db.DateTime(3)
+  updatedAt   DateTime          @updatedAt @db.DateTime(3)
+  deliveries  WebhookDelivery[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, createdAt])
+}
+
+/// One event sent (or being retried) to one endpoint; the log behind Integrations → Logs.
+model WebhookDelivery {
+  id             String          @id @default(cuid()) @db.Char(25)
+  tenantId       String          @db.Char(25)
+  endpointId     String          @db.Char(25)
+  event          String          @db.VarChar(40)
+  payload        Json
+  /// PENDING, SUCCESS or FAILED
+  status         String          @default("PENDING") @db.VarChar(16)
+  attempts       Int             @default(0)
+  responseStatus Int?
+  responseBody   String?         @db.VarChar(1000)
+  error          String?         @db.VarChar(500)
+  durationMs     Int?
+  deliveredAt    DateTime?       @db.DateTime(3)
+  createdAt      DateTime        @default(now()) @db.DateTime(3)
+  updatedAt      DateTime        @updatedAt @db.DateTime(3)
+  endpoint       WebhookEndpoint @relation(fields: [tenantId, endpointId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, endpointId, createdAt])
 }

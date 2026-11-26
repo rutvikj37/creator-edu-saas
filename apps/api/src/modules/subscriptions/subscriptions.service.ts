@@ -6,9 +6,10 @@ import { EntitlementsService, type FeatureSnapshot } from './entitlements.servic
 
 type Tx = Prisma.TransactionClient;
 
-export function addInterval(from: Date, interval: 'MONTH' | 'YEAR'): Date {
+export function addInterval(from: Date, interval: 'MONTH' | 'SIX_MONTH' | 'YEAR'): Date {
   const d = new Date(from);
   if (interval === 'MONTH') d.setUTCMonth(d.getUTCMonth() + 1);
+  else if (interval === 'SIX_MONTH') d.setUTCMonth(d.getUTCMonth() + 6);
   else d.setUTCFullYear(d.getUTCFullYear() + 1);
   return d;
 }

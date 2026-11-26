@@ -76,7 +76,7 @@ export class LimitOverridesDto {
 }
 
 export class PlanPriceDto {
-  @ApiProperty({ enum: ['MONTH', 'YEAR'] }) @IsIn(['MONTH', 'YEAR']) interval: 'MONTH' | 'YEAR';
+  @ApiProperty({ enum: ['MONTH', 'SIX_MONTH', 'YEAR'] }) @IsIn(['MONTH', 'SIX_MONTH', 'YEAR']) interval: 'MONTH' | 'SIX_MONTH' | 'YEAR';
   @ApiProperty() @Matches(/^[A-Z]{3}$/) currency: string;
   @ApiProperty() @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(100_000_000) amount: number;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() active?: boolean;

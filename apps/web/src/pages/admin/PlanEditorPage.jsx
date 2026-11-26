@@ -19,7 +19,7 @@ export const planSchema = z.object({
   isDefault: z.boolean(),
   trialDays: z.coerce.number().int().min(0).max(365),
   sortOrder: z.coerce.number().int().min(0).max(1000),
-  prices: z.array(z.object({ interval: z.enum(['MONTH', 'YEAR']), currency: z.string().regex(/^[A-Z]{3}$/, '3-letter code'), amount: z.coerce.number().min(0, 'Must be ≥ 0') })),
+  prices: z.array(z.object({ interval: z.enum(['MONTH', 'SIX_MONTH', 'YEAR']), currency: z.string().regex(/^[A-Z]{3}$/, '3-letter code'), amount: z.coerce.number().min(0, 'Must be ≥ 0') })),
 });
 
 const blank = { code: '', name: '', description: '', status: 'DRAFT', isPublic: true, isDefault: false, trialDays: 0, sortOrder: 0, prices: [] };
@@ -111,7 +111,7 @@ export function PlanEditorPage() {
               {prices.fields.length === 0 && <p className="text-sm text-muted">No prices: the plan is free or complimentary.</p>}
               {prices.fields.map((field, i) => (
                 <div key={field.id} className="flex items-start gap-2">
-                  <Select aria-label="Interval" options={[{ value: 'MONTH', label: 'Monthly' }, { value: 'YEAR', label: 'Yearly' }]} {...register(`prices.${i}.interval`)} className="w-28" />
+                  <Select aria-label="Interval" options={[{ value: 'MONTH', label: 'Monthly' }, { value: 'SIX_MONTH', label: '6 months' }, { value: 'YEAR', label: '12 months' }]} {...register(`prices.${i}.interval`)} className="w-36" />
                   <Input aria-label="Currency" className="w-20 uppercase" maxLength={3} {...register(`prices.${i}.currency`)} error={errors.prices?.[i]?.currency?.message} />
                   <Input aria-label="Amount" type="number" step="0.01" min={0} {...register(`prices.${i}.amount`)} error={errors.prices?.[i]?.amount?.message} />
                   <Button variant="ghost" size="icon" aria-label="Remove price" onClick={() => prices.remove(i)}><Trash2 className="size-4" /></Button>

@@ -47,7 +47,8 @@ export class DashboardService {
     const mrr: Record<string, number> = {};
     for (const s of subs) {
       if (!s.planPrice || !['ACTIVE', 'PAST_DUE', 'GRACE'].includes(s.status)) continue;
-      const monthly = Number(s.planPrice.amount) / (s.planPrice.interval === 'YEAR' ? 12 : 1);
+      const months = s.planPrice.interval === 'YEAR' ? 12 : s.planPrice.interval === 'SIX_MONTH' ? 6 : 1;
+      const monthly = Number(s.planPrice.amount) / months;
       mrr[s.planPrice.currency] = (mrr[s.planPrice.currency] ?? 0) + monthly;
     }
     const round = (n: number) => Math.round(n * 100) / 100;

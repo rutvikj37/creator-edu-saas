@@ -15,8 +15,8 @@ describe('SaaS plan billing (e2e)', () => {
   let prisma: PrismaService;
   let billing: BillingService;
   let sim: RazorpaySim;
-  let growthMonthly: string;
-  let proMonthly: string;
+  let growPrice: string;
+  let risePrice: string;
 
   async function academy() {
     const c = await registerCreator(app);
@@ -33,10 +33,10 @@ describe('SaaS plan billing (e2e)', () => {
     await resetDatabase(app);
     sim = new RazorpaySim().install(app);
     sim.keys.set(KEY_ID, KEY_SECRET);
-    const growth = await prisma.subscriptionPlan.findUniqueOrThrow({ where: { code: 'growth' }, include: { prices: true } });
-    const pro = await prisma.subscriptionPlan.findUniqueOrThrow({ where: { code: 'pro' }, include: { prices: true } });
-    growthMonthly = growth.prices.find((p) => p.interval === 'MONTH' && p.currency === 'INR')!.id;
-    proMonthly = pro.prices.find((p) => p.interval === 'MONTH' && p.currency === 'INR')!.id;
+    const grow = await prisma.subscriptionPlan.findUniqueOrThrow({ where: { code: 'grow' }, include: { prices: true } });
+    const rise = await prisma.subscriptionPlan.findUniqueOrThrow({ where: { code: 'rise' }, include: { prices: true } });
+    growPrice = grow.prices.find((p) => p.interval === 'SIX_MONTH' && p.currency === 'INR')!.id;
+    risePrice = rise.prices.find((p) => p.interval === 'SIX_MONTH' && p.currency === 'INR')!.id;
   });
   afterAll(async () => app?.close());
 
@@ -49,8 +49,8 @@ describe('SaaS plan billing (e2e)', () => {
     // Without platform keys, plans are visible but cannot be bought online.
     const before = (await authed(app, cs).get('/api/v1/creator/billing/plans').expect(200)).body.data;
     expect(before).toMatchObject({ paymentsEnabled: false, currency: 'INR', current: { status: 'TRIALING' } });
-    expect(before.plans.map((p: any) => p.code)).toEqual(['trial', 'growth', 'pro']);
-    const blocked = await authed(app, cs).post('/api/v1/creator/billing/checkout').send({ planPriceId: growthMonthly }).expect(409);
+    expect(before.plans.map((p: any) => p.code)).toEqual(['grow', 'rise']);
+    const blocked = await authed(app, cs).post('/api/v1/creator/billing/checkout').send({ planPriceId: growPrice }).expect(409);
     expect(blocked.body.error.code).toBe('INTEGRATION_NOT_CONFIGURED');
 
     // Super admin configures the platform account and GST; secrets are masked.
@@ -65,31 +65,31 @@ describe('SaaS plan billing (e2e)', () => {
     expect(gw).toMatchObject({ configured: true, status: 'VERIFIED', mode: 'TEST', hasWebhookSecret: true });
     expect(gw.webhookUrl).toMatch(/\/api\/v1\/webhooks\/razorpay\/platform$/);
 
-    // Growth monthly: ₹2,999 + 18% GST.
-    const quote = (await authed(app, cs).post('/api/v1/creator/billing/quote').send({ planPriceId: growthMonthly }).expect(200)).body.data;
-    expect(quote).toMatchObject({ plan: { name: 'Growth' }, credit: '0.00', tax: '539.82', total: '3538.82', taxRate: 18, paymentsEnabled: true });
-    const inv = (await authed(app, cs).post('/api/v1/creator/billing/checkout').send({ planPriceId: growthMonthly }).expect(201)).body.data;
-    expect(inv).toMatchObject({ kind: 'PLAN', status: 'OPEN', number: null, totalAmount: '3538.82' });
+    // Grow 6-month: ₹15,999 + 18% GST.
+    const quote = (await authed(app, cs).post('/api/v1/creator/billing/quote').send({ planPriceId: growPrice }).expect(200)).body.data;
+    expect(quote).toMatchObject({ plan: { name: 'Grow' }, credit: '0.00', tax: '2879.82', total: '18878.82', taxRate: 18, paymentsEnabled: true });
+    const inv = (await authed(app, cs).post('/api/v1/creator/billing/checkout').send({ planPriceId: growPrice }).expect(201)).body.data;
+    expect(inv).toMatchObject({ kind: 'PLAN', status: 'OPEN', number: null, totalAmount: '18878.82' });
     const pay = (await authed(app, cs).post(`/api/v1/creator/billing/invoices/${inv.id}/pay`).expect(200)).body.data;
-    expect(pay.checkout).toMatchObject({ keyId: KEY_ID, amount: 353882, currency: 'INR', name: 'Platform Pvt Ltd' });
+    expect(pay.checkout).toMatchObject({ keyId: KEY_ID, amount: 1887882, currency: 'INR', name: 'Platform Pvt Ltd' });
     const r = sim.pay(pay.checkout.orderId);
     await authed(app, cs).post(`/api/v1/creator/billing/invoices/${inv.id}/confirm`).send({ ...r, razorpay_signature: 'b'.repeat(64) }).expect(422);
     const paid = (await authed(app, cs).post(`/api/v1/creator/billing/invoices/${inv.id}/confirm`).send(r).expect(200)).body.data;
     expect(paid).toMatchObject({ status: 'PAID', paidVia: 'RAZORPAY', reference: r.razorpay_payment_id, number: expect.stringMatching(/^PLT\/\d{4}-\d{2}\/00001$/) });
     let sub = await current(tenantId);
-    expect(sub).toMatchObject({ status: 'ACTIVE', planPriceId: growthMonthly, source: 'billing' });
-    expect(sub.currentPeriodEnd!.getTime() - sub.currentPeriodStart.getTime()).toBeGreaterThan(27 * DAY);
-    expect((await authed(app, cs).get('/api/v1/creator/billing')).body.data.entitlements).toMatchObject({ active: true, planName: 'Growth' });
+    expect(sub).toMatchObject({ status: 'ACTIVE', planPriceId: growPrice, source: 'billing' });
+    expect(sub.currentPeriodEnd!.getTime() - sub.currentPeriodStart.getTime()).toBeGreaterThan(150 * DAY);
+    expect((await authed(app, cs).get('/api/v1/creator/billing')).body.data.entitlements).toMatchObject({ active: true, planName: 'Grow' });
     expect((await lastEmail(app, c.body.email))!.tag).toBe('billing-receipt');
-    await authed(app, cs).post('/api/v1/creator/billing/checkout').send({ planPriceId: growthMonthly }).expect(409); // already on it
+    await authed(app, cs).post('/api/v1/creator/billing/checkout').send({ planPriceId: growPrice }).expect(409); // already on it
     const pdf = await authed(app, cs).get(`/api/v1/creator/billing/invoices/${inv.id}/pdf`).buffer(true).expect(200);
     expect(Buffer.from(pdf.body).subarray(0, 5).toString()).toBe('%PDF-');
 
-    // Upgrade mid-period: unused Growth time is credited.
-    const up = (await authed(app, cs).post('/api/v1/creator/billing/quote').send({ planPriceId: proMonthly }).expect(200)).body.data;
-    expect(Number(up.credit)).toBeGreaterThan(2990);
-    expect(Number(up.credit)).toBeLessThanOrEqual(2999);
-    expect(up.creditNote).toBe('Credit for unused time on Growth');
+    // Upgrade mid-period: unused Grow time is credited.
+    const up = (await authed(app, cs).post('/api/v1/creator/billing/quote').send({ planPriceId: risePrice }).expect(200)).body.data;
+    expect(Number(up.credit)).toBeGreaterThan(15000);
+    expect(Number(up.credit)).toBeLessThanOrEqual(15999);
+    expect(up.creditNote).toBe('Credit for unused time on Grow');
 
     // Renewal invoice 7 days ahead, once.
     await prisma.subscription.update({ where: { id: sub.id }, data: { currentPeriodEnd: new Date(Date.now() + 3 * DAY) } });

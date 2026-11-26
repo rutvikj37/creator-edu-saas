@@ -41,7 +41,7 @@ describe('Platform administration (e2e)', () => {
     expect(prices.find((p: any) => p.interval === 'MONTH')).toMatchObject({ amount: '12999', active: true });
     expect(prices.find((p: any) => p.interval === 'YEAR')).toMatchObject({ active: false }); // kept for history, deactivated
     const pub = await api(app).get('/api/v1/public/plans').set('Host', PLATFORM).expect(200);
-    expect(pub.body.data.map((p: any) => p.code)).toEqual(expect.arrayContaining(['trial', 'growth', 'pro', 'campus']));
+    expect(pub.body.data.map((p: any) => p.code)).toEqual(expect.arrayContaining(['grow', 'rise', 'campus']));
     expect(await prisma.auditLog.count({ where: { action: { in: ['plan.create', 'plan.update'] } } })).toBe(2);
   });
 
@@ -133,10 +133,10 @@ describe('Platform administration (e2e)', () => {
     const denied = await authed(app, c.session).post('/api/v1/creator/domains').send({ hostname: 'learn.limit-example.com' }).expect(403);
     expect(denied.body.error.code).toBe('PLAN_LIMIT_REACHED');
 
-    const growth = await prisma.subscriptionPlan.findUniqueOrThrow({ where: { code: 'growth' }, include: { prices: true } });
-    const monthlyInr = growth.prices.find((p) => p.interval === 'MONTH' && p.currency === 'INR')!;
-    const changed = await authed(app, root).post(`/api/v1/platform/tenants/${c.tenant.id}/subscription`).send({ planId: growth.id, planPriceId: monthlyInr.id }).expect(200);
-    expect(changed.body.data).toMatchObject({ status: 'ACTIVE', plan: { code: 'growth' } });
+    const grow = await prisma.subscriptionPlan.findUniqueOrThrow({ where: { code: 'grow' }, include: { prices: true } });
+    const sixMonthInr = grow.prices.find((p) => p.interval === 'SIX_MONTH' && p.currency === 'INR')!;
+    const changed = await authed(app, root).post(`/api/v1/platform/tenants/${c.tenant.id}/subscription`).send({ planId: grow.id, planPriceId: sixMonthInr.id }).expect(200);
+    expect(changed.body.data).toMatchObject({ status: 'ACTIVE', plan: { code: 'grow' } });
     await authed(app, c.session).post('/api/v1/creator/domains').send({ hostname: 'learn.limit-example.com' }).expect(201);
     const second = await authed(app, c.session).post('/api/v1/creator/domains').send({ hostname: 'two.limit-example.com' }).expect(403);
     expect(second.body.error.code).toBe('PLAN_LIMIT_REACHED');
