@@ -106,7 +106,7 @@ export const NAV = {
       label: 'Website', icon: Globe,
       items: [
         item('Website builder', '/creator/website', Brush, 8, { available: true, perm: 'website.manage' }),
-        item('Branding', '/creator/academy', Palette, 4, { available: true, perm: 'academy.manage' }),
+        item('Branding', '/creator/academy?tab=branding', Palette, 4, { available: true, perm: 'academy.manage' }),
         item('Domains', '/creator/domains', Globe, 2, { available: true, perm: 'domains.manage' }),
       ],
     },
@@ -129,15 +129,10 @@ export const NAV = {
       ],
     },
     {
+      // Tax, security, communications, etc. are reached via My academy → SettingsTabs, not the sidebar.
       label: 'Settings', icon: Settings,
       items: [
-        item('Business details', '/creator/academy?tab=business', Building2, 4, { available: true, perm: 'academy.manage' }),
-        item('Tax & invoicing', '/creator/settings/tax-invoicing', Receipt, 7, { available: true, perm: 'academy.manage' }),
-        item('Security', '/creator/settings/security', ShieldCheck, 2, { available: true, perm: 'academy.manage' }),
-        item('Communications', '/creator/settings/communications', Mail, 12, { available: true, perm: 'academy.manage' }),
-        item('Custom fields', '/creator/settings/custom-fields', ListChecks, 12, { available: true, perm: 'academy.manage' }),
-        item('User experience', '/creator/settings/user-experience', Palette, 12, { available: true, perm: 'academy.manage' }),
-        item('Signup & login', '/creator/settings/signup-login', KeyRound, 12, { available: true, perm: 'academy.manage' }),
+        item('My academy', '/creator/academy', Building2, 4, { available: true, perm: 'academy.manage' }),
         item('Billing & plan', '/creator/billing', Wallet, 3, { available: true, perm: 'billing.manage' }),
       ],
     },
