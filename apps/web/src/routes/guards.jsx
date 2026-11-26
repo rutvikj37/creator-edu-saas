@@ -84,6 +84,9 @@ export function postLoginPath(me, surface, next) {
   if (under(path, STUDENT_PREFIXES) && !isStudent) return home;
   if (under(path, WORKSPACE_PREFIXES) && !hasWorkspace) return home;
   if (under(path, STAFF_PREFIXES) && me.realm !== 'PLATFORM') return home;
+  // On the platform LMS host, learners only belong in /learn (and cart/checkout) —
+  // ignore leftover ?next=/ or marketing paths from a prior guest session.
+  if (isStudent && surface === 'platform' && !under(path, STUDENT_PREFIXES)) return home;
   return path;
 }
 

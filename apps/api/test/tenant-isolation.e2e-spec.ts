@@ -264,7 +264,9 @@ describe('Tenant isolation (e2e)', () => {
   it('unknown and unverified hosts resolve to nothing', async () => {
     await api(app).post('/api/v1/auth/login').set('Host', 'learn.alpha-example.com').send({ email: 'a@b.co', password: 'whatever-123' }).expect(404);
     await api(app).post('/api/v1/auth/login').set('Host', 'nope.lvh.me').send({ email: 'a@b.co', password: 'whatever-123' }).expect(404);
-    await api(app).get('/api/v1/public/site').set('Host', PLATFORM).expect(404);
+    // Platform host has no academy Website row — soft 200 defaults (not a hard 404 that breaks the SPA).
+    const platformSite = await api(app).get('/api/v1/public/site').set('Host', PLATFORM).expect(200);
+    expect(platformSite.body.data).toMatchObject({ platformHost: true, slug: null });
   });
 
   it('verified custom domains route to their academy', async () => {

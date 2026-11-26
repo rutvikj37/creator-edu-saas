@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TenantsModule } from '../tenants/tenants.module.js';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './services/auth.service.js';
@@ -16,7 +16,7 @@ import { PermissionsGuard } from './guards/permissions.guard.js';
 import { PlatformStudentLoginService } from './services/platform-student-login.service.js';
 
 @Module({
-  imports: [TenantsModule],
+  imports: [forwardRef(() => TenantsModule)],
   controllers: [AuthController],
   providers: [
     AuthService, EmailVerificationService, GoogleOAuthService, OtpService, PasswordResetService, PasswordService,

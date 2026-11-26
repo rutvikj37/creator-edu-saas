@@ -112,7 +112,8 @@ export function CreatorLayout({ preview = false, ...props }) {
 }
 export function StudentLayout({ preview = false, ...props }) {
   const account = useShellAccount('/learn/account/security');
-  const site = useQuery({ queryKey: ['brand', 'academy'], queryFn: academyApi.site, enabled: !preview, staleTime: 5 * 60_000 });
+  // Platform LMS host serves bridged-academy branding via /public/site (soft defaults if unset).
+  const site = useQuery({ queryKey: ['brand', 'academy'], queryFn: academyApi.site, enabled: !preview, staleTime: 5 * 60_000, retry: false });
   const name = site.data?.name ?? 'Academy';
   return <DashboardShell nav={NAV.student} brand={{ key: 'student', mark: name.slice(0, 2).toUpperCase(), name, subtitle: 'Student' }} banner={preview ? undefined : <AnnouncementsBanner />} {...(preview ? {} : account)} {...props} />;
 }

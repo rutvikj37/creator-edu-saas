@@ -134,4 +134,10 @@ describe('postLoginPath', () => {
   it('rejects open redirects', () => {
     expect(postLoginPath(student, 'academy', '//evil.com')).toBe('/learn');
   });
+  it('sends platform-host students to /learn instead of marketing or leftover next', () => {
+    expect(postLoginPath(student, 'platform', '/')).toBe('/learn');
+    expect(postLoginPath(student, 'platform', '/pricing')).toBe('/learn');
+    expect(postLoginPath(student, 'platform', '/creator')).toBe('/learn');
+    expect(postLoginPath(student, 'platform', '/learn/orders')).toBe('/learn/orders');
+  });
 });

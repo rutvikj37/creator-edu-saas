@@ -304,10 +304,17 @@ describe('Authentication (e2e)', () => {
       expect(me.body.data.activeTenantId).toBe(a.tenant.id);
       await authed(app, onPlatform.session).get('/api/v1/learn/enrollments').expect(200);
 
+      // Bridged academy branding is public on the platform host (student shell needs it).
+      const site = await api(app).get('/api/v1/public/site').set('Host', PLATFORM).expect(200);
+      expect(site.body.data).toMatchObject({ name: a.tenant.name, slug: a.tenant.slug });
+      expect(site.body.data.platformHost).toBeUndefined();
+
       // Wrong academy's password still fails; other academy students are not eligible on platform.
       expect((await login(app, PLATFORM, email, 'other-password-22')).res.status).toBe(401);
       bridge.setAllowedTenantIdForTests(null);
       expect((await login(app, PLATFORM, email, 'student-password-1')).res.status).toBe(401);
+      const soft = await api(app).get('/api/v1/public/site').set('Host', PLATFORM).expect(200);
+      expect(soft.body.data.platformHost).toBe(true);
     });
   });
 
