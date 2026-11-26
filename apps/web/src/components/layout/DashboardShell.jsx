@@ -224,7 +224,7 @@ export function DashboardShell({ nav, brand, user, footer, onSignOut, notificati
   );
 
   return (
-    <div className="flex h-dvh overflow-hidden">
+    <div className="flex h-screen h-dvh overflow-hidden bg-bg">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-surface focus:px-3 focus:py-2">
         Skip to content
       </a>
@@ -262,8 +262,8 @@ export function DashboardShell({ nav, brand, user, footer, onSignOut, notificati
         </div>
       )}
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
-        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-line bg-surface/90 px-4 backdrop-blur sm:px-6">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="z-30 flex h-14 shrink-0 items-center gap-2 border-b border-line bg-surface/90 px-4 backdrop-blur sm:px-6">
           <Button variant="ghost" size="icon-sm" className="lg:hidden" aria-label={t('shell.openMenu')} onClick={() => setMobileOpen(true)}>
             <Menu className="size-5" />
           </Button>
@@ -345,7 +345,7 @@ export function DashboardShell({ nav, brand, user, footer, onSignOut, notificati
             )}
           </div>
         </header>
-        <main id="main" className={cn('flex-1 px-4 py-6 sm:px-6 lg:px-8', tabs.length > 0 && 'pb-24 lg:pb-6')}>
+        <main id="main" className={cn('min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8', tabs.length > 0 && 'pb-24 lg:pb-6')}>
           {banner}
           <Outlet />
         </main>
