@@ -1,7 +1,7 @@
 import {
   Activity, Bell, CircleUser, FileCheck2, Home, ListChecks, ShoppingBag, CalendarClock, MessageCircle, Award, Banknote, BarChart3, BookOpen, Boxes, Brush, Building2, ClipboardCheck, Component,
   CreditCard, Crown, FileText, FolderTree, Globe, GraduationCap, Handshake, HeartPulse, Inbox, LayoutDashboard, LifeBuoy,
-  KeyRound, Layers, Library, Link2, Package, Mail, Megaphone, MessagesSquare, Palette, Percent, Plug, Radio, Receipt, ScrollText, Settings, ShieldCheck,
+  KeyRound, Layers, Library, Link2, Package, Mail, Megaphone, MessagesSquare, Percent, Plug, Radio, Receipt, ScrollText, Settings, ShieldCheck,
   ShoppingCart, Sparkles, Star, Tag, Ticket, UserCog, Users, Video, Wallet,
 } from 'lucide-react';
 import { FEATURE_FLAGS } from '../config/featureFlags.js';
@@ -44,7 +44,8 @@ export const NAV = {
   ],
 
   // Grouped like Graphy's creator dashboard: Home / Inbox / Community up top, then one rail
-  // icon per section (Products, Learning, Users, Reports, Website, Marketing, Integrations, Settings).
+  // icon per section (Products, Learning, Users, Reports, Website, Marketing, Settings).
+  // Branding, Domains, Payments, Live integrations live under My academy → SettingsTabs.
   creator: [
     {
       label: null,
@@ -103,11 +104,10 @@ export const NAV = {
       ],
     },
     {
+      // Branding & Domains are My academy tabs (SettingsTabs / academy?tab=branding), not sidebar items.
       label: 'Website', icon: Globe,
       items: [
         item('Website builder', '/creator/website', Brush, 8, { available: true, perm: 'website.manage' }),
-        item('Branding', '/creator/academy?tab=branding', Palette, 4, { available: true, perm: 'academy.manage' }),
-        item('Domains', '/creator/domains', Globe, 2, { available: true, perm: 'domains.manage' }),
       ],
     },
     {
@@ -122,14 +122,7 @@ export const NAV = {
       ],
     },
     {
-      label: 'Integrations', icon: Plug,
-      items: [
-        item('Payment gateway', '/creator/payments', CreditCard, 7, { available: true, perm: 'integrations.manage' }),
-        item('Live class apps', '/creator/integrations', Radio, 9, { available: true, perm: 'live.manage' }),
-      ],
-    },
-    {
-      // Tax, security, communications, etc. are reached via My academy → SettingsTabs, not the sidebar.
+      // Payments, Live integrations, tax, security, etc. via My academy → SettingsTabs.
       label: 'Settings', icon: Settings,
       items: [
         item('My academy', '/creator/academy', Building2, 4, { available: true, perm: 'academy.manage' }),
