@@ -17,7 +17,7 @@ export PATH=/opt/node24/bin:$PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 R=/opt/lms/releases/$REL
 cd "$R" && ln -sfn /opt/lms/shared/.env .env
 pnpm install --frozen-lockfile --reporter=silent
-(cd apps/api && pnpm exec prisma generate >/dev/null && pnpm build >/dev/null && pnpm exec prisma migrate deploy 2>&1 | tail -1 && pnpm db:sync-pricing)
+(cd apps/api && pnpm exec prisma generate >/dev/null && pnpm build >/dev/null && pnpm exec prisma migrate deploy && pnpm db:sync-pricing)
 (cd apps/web && pnpm build >/dev/null)
 ln -sfn "$R" /opt/lms/current
 pm2 reload /opt/lms/ecosystem.config.cjs --update-env >/dev/null && pm2 save >/dev/null
