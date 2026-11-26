@@ -131,7 +131,7 @@ it('membership checkout quotes and orders by plan id', async () => {
   checkoutApi.quote.mockResolvedValue({ kind: 'membership', currency: 'INR', subtotal: '499.00', discount: '0.00', tax: '0.00', total: '499.00', taxRate: 0, taxInclusive: true, paymentsEnabled: true });
   checkoutApi.checkout.mockResolvedValue({ id: 'o1', status: 'PAID' });
   wrap([{ path: '/checkout/membership/:planId', element: <CheckoutPage /> }, { path: '/learn/orders/:id', element: <p>order page</p> }], '/checkout/membership/p1');
-  expect(await screen.findByText('All access')).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: 'All access' })).toBeInTheDocument();
   expect(checkoutApi.quote).toHaveBeenCalledWith({ membershipPlanId: 'p1', couponCode: undefined });
   await userEvent.click(screen.getByRole('button', { name: /Pay/ }));
   await waitFor(() => expect(checkoutApi.checkout.mock.calls[0][0]).toMatchObject({ membershipPlanId: 'p1' }));

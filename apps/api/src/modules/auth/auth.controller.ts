@@ -14,6 +14,7 @@ import { realmKeyOf, type AppRequest, type AuthContext, type HostRealm } from '.
 import { AuditService } from '../../core/audit/audit.service.js';
 import { AuthzService } from '../authz/authz.service.js';
 import {
+  CheckoutAccountDto,
   ChangePasswordDto, CodeDto, DisableMfaDto, ForgotPasswordDto, HandoffDto, LoginDto, MfaLoginDto, RegisterCreatorDto,
   RegisterStudentDto, ResetPasswordDto, SendOtpDto, SwitchTenantDto, TokenDto,
 } from './dto/auth.dto.js';
@@ -98,6 +99,17 @@ export class AuthController {
     const { user, session } = await this.auth.registerStudent(dto, host, meta);
     await this.emailVerification.send(user, this.origin(req), await this.brand(host));
     return this.respond(res, session);
+  }
+
+  @Public()
+  @Throttle(authLimit)
+  @HttpCode(200)
+  @Post('register/checkout')
+  @ApiOperation({ summary: 'Guest checkout on an academy host: signs a new buyer in (password emailed after payment); existing accounts must log in' })
+  async checkoutAccount(@Body() dto: CheckoutAccountDto, @Req() req: AppRequest, @Res({ passthrough: true }) res: Response, @ClientMetaParam() meta: ClientMeta) {
+    const result = await this.auth.checkoutAccount(dto, this.host(req), meta);
+    if (result.status === 'exists') return { accountExists: true };
+    return this.respond(res, result.session, { accountExists: false });
   }
 
   @Public()

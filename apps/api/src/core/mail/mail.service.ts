@@ -14,6 +14,8 @@ export interface EmailJob extends RenderedEmail {
   tag: string;
   /** Extra headers, e.g. List-Unsubscribe for marketing email. */
   headers?: Record<string, string>;
+  /** Carries a secret (e.g. a generated password): the queued job is deleted as soon as it is delivered. */
+  sensitive?: boolean;
 }
 
 const OVERRIDE_TTL_MS = 30_000;
@@ -30,9 +32,9 @@ export class MailService {
   ) {}
 
   async send(job: EmailJob): Promise<void> {
-    const { template, ...email } = job;
+    const { template, sensitive, ...email } = job;
     if (template) Object.assign(email, await this.applyOverride(template.key, template.vars));
-    await this.queue.add(SEND_EMAIL_JOB, email, { attempts: 6 });
+    await this.queue.add(SEND_EMAIL_JOB, email, sensitive ? { attempts: 6, removeOnComplete: true, removeOnFail: { age: 24 * 3600 } } : { attempts: 6 });
   }
 
   /** Drops cached overrides after Super Admin edits a template. */

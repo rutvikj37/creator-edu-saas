@@ -13,9 +13,12 @@ import { QuestionBankService } from '../assessment/question-bank.service.js';
 import { QuestionBankController } from '../assessment/question-bank.controller.js';
 import { CreatorReviewsController, LearnReviewsController, PublicReviewsController } from './reviews.controller.js';
 
+import { PasswordService } from '../auth/services/password.service.js';
+import { AccountCredentialsService } from '../auth/services/account-credentials.service.js';
+
 @Module({
   controllers: [CatalogController, LearnController, CreatorLearningController, PublicCertificatesController, LearnReviewsController, PublicReviewsController, CreatorReviewsController, QuestionBankController],
-  providers: [ReviewsService, QuestionBankService, LearningService, CreatorLearningService, QuizzesService, AssignmentsService, CertificatesService],
+  providers: [PasswordService, AccountCredentialsService, ReviewsService, QuestionBankService, LearningService, CreatorLearningService, QuizzesService, AssignmentsService, CertificatesService],
   exports: [LearningService, ReviewsService],
 })
 export class LearningModule {}

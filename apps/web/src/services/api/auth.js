@@ -13,6 +13,11 @@ export const authApi = {
   providers: () => http.get('/auth/providers').then(d),
   registerCreator: (body) => http.post('/auth/register/creator', body).then(d),
   registerStudent: (body) => http.post('/auth/register/student', body).then(d),
+  /** Guest checkout: signs a new buyer in (password emailed once they get access) or reports { accountExists: true }. */
+  checkoutAccount: (body) => http.post('/auth/register/checkout', body).then(d).then((res) => {
+    if (res?.refreshToken && typeof window !== 'undefined') window.sessionStorage?.setItem('ce_rt_fallback', res.refreshToken);
+    return res;
+  }),
   login: (body) => http.post('/auth/login', body).then(d).then((res) => {
     if (res?.refreshToken && typeof window !== 'undefined') {
       window.sessionStorage?.setItem('ce_rt_fallback', res.refreshToken);

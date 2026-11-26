@@ -55,7 +55,7 @@ export function ProductPage() {
                   : !site.data?.paymentsEnabled ? <Alert tone="info">Online checkout opens once this academy enables payments.</Alert>
                   : (
                     <div className="space-y-2">
-                      <Button className="w-full" size="lg" style={{ background: color }} onClick={() => (auth.status === 'authenticated' ? navigate(`/checkout/product/${slug}`) : login())}>{auth.status === 'authenticated' ? 'Buy now' : 'Sign up to buy'}</Button>
+                      <Button className="w-full" size="lg" style={{ background: color }} onClick={() => navigate(`/checkout/product/${slug}`)}>Buy now</Button>
                       {auth.status === 'authenticated' && <Button className="w-full" variant="secondary" leftIcon={ShoppingCart} loading={add.isPending} onClick={() => add.mutate()}>Add to cart</Button>}
                     </div>
                   )}

@@ -129,6 +129,11 @@ export function fmtMoney(minor: number, currency: string) {
 }
 
 import { financialYear, invoiceNumber } from './invoice-number.js';
+import { AccountCredentialsService } from '../auth/services/account-credentials.service.js';
+
+/** User id for quotes on the checkout page before sign-in: matches no user, so nothing counts as owned or redeemed. */
+export const GUEST_BUYER = '';
+
 export { financialYear };
 
 export async function nextSequence(tx: { $executeRaw: any; $queryRaw: any }, tenantId: string, name: string): Promise<number> {
@@ -167,6 +172,7 @@ export class OrdersService {
     private readonly digital: DigitalProductsService,
     private readonly coaching: CoachingService,
     private readonly funnel: FunnelService,
+    private readonly credentials: AccountCredentialsService,
   ) {}
 
   // ── views ─────────────────────────────────────────────────
@@ -729,6 +735,10 @@ export class OrdersService {
     await this.audit.record({ action: 'order.paid', tenantId, actorRealm: 'SYSTEM', targetType: 'Order', targetId: order.id, after: { number: order.number, total: order.totalAmount.toString(), paymentId: paid?.result.providerPaymentId ?? null } });
     await this.events.emit('order.paid', { tenantId, userId: order.userId, orderId: order.id, courseIds: grantedCourses(order.items), total: order.totalAmount.toString(), currency: order.currency });
     await this.notifications.notify({ userId: order.userId, tenantId, category: 'orders', title: 'Purchase confirmed', body: `You now have access to ${order.items.map((i) => i.title).join(', ')}.`, link: '/learn', brand: tenant.name, skipEmail: true }).catch(() => undefined);
+    // Bought at guest checkout: the account has no password yet, so generate one and email the login details.
+    if (opts.notify !== false) {
+      await this.credentials.sendIfPasswordless(tenantId, order.userId, order.items.map((i) => i.title));
+    }
     if (billing.email && opts.notify !== false) {
       await this.mail.send({
         to: billing.email, tenantId, tag: 'purchase-receipt',

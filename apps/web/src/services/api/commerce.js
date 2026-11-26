@@ -31,6 +31,9 @@ export const creatorCommerceApi = {
 export const checkoutApi = {
   quote: (body) => http.post('/learn/checkout/quote', body).then(d),
   offers: (courseId) => http.get('/learn/checkout/offers', { params: courseId ? { courseId } : {} }).then(d),
+  /** Price and offers for a buyer who isn't signed in yet. */
+  guestQuote: (body) => http.post('/public/checkout/quote', body).then(d),
+  guestOffers: (courseId) => http.get('/public/checkout/offers', { params: courseId ? { courseId } : {} }).then(d),
   checkout: (body, idempotencyKey) => http.post('/learn/checkout', body, { headers: { 'Idempotency-Key': idempotencyKey } }).then(d),
   orders: () => http.get('/learn/orders').then(d),
   order: (id) => http.get(`/learn/orders/${id}`).then(d),

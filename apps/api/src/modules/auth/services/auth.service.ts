@@ -10,7 +10,7 @@ import { MailService } from '../../../core/mail/mail.service.js';
 import { emailTemplates } from '../../../core/mail/templates.js';
 import { AuthzService } from '../../authz/authz.service.js';
 import { TenantsService } from '../../tenants/tenants.service.js';
-import type { ChangePasswordDto, LoginDto, RegisterCreatorDto, RegisterStudentDto } from '../dto/auth.dto.js';
+import type { ChangePasswordDto, CheckoutAccountDto, LoginDto, RegisterCreatorDto, RegisterStudentDto } from '../dto/auth.dto.js';
 import { PasswordService } from './password.service.js';
 import { SessionService, type ClientMeta, type IssuedSession } from './session.service.js';
 import { TokenService } from './token.service.js';
@@ -57,6 +57,34 @@ export class AuthService {
     await this.recordLogin(user.id, host.tenantId, dto.email, true, null, 'register', meta);
     await this.events.emit('student.registered', { tenantId: host.tenantId, userId: user.id, email: user.email, name: user.fullName });
     return { user, session };
+  }
+
+  /**
+   * Guest checkout on an academy host: signs the buyer in without a password so they can pay.
+   * A new email gets a passwordless student account (its password is generated and emailed when
+   * the order is paid). An email that already belongs to a real account is never signed in here;
+   * the buyer must log in. The one exception is an empty passwordless account (no password, no
+   * courses, no paid orders), which is what an earlier abandoned guest checkout leaves behind.
+   */
+  async checkoutAccount(dto: CheckoutAccountDto, host: HostRealm, meta: ClientMeta): Promise<{ status: 'exists' } | { status: 'signed-in'; session: IssuedSession }> {
+    if (host.kind !== 'tenant') throw AppException.notFound();
+    if (host.status !== 'ACTIVE') throw AppException.forbidden('This academy is not accepting purchases yet.');
+    const email = dto.email.trim().toLowerCase();
+    let user = await this.prisma.user.findUnique({ where: { realmKey_email: { realmKey: host.tenantId, email } } });
+    if (user) {
+      const empty = !user.passwordHash && user.status === 'ACTIVE' && !user.deletedAt
+        && !(await this.prisma.enrollment.count({ where: { userId: user.id } }))
+        && !(await this.prisma.order.count({ where: { userId: user.id, status: 'PAID' } }));
+      if (!empty) return { status: 'exists' };
+    } else {
+      // The phone is unique per academy; if someone else already uses it, keep it on the order only.
+      const phone = dto.phone && !(await this.prisma.user.findUnique({ where: { realmKey_phone: { realmKey: host.tenantId, phone: dto.phone } }, select: { id: true } })) ? dto.phone : null;
+      user = await this.prisma.user.create({ data: { realm: 'TENANT', realmKey: host.tenantId, tenantId: host.tenantId, email, phone, fullName: dto.fullName } });
+      await this.events.emit('student.registered', { tenantId: host.tenantId, userId: user.id, email: user.email, name: user.fullName });
+    }
+    const session = await this.sessions.issue(user, { tenantId: host.tenantId, mfaSetupRequired: false }, meta);
+    await this.recordLogin(user.id, host.tenantId, email, true, null, 'checkout', meta);
+    return { status: 'signed-in', session };
   }
 
   async login(dto: LoginDto, host: HostRealm, meta: ClientMeta): Promise<LoginResult> {

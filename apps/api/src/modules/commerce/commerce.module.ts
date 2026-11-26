@@ -3,7 +3,7 @@ import { Module } from '@nestjs/common';
 import { BillingProcessor, CommerceProcessor, CommerceScheduler, WebhooksProcessor } from './commerce.processor.js';
 import { BillingService } from '../billing/billing.service.js';
 import { CreatorPlanBillingController, PlatformBillingController } from '../billing/billing.controller.js';
-import { CreatorCouponsController, CreatorOrdersController, CreatorPaymentsController, LearnCommerceController, RazorpayWebhookController } from './commerce.controller.js';
+import { CreatorCouponsController, CreatorOrdersController, CreatorPaymentsController, LearnCommerceController, PublicCheckoutController, RazorpayWebhookController } from './commerce.controller.js';
 import { CouponsService } from './coupons.service.js';
 import { DigitalProductsService } from './digital-products.service.js';
 import { CoachingService } from './coaching/coaching.service.js';
@@ -21,13 +21,15 @@ import { PaymentHttp } from './providers/http.js';
 import { PROVIDER_CLASSES } from './providers/registry.js';
 import { WebhooksService } from './webhooks.service.js';
 import { FilesService } from '../files/files.service.js';
+import { PasswordService } from '../auth/services/password.service.js';
+import { AccountCredentialsService } from '../auth/services/account-credentials.service.js';
 
 const SERVICES = [SettlementsService, PaymentHttp, ...PROVIDER_CLASSES, GatewayService, CouponsService, DigitalProductsService, CoachingService, GoogleMeetService, FunnelService, OrdersService, WebhooksService, BillingService, RecoveryService];
 
 /** Razorpay commerce (academy sales) and SaaS plan billing: HTTP API. */
 @Module({
-  controllers: [CreatorCoachingController, PublicCoachingController, LearnCoachingController, CreatorProductsController, PublicProductsController, LearnProductsController, CreatorBundlesController, PublicBundlesController, LearnCartController, CreatorPaymentsController, CreatorCouponsController, CreatorOrdersController, LearnCommerceController, RazorpayWebhookController, CreatorPlanBillingController, PlatformBillingController],
-  providers: [...SERVICES, BundlesService, CartService],
+  controllers: [CreatorCoachingController, PublicCoachingController, LearnCoachingController, CreatorProductsController, PublicProductsController, LearnProductsController, CreatorBundlesController, PublicBundlesController, LearnCartController, CreatorPaymentsController, CreatorCouponsController, CreatorOrdersController, LearnCommerceController, PublicCheckoutController, RazorpayWebhookController, CreatorPlanBillingController, PlatformBillingController],
+  providers: [...SERVICES, BundlesService, CartService, PasswordService, AccountCredentialsService],
   exports: [OrdersService, GatewayService, FunnelService, RecoveryService],
 })
 export class CommerceModule {}

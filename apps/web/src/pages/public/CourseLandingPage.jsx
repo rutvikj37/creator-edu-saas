@@ -42,7 +42,8 @@ export function CourseLandingPage() {
 
   const cta = () => {
     if (enrolled) return navigate(`/learn/courses/${c.id}`);
-    if (auth.status !== 'authenticated') return navigate(`/register?next=${encodeURIComponent(`/courses/${slug}`)}`);
+    // Signed out: the checkout page creates the account (free courses too) and emails the login details.
+    if (auth.status !== 'authenticated') return navigate(`/checkout/${slug}`);
     if (c.isFree) return enroll.mutate();
     return navigate(`/checkout/${slug}`);
   };

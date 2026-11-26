@@ -26,6 +26,13 @@ export class RegisterStudentDto {
   @ApiProperty() @IsString() @MinLength(PASSWORD_RULE.min, { message: `Password must be at least ${PASSWORD_RULE.min} characters` }) @MaxLength(PASSWORD_RULE.max) password: string;
 }
 
+/** Guest checkout: name, email and phone only. The password is generated and emailed once the order is paid. */
+export class CheckoutAccountDto {
+  @ApiProperty() @Transform(trim) @IsString() @Length(2, 120) fullName: string;
+  @ApiProperty() @Transform(lower) @IsEmail({}, { message: 'Enter a valid email address' }) @MaxLength(191) email: string;
+  @ApiPropertyOptional() @IsOptional() @Transform(trim) @Matches(/^\+[1-9]\d{7,14}$/, { message: 'Use international format, e.g. +919876543210' }) phone?: string;
+}
+
 export class LoginDto {
   @ApiProperty() @Transform(lower) @IsEmail({}, { message: 'Enter a valid email address' }) email: string;
   @ApiProperty() @IsString() @MinLength(1) @MaxLength(PASSWORD_RULE.max) password: string;

@@ -13,7 +13,8 @@ import { Paginated } from '../../common/interceptors/response-envelope.intercept
 import type { AuthContext } from '../../core/tenancy/request-context.js';
 import { CouponsService } from './coupons.service.js';
 import { GatewayService } from './gateway.service.js';
-import { OrdersService } from './orders.service.js';
+import { GUEST_BUYER, OrdersService } from './orders.service.js';
+import { AppException } from '../../common/errors/app-exception.js';
 import { WebhooksService } from './webhooks.service.js';
 import { BillingService } from '../billing/billing.service.js';
 
@@ -299,6 +300,27 @@ export class LearnCommerceController {
 
   @Get('orders/:id/invoice')
   async invoice(@Param('id') id: string, @CurrentAuth() auth: AuthContext, @Res() res: Response) { sendPdf(res, await this.orders.invoicePdf(id, auth.userId)); }
+}
+
+// ── Guest checkout (not signed in yet) ─────────────────────
+/** Price and offers for someone on the checkout page before they have an account. */
+@ApiTags('Academy (public) · Checkout')
+@Public()
+@TenantScoped('academy')
+@Controller({ path: 'public/checkout', version: '1' })
+export class PublicCheckoutController {
+  constructor(private readonly orders: OrdersService, private readonly coupons: CouponsService) {}
+
+  @Get('offers')
+  @ApiOperation({ summary: 'Coupons the academy offers on the checkout page' })
+  offers(@Query('courseId') courseId?: string) { return this.coupons.offers(courseId && courseId.length === 25 ? courseId : null); }
+
+  @Post('quote') @HttpCode(200)
+  @ApiOperation({ summary: 'Price breakdown for a guest (no cart or upsell: those need an account)' })
+  quote(@Body() dto: QuoteDto) {
+    if (dto.fromCart || dto.upsellOfferId) throw AppException.unauthenticated('Sign in to check out your cart or an offer.');
+    return this.orders.quote(GUEST_BUYER, dto, dto.couponCode);
+  }
 }
 
 // ── Razorpay webhooks ───────────────────────────────────────

@@ -12,6 +12,7 @@ import { enrollmentExpiry, isEnrollmentUsable, progressPercent, unlockTime } fro
 
 type LessonRow = Awaited<ReturnType<TenantPrismaClient['courseLesson']['findFirst']>> & object;
 
+import { AccountCredentialsService } from '../auth/services/account-credentials.service.js';
 @Injectable()
 export class LearningService {
   private readonly logger = new Logger(LearningService.name);
@@ -23,6 +24,7 @@ export class LearningService {
     private readonly files: FilesService,
     private readonly certificates: CertificatesService,
     private readonly events: AppEvents,
+    private readonly credentials: AccountCredentialsService,
     @Optional() private readonly watermark?: PdfWatermarkService,
   ) {}
 
@@ -54,7 +56,10 @@ export class LearningService {
     const course = await this.db.course.findFirst({ where: { id: courseId, deletedAt: null, status: 'PUBLISHED' } });
     if (!course || course.visibility === 'PRIVATE') throw AppException.notFound('Course not found');
     if (!course.isFree) throw AppException.forbidden('This course requires purchase.');
-    return this.grant(userId, courseId, 'FREE');
+    const e = await this.grant(userId, courseId, 'FREE');
+    // Signed up at guest checkout: email the generated login details now that they have access.
+    await this.credentials.sendIfPasswordless(e.tenantId, userId, [course.title]);
+    return e;
   }
 
   async myEnrollments(userId: string, apiOrigin: string) {

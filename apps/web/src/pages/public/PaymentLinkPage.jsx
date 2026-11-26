@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Clock, Lock, ShieldCheck } from 'lucide-react';
 import { Alert } from '../../components/auth/Alert.jsx';
 import { Button, Card, CardBody, ErrorState, Skeleton } from '../../components/ui/index.js';
-import { useAuth } from '../../context/AuthContext.jsx';
 import { academyApi } from '../../services/api/auth.js';
 import { checkoutApi } from '../../services/api/commerce.js';
 import { formatDate, formatMoney } from '../../utils/format.js';
@@ -16,7 +15,6 @@ const KIND_LABELS = { course: 'Course', bundle: 'Bundle', product: 'Digital down
 export function PaymentLinkPage() {
   const { code } = useParams();
   const [search] = useSearchParams();
-  const auth = useAuth();
   const navigate = useNavigate();
   const site = useQuery({ queryKey: ['brand', 'academy'], queryFn: academyApi.site, staleTime: 5 * 60_000 });
   const q = useQuery({ queryKey: ['public', 'pay', code], queryFn: () => checkoutApi.paymentLink(code), retry: false });
@@ -49,14 +47,7 @@ export function PaymentLinkPage() {
               {l.couponCode && <p className="text-sm text-green-700">Promo code {l.couponCode} is applied at checkout.</p>}
               {l.expiresAt && <p className="flex items-center gap-1.5 text-xs text-muted"><Clock className="size-3.5" />Offer ends {formatDate(l.expiresAt, { withTime: true })}</p>}
               {!site.data?.paymentsEnabled ? <Alert tone="info">Online checkout opens once this academy enables payments.</Alert>
-                : auth.status === 'authenticated' ? (
-                  <Button className="w-full" size="lg" leftIcon={Lock} style={{ background: color }} onClick={() => navigate(checkout)}>Continue to payment</Button>
-                ) : (
-                  <div className="space-y-2">
-                    <Button className="w-full" size="lg" style={{ background: color }} onClick={() => navigate(`/register?next=${encodeURIComponent(checkout)}`)}>Create an account to pay</Button>
-                    <Button className="w-full" variant="secondary" onClick={() => navigate(`/login?next=${encodeURIComponent(checkout)}`)}>I already have an account</Button>
-                  </div>
-                )}
+                : <Button className="w-full" size="lg" leftIcon={Lock} style={{ background: color }} onClick={() => navigate(checkout)}>Continue to payment</Button>}
               {detailsPath && <p className="text-center text-sm"><Link to={detailsPath} className="text-primary-600 hover:underline">See full details</Link></p>}
               <p className="flex items-start gap-2 text-xs text-muted"><ShieldCheck className="mt-0.5 size-4 shrink-0" />Payments are processed securely by Razorpay. Your access is added to your account right after payment.</p>
             </CardBody>

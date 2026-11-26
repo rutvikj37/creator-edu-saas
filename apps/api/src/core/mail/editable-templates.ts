@@ -95,6 +95,15 @@ export const EDITABLE_TEMPLATES: EditableTemplate[] = [
     },
   },
   {
+    key: 'accountCredentials', name: 'Login details after checkout', description: 'Sent when someone buys without an account: their account is created at checkout and this email carries the generated password.',
+    variables: [brand, name, { name: 'email', description: 'Login email', sample: 'priya@example.com' }, { name: 'password', description: 'Generated password', sample: 'Kp7mX2qWa9' }, { name: 'items', description: 'Purchased items, one "- item" per line', sample: '- Communication course' }, { name: 'url', description: 'Academy login page', sample: 'https://acme.example.com/login' }],
+    required: ['email', 'password'], ctaVar: 'url',
+    defaults: {
+      subject: 'Your {{brand}} login details', heading: 'Your account is ready', ctaLabel: 'Log in and start learning',
+      body: 'Hi {{name}},\n\nThanks for your purchase! We created your account at **{{brand}}** so you can start right away. You now have access to:\n\n{{items}}\n\nUse these details to log in:\n\nEmail: **{{email}}**\nPassword: **{{password}}**\n\nKeep this password private. You can change it any time from Account security after you log in.',
+    },
+  },
+  {
     key: 'studentInvite', name: 'Student invitation', description: 'Sent when a creator adds a student and invites them to set a password.',
     variables: [brand, name, { name: 'courses', description: 'Courses they can access, one "- title" per line (empty if none)', sample: '- Algebra\n- Geometry' }, { name: 'url', description: 'Set-password link (valid 7 days)', sample: 'https://acme.example.com/reset-password?token=abc' }],
     required: [], ctaVar: 'url',

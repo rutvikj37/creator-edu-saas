@@ -9,6 +9,16 @@ describe('email templates', () => {
     expect(escapeHtml(`"'`)).toBe('&quot;&#39;');
   });
 
+  it('renders login details after guest checkout', () => {
+    const e = emailTemplates.accountCredentials({ brand: 'Acme', name: 'Asha', email: 'asha@example.test', password: 'Kp7mX2qWa9', items: ['Algebra', 'Geometry'], url: 'https://acme.example.test/login' });
+    expect(e.subject).toBe('Your Acme login details');
+    expect(e.html).toContain('asha@example.test');
+    expect(e.html).toContain('Kp7mX2qWa9');
+    expect(e.html).toContain('<li>Algebra</li>');
+    expect(e.html).toContain('https://acme.example.test/login');
+    expect(e.text).toContain('Kp7mX2qWa9');
+  });
+
   it('renders student invite with academy reset link and courses', () => {
     const e = emailTemplates.studentInvite({
       brand: 'Acme',

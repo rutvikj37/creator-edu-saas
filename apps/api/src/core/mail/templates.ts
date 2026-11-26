@@ -55,6 +55,9 @@ export const emailTemplates = {
   passwordReset(p: { brand: string; name: string; url: string }): RenderedEmail {
     return fromTemplate('passwordReset', p);
   },
+  accountCredentials(p: { brand: string; name: string; email: string; password: string; items: string[]; url: string }): RenderedEmail {
+    return fromTemplate('accountCredentials', { ...p, items: p.items.map((i) => `- ${i}`).join('\n') });
+  },
   studentInvite(p: { brand: string; name: string; url: string; courses?: string }): RenderedEmail {
     return fromTemplate('studentInvite', { ...p, courses: p.courses ?? '' });
   },

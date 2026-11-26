@@ -32,7 +32,6 @@ export function BundlePage() {
   const owned = new Set((mine.data ?? []).filter((e) => e.usable).map((e) => e.course.id));
   const ownsAll = b && b.courses.every((c) => owned.has(c.id));
   const saving = b ? Number(b.worthAmount) - Number(b.priceAmount) : 0;
-  const login = () => navigate(`/register?next=${encodeURIComponent(`/bundles/${slug}`)}`);
   return (
     <div className="min-h-dvh bg-surface-2" style={{ fontFamily: site.data?.theme?.fontBody }}>
       <AcademyHeader site={site.data} />
@@ -70,7 +69,7 @@ export function BundlePage() {
                   : !site.data?.paymentsEnabled ? <Alert tone="info">Online checkout opens once this academy enables payments.</Alert>
                   : (
                     <div className="space-y-2">
-                      <Button className="w-full" size="lg" style={{ background: color }} onClick={() => (auth.status === 'authenticated' ? navigate(`/checkout/bundle/${slug}`) : login())}>{auth.status === 'authenticated' ? 'Buy bundle' : 'Sign up to buy'}</Button>
+                      <Button className="w-full" size="lg" style={{ background: color }} onClick={() => navigate(`/checkout/bundle/${slug}`)}>Buy bundle</Button>
                       {auth.status === 'authenticated' && <Button className="w-full" variant="secondary" leftIcon={ShoppingCart} loading={add.isPending} onClick={() => add.mutate()}>Add to cart</Button>}
                     </div>
                   )}

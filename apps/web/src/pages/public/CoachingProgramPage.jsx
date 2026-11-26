@@ -81,7 +81,7 @@ export function CoachingProgramPage() {
                 {owned ? <Button className="w-full" size="lg" onClick={() => navigate('/learn/coaching')}>Book your sessions</Button>
                   : p.isFree ? <Button className="w-full" size="lg" style={{ background: color }} loading={claim.isPending} onClick={() => (auth.status === 'authenticated' ? claim.mutate() : login())}>{auth.status === 'authenticated' ? 'Get it free' : 'Sign up to book'}</Button>
                   : !site.data?.paymentsEnabled ? <Alert tone="info">Online checkout opens once this academy enables payments.</Alert>
-                  : <Button className="w-full" size="lg" style={{ background: color }} onClick={() => (auth.status === 'authenticated' ? navigate(`/checkout/coaching/${slug}`) : login())}>{auth.status === 'authenticated' ? 'Get access now' : 'Sign up to buy'}</Button>}
+                  : <Button className="w-full" size="lg" style={{ background: color }} onClick={() => navigate(`/checkout/coaching/${slug}`)}>Get access now</Button>}
                 <p className="text-xs text-muted">After {p.isFree ? 'signing up' : 'payment'} you choose a time for each session from the coaches’ free slots.</p>
               </CardBody>
             </Card>
