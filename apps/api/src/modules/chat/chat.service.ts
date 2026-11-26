@@ -1,9 +1,13 @@
 import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import type { Redis } from 'ioredis';
+import { PERMISSIONS } from '@ce/shared';
 import { AppException } from '../../common/errors/app-exception.js';
 import { PrismaService } from '../../core/prisma/prisma.service.js';
 import { REDIS_CLIENT } from '../../core/redis/redis.constants.js';
+import type { AuthContext } from '../../core/tenancy/request-context.js';
+import { AuthzService } from '../authz/authz.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
+import { ChatRealtimeService } from './chat-realtime.service.js';
 
 export type ChatKind = 'ACADEMY' | 'PLATFORM';
 export type Side = 'customer' | 'agent';
@@ -17,10 +21,9 @@ type Conv = { id: string; tenantId: string; kind: ChatKind; customerUserId: stri
 
 /**
  * Live chat: students ↔ academy team (ACADEMY) and academy team ↔ platform support (PLATFORM).
- * Messages are stored in MySQL; delivery is near real-time through long polling: a client asks
- * for messages after the last one it has and the request waits (up to 25 s) until a new message
- * is published on Redis — so it works across API instances without WebSockets or new headers.
- * All access checks are done by the caller (controller) choosing the conversation.
+ * Messages are stored in MySQL. Delivery prefers Socket.IO rooms (Redis adapter across API
+ * instances); HTTP long polling on Redis `chat:new` remains as a compatibility fallback.
+ * All access checks are done by the caller (controller/gateway) choosing the conversation.
  */
 @Injectable()
 export class ChatService implements OnModuleDestroy {
@@ -32,6 +35,8 @@ export class ChatService implements OnModuleDestroy {
     private readonly prisma: PrismaService,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
     private readonly notifications: NotificationsService,
+    private readonly authz: AuthzService,
+    private readonly realtime: ChatRealtimeService,
   ) {}
 
   private async subscriber() {
@@ -73,6 +78,29 @@ export class ChatService implements OnModuleDestroy {
     const c = await this.prisma.chatConversation.findFirst({ where: { id, kind: scope.kind, ...(scope.kind === 'ACADEMY' ? { tenantId: scope.tenantId } : {}) } });
     if (!c) throw AppException.notFound('Conversation not found');
     return c as Conv;
+  }
+
+  /** Socket subscribe: student owner, academy support staff, creator support chat, or platform support agents. */
+  async assertCanSubscribe(auth: AuthContext, conversationId: string) {
+    const c = await this.prisma.chatConversation.findUnique({ where: { id: conversationId } });
+    if (!c) throw AppException.forbidden();
+    if (c.kind === 'ACADEMY') {
+      if (auth.realm === 'TENANT' && auth.userId === c.customerUserId && auth.realmKey === c.tenantId) return c as Conv;
+      if (auth.realm === 'PLATFORM' && auth.tenantId === c.tenantId) {
+        const perms = await this.authz.permissions(auth);
+        if (perms.has(PERMISSIONS.SUPPORT_MANAGE)) return c as Conv;
+      }
+    } else {
+      if (auth.realm === 'PLATFORM' && auth.tenantId === c.tenantId) {
+        const perms = await this.authz.permissions(auth);
+        if (perms.has(PERMISSIONS.SETTINGS_MANAGE)) return c as Conv;
+      }
+      if (auth.realm === 'PLATFORM') {
+        const perms = await this.authz.permissions(auth);
+        if (perms.has(PERMISSIONS.PLATFORM_SUPPORT_MANAGE)) return c as Conv;
+      }
+    }
+    throw AppException.forbidden();
   }
 
   /** Customers whose name or email (students) or academy name/slug (platform) contains `q`. */
@@ -165,8 +193,11 @@ export class ChatService implements OnModuleDestroy {
       },
     });
     await this.redis.publish(CHANNEL, c.id);
+    const viewed = (await this.view(c, [m]))[0];
+    const fresh = await this.prisma.chatConversation.findUniqueOrThrow({ where: { id: c.id } });
+    this.realtime.emitMessage({ conversationId: c.id, message: viewed, status: fresh.status });
     if (side === 'agent') await this.notifyCustomer(c, text).catch(() => undefined);
-    return (await this.view(c, [m]))[0];
+    return viewed;
   }
 
   private async notifyCustomer(c: Conv, text: string) {
@@ -188,6 +219,7 @@ export class ChatService implements OnModuleDestroy {
   async setStatus(c: Conv, status: 'OPEN' | 'CLOSED') {
     await this.prisma.chatConversation.update({ where: { id: c.id }, data: { status } });
     await this.redis.publish(CHANNEL, c.id);
+    this.realtime.emitStatus(c.id, status);
     return { status };
   }
 

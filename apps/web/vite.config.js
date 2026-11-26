@@ -19,7 +19,8 @@ export default defineConfig(({ mode }) => {
   const root = env.VITE_PLATFORM_ROOT_DOMAIN || 'lvh.me';
   const extraHosts = [env.VITE_APP_HOST, env.VITE_ADMIN_HOST].filter(Boolean);
   const allowedHosts = [`.${root}`, 'localhost', ...extraHosts];
-  const proxy = { '/api': { target: env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:4000', changeOrigin: false, xfwd: true } };
+  // ws: true so Socket.IO upgrades on /api/socket.io pass through the same-origin proxy.
+  const proxy = { '/api': { target: env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:4000', changeOrigin: false, xfwd: true, ws: true } };
   return {
     envDir: '../../',
     plugins: [react(), tailwindcss()],

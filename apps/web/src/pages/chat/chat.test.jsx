@@ -15,6 +15,10 @@ vi.mock('../../services/api/chat.js', () => ({
   creatorChatApi: { list: vi.fn(), thread: vi.fn() },
   platformChatApi: { list: vi.fn(), thread: vi.fn() },
 }));
+vi.mock('../../services/chatSocket.js', () => ({
+  ensureChatSocket: vi.fn(async () => null), // force long-poll path in unit tests
+  watchConversation: vi.fn(() => () => undefined),
+}));
 
 const never = () => new Promise(() => {});
 function wrap(element, path = '/') {
@@ -24,7 +28,7 @@ function wrap(element, path = '/') {
 }
 afterEach(() => vi.clearAllMocks());
 
-it('student sees history, receives a reply through the long poll, and sends a message', async () => {
+it('student sees history, receives a reply through the long poll fallback, and sends a message', async () => {
   learnChatApi.load.mockResolvedValue({ conversation: { id: 'c1', status: 'OPEN' }, messages: [{ id: 'm1', side: 'customer', body: 'Hello there', senderName: 'Riya', createdAt: '2026-11-06T10:00:00Z' }], hasMore: false, unread: 0 });
   learnChatApi.poll
     .mockResolvedValueOnce({ messages: [{ id: 'm2', side: 'agent', body: 'Hi Riya, how can we help?', senderName: 'Team', createdAt: '2026-11-06T10:01:00Z' }], status: 'OPEN' })

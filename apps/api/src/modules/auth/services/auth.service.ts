@@ -213,6 +213,8 @@ export class AuthService {
       mfaSetupRequired = false;
     } else {
       tenantId = user.realmKey;
+      // Free this device's prior family before counting, so re-login does not burn a device slot.
+      await this.sessions.revokeSameDevice(user.id, meta);
       await this.enforceDeviceLimit(user.id, tenantId);
     }
     await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });

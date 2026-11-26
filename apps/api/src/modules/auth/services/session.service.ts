@@ -58,11 +58,36 @@ export class SessionService {
     return (await this.redis.exists(this.revokedKey(familyId))) === 1;
   }
 
+  /**
+   * Device identity for the sessions list: exact User-Agent string (trimmed to column length).
+   * Re-login from the same UA revokes the prior family so the list shows one row per device.
+   * Missing/empty UA skips dedupe (cannot identify the device).
+   */
+  deviceKey(meta: ClientMeta): string | null {
+    const ua = meta.userAgent?.slice(0, 512)?.trim();
+    return ua || null;
+  }
+
+  /** Revoke active session families that match this device (same User-Agent). */
+  async revokeSameDevice(userId: string, meta: ClientMeta) {
+    const userAgent = this.deviceKey(meta);
+    if (!userAgent) return;
+    const rows = await this.prisma.userSession.findMany({
+      where: { userId, userAgent, rotatedAt: null, revokedAt: null, expiresAt: { gt: new Date() } },
+      distinct: ['familyId'],
+      select: { familyId: true },
+    });
+    for (const row of rows) await this.revokeFamily(row.familyId, 'same_device');
+  }
+
   async issue(
     user: { id: string; realm: 'PLATFORM' | 'TENANT'; realmKey: string },
     opts: { tenantId: string | null; mfaSetupRequired: boolean; familyId?: string },
     meta: ClientMeta,
   ): Promise<IssuedSession> {
+    // New login (not refresh continuation): replace any active session for this device.
+    if (!opts.familyId) await this.revokeSameDevice(user.id, meta);
+
     const familyId = opts.familyId ?? createId();
     const refreshToken = randomToken(32);
     const expiresAt = new Date(Date.now() + this.refreshTtlMs);
@@ -151,12 +176,19 @@ export class SessionService {
   }
 
   /** Active devices: the current (unrotated, unrevoked, unexpired) row of each family. */
-  async listActive(userId: string) {
-    return this.prisma.userSession.findMany({
-      where: { userId, rotatedAt: null, revokedAt: null, expiresAt: { gt: new Date() } },
-      orderBy: { lastUsedAt: 'desc' },
-      select: { familyId: true, userAgent: true, ip: true, createdAt: true, lastUsedAt: true, expiresAt: true },
-    });
+  async listActive(userId: string, page = 1, pageSize = 20) {
+    const where = { userId, rotatedAt: null, revokedAt: null, expiresAt: { gt: new Date() } };
+    const [total, rows] = await this.prisma.$transaction([
+      this.prisma.userSession.count({ where }),
+      this.prisma.userSession.findMany({
+        where,
+        orderBy: { lastUsedAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: { familyId: true, userAgent: true, ip: true, createdAt: true, lastUsedAt: true, expiresAt: true },
+      }),
+    ]);
+    return { rows, total };
   }
 
   async setActiveTenant(familyId: string, tenantId: string | null) {

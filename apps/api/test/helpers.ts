@@ -6,8 +6,10 @@ import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/bootstrap.js';
+import { AppConfig } from '../src/config/app-config.service.js';
 import { PrismaService } from '../src/core/prisma/prisma.service.js';
 import { REDIS_CLIENT } from '../src/core/redis/redis.constants.js';
+import { RedisIoAdapter } from '../src/core/redis/redis-io.adapter.js';
 import { QUEUES } from '../src/core/queue/queue.constants.js';
 import { seed } from '../prisma/seed.js';
 import { totp } from '../src/core/crypto/totp.js';
@@ -19,6 +21,9 @@ export async function createTestApp() {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>({ bufferLogs: true, rawBody: true });
   configureApp(app);
+  const redisIo = new RedisIoAdapter(app, app.get(AppConfig).get('REDIS_URL'));
+  await redisIo.connectToRedis();
+  app.useWebSocketAdapter(redisIo);
   await app.init();
   return app;
 }
@@ -102,8 +107,16 @@ export async function registerCreator(app: NestExpressApplication, overrides: Pa
   return { body, res, session, tenant: { id: tenant.id, slug: tenant.slug, name: tenant.name } };
 }
 
-export async function login(app: NestExpressApplication, host: string, email: string, password: string) {
-  const res = await api(app).post('/api/v1/auth/login').set('Host', host).send({ email, password });
+export async function login(
+  app: NestExpressApplication,
+  host: string,
+  email: string,
+  password: string,
+  opts?: { userAgent?: string },
+) {
+  let req = api(app).post('/api/v1/auth/login').set('Host', host);
+  if (opts?.userAgent) req = req.set('User-Agent', opts.userAgent);
+  const res = await req.send({ email, password });
   return { res, session: parseSession(res, host) };
 }
 

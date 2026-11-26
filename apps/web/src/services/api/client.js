@@ -67,6 +67,10 @@ let accessTokenGetter = () => null;
 export function setAccessTokenGetter(fn) {
   accessTokenGetter = fn;
 }
+/** Current in-memory access token (for Socket.IO handshake; never persisted). */
+export function getAccessToken() {
+  return accessTokenGetter();
+}
 
 http.interceptors.request.use((config) => {
   const token = accessTokenGetter();

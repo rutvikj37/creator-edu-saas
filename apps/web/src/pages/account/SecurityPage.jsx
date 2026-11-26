@@ -9,7 +9,7 @@ import { SettingsTabs } from '../../components/layout/SettingsTabs.jsx';
 import { PasswordInput } from '../../components/auth/PasswordInput.jsx';
 import { TwoFactorSetup } from '../../components/account/TwoFactorSetup.jsx';
 import { EmailVerificationBanner } from '../../components/account/EmailVerificationBanner.jsx';
-import { Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, ErrorState, Input, Modal, Skeleton, toast } from '../../components/ui/index.js';
+import { Badge, Button, Card, CardBody, CardHeader, ConfirmDialog, ErrorState, Input, Modal, Pagination, Skeleton, toast } from '../../components/ui/index.js';
 import { authApi } from '../../services/api/auth.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { applyApiErrors } from '../../utils/forms.js';
@@ -129,7 +129,12 @@ function describeAgent(ua = '') {
 function SessionsCard() {
   const auth = useAuth();
   const qc = useQueryClient();
-  const sessions = useQuery({ queryKey: ['auth', 'sessions'], queryFn: authApi.sessions });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const sessions = useQuery({
+    queryKey: ['auth', 'sessions', page, pageSize],
+    queryFn: () => authApi.sessions({ page, pageSize }),
+  });
   const [confirmAll, setConfirmAll] = useState(false);
   const revoke = useMutation({
     mutationFn: authApi.revokeSession,
@@ -145,6 +150,9 @@ function SessionsCard() {
     onError: (e) => toast.error(e.message),
   });
 
+  const items = sessions.data?.items ?? [];
+  const meta = sessions.data?.meta ?? { page, pageSize, total: 0 };
+
   return (
     <Card>
       <CardHeader title="Where you're signed in" description="Sign out devices you don't recognise."
@@ -152,22 +160,38 @@ function SessionsCard() {
       {sessions.isError ? (
         <ErrorState error={sessions.error} onRetry={() => sessions.refetch()} />
       ) : (
-        <ul className="divide-y divide-line">
-          {sessions.isLoading
-            ? [0, 1].map((i) => <li key={i} className="p-5"><Skeleton className="h-10 w-full" /></li>)
-            : sessions.data.map((s) => (
-                <li key={s.id} className="flex items-center gap-4 px-5 py-4">
-                  <Monitor className="size-5 shrink-0 text-muted" aria-hidden />
-                  <div className="min-w-0 flex-1 text-sm">
-                    <p className="font-medium">{describeAgent(s.userAgent)} {s.current && <Badge tone="primary" className="ml-1.5">This device</Badge>}</p>
-                    <p className="text-muted">{s.ip ?? 'Unknown IP'} · Last active {formatDate(s.lastUsedAt, { withTime: true })}</p>
-                  </div>
-                  {!s.current && (
-                    <Button variant="ghost" size="sm" loading={revoke.isPending && revoke.variables === s.id} onClick={() => revoke.mutate(s.id)}>Sign out</Button>
-                  )}
-                </li>
-              ))}
-        </ul>
+        <>
+          <ul className="divide-y divide-line">
+            {sessions.isLoading
+              ? [0, 1].map((i) => <li key={i} className="p-5"><Skeleton className="h-10 w-full" /></li>)
+              : items.length === 0
+                ? <li className="px-5 py-8 text-center text-sm text-muted">No active sessions.</li>
+                : items.map((s) => (
+                    <li key={s.id} className="flex items-center gap-4 px-5 py-4">
+                      <Monitor className="size-5 shrink-0 text-muted" aria-hidden />
+                      <div className="min-w-0 flex-1 text-sm">
+                        <p className="font-medium">{describeAgent(s.userAgent)} {s.current && <Badge tone="primary" className="ml-1.5">This device</Badge>}</p>
+                        <p className="text-muted">{s.ip ?? 'Unknown IP'} · Last active {formatDate(s.lastUsedAt, { withTime: true })}</p>
+                      </div>
+                      {!s.current && (
+                        <Button variant="ghost" size="sm" loading={revoke.isPending && revoke.variables === s.id} onClick={() => revoke.mutate(s.id)}>Sign out</Button>
+                      )}
+                    </li>
+                  ))}
+          </ul>
+          {!sessions.isLoading && meta.total > 0 && (
+            <div className="border-t border-line px-5">
+              <Pagination
+                page={meta.page}
+                pageSize={meta.pageSize}
+                total={meta.total}
+                pageSizes={[10, 20, 50]}
+                onPageChange={setPage}
+                onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
+              />
+            </div>
+          )}
+        </>
       )}
       <ConfirmDialog open={confirmAll} onClose={() => setConfirmAll(false)} title="Sign out of all devices?"
         description="You'll be signed out here too and need to sign in again." confirmLabel="Sign out everywhere"

@@ -7,8 +7,6 @@ import { formatDate } from '../../utils/format.js';
 const BILLING_MONTH_OPTIONS = [
   { value: '12', label: '12 Months (1 Year)' },
   { value: '6', label: '6 Months' },
-  { value: '3', label: '3 Months' },
-  { value: '1', label: '1 Month' },
 ];
 
 const TRIAL_PRESET_DAYS = [7, 14, 30, 60, 90];
@@ -17,12 +15,12 @@ function calculatePlanPrice(plan, months) {
   if (!plan) return '24999';
   const inrPrices = plan.prices?.filter((p) => p.currency === 'INR') ?? [];
   const yearPrice = inrPrices.find((p) => p.interval === 'YEAR' || p.interval === 'YEARLY');
-  const monthPrice = inrPrices.find((p) => p.interval === 'MONTH' || p.interval === 'MONTHLY');
+  const sixPrice = inrPrices.find((p) => p.interval === 'SIX_MONTH');
   const m = Number(months) || 12;
 
   if (m === 12 && yearPrice) return String(Number(yearPrice.amount));
-  if (m === 1 && monthPrice) return String(Number(monthPrice.amount));
-  if (monthPrice) return String(Number(monthPrice.amount) * m);
+  if (m === 6 && sixPrice) return String(Number(sixPrice.amount));
+  if (sixPrice) return String(Math.round((Number(sixPrice.amount) / 6) * m));
   if (yearPrice) return String(Math.round((Number(yearPrice.amount) / 12) * m));
   return '24999';
 }
@@ -35,9 +33,9 @@ function findMatchingPriceId(plan, months) {
     const yearPrice = inrPrices.find((p) => p.interval === 'YEAR' || p.interval === 'YEARLY');
     return yearPrice?.id;
   }
-  if (m === 1) {
-    const monthPrice = inrPrices.find((p) => p.interval === 'MONTH' || p.interval === 'MONTHLY');
-    return monthPrice?.id;
+  if (m === 6) {
+    const sixPrice = inrPrices.find((p) => p.interval === 'SIX_MONTH');
+    return sixPrice?.id;
   }
   return undefined;
 }

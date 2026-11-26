@@ -29,6 +29,8 @@ import { PasswordService } from './services/password.service.js';
 import { SessionService, type ClientMeta, type IssuedSession } from './services/session.service.js';
 import { TwoFactorService } from './services/two-factor.service.js';
 import { PUBLIC_USER_SELECT } from './services/user-view.js';
+import { PaginationQueryDto } from '../../common/dto/pagination.dto.js';
+import { Paginated } from '../../common/interceptors/response-envelope.interceptor.js';
 
 const authLimit = { default: { limit: () => Number(process.env.AUTH_RATE_LIMIT_PER_MINUTE ?? 10), ttl: 60_000 } };
 
@@ -185,9 +187,18 @@ export class AuthController {
 
   // ── sessions ───────────────────────────────────────────────────────
   @Get('sessions')
-  async listSessions(@CurrentAuth() auth: AuthContext) {
-    const rows = await this.sessions.listActive(auth.userId);
-    return rows.map((r) => ({ id: r.familyId, userAgent: r.userAgent, ip: r.ip, createdAt: r.createdAt, lastUsedAt: r.lastUsedAt, current: r.familyId === auth.sessionId }));
+  @ApiOperation({ summary: 'List active devices (paginated)' })
+  async listSessions(@CurrentAuth() auth: AuthContext, @Query() q: PaginationQueryDto) {
+    const { rows, total } = await this.sessions.listActive(auth.userId, q.page, q.pageSize);
+    const items = rows.map((r) => ({
+      id: r.familyId,
+      userAgent: r.userAgent,
+      ip: r.ip,
+      createdAt: r.createdAt,
+      lastUsedAt: r.lastUsedAt,
+      current: r.familyId === auth.sessionId,
+    }));
+    return new Paginated(items, { page: q.page, pageSize: q.pageSize, total });
   }
 
   @Delete('sessions/:id')

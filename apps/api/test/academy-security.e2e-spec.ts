@@ -37,10 +37,10 @@ describe('Academy security settings (e2e)', () => {
     const host = tenantHost(c.tenant.slug);
     const email = uniqueEmail('dev');
     await api(app).post('/api/v1/auth/register/student').set('Host', host).send({ fullName: 'Device Learner', email, password: 'student-password-1' }).expect(201);
-    const d1 = (await login(app, host, email, 'student-password-1')).session;
-    const d2 = (await login(app, host, email, 'student-password-1')).session;
+    const d1 = (await login(app, host, email, 'student-password-1', { userAgent: 'Device/1' })).session;
+    const d2 = (await login(app, host, email, 'student-password-1', { userAgent: 'Device/2' })).session;
     await authed(app, d1).get('/api/v1/auth/me').expect(200);
-    const d3 = (await login(app, host, email, 'student-password-1')).session;
+    const d3 = (await login(app, host, email, 'student-password-1', { userAgent: 'Device/3' })).session;
     const user = await prisma.user.findFirstOrThrow({ where: { email, realmKey: c.tenant.id } });
     const families = new Set((await prisma.userSession.findMany({ where: { userId: user.id, revokedAt: null } })).map((s) => s.familyId));
     expect(families.size).toBe(2);

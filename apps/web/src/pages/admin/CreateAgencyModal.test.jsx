@@ -25,8 +25,8 @@ const mockPlans = [
     name: 'Growth',
     trialDays: 0,
     prices: [
-      { id: 'price-growth-m', interval: 'MONTH', currency: 'INR', amount: '2999' },
-      { id: 'price-growth-y', interval: 'YEAR', currency: 'INR', amount: '29990' },
+      { id: 'price-growth-6', interval: 'SIX_MONTH', currency: 'INR', amount: '16999' },
+      { id: 'price-growth-y', interval: 'YEAR', currency: 'INR', amount: '19999' },
     ],
   },
   {
@@ -35,8 +35,8 @@ const mockPlans = [
     name: 'Pro',
     trialDays: 0,
     prices: [
-      { id: 'price-pro-m', interval: 'MONTH', currency: 'INR', amount: '7999' },
-      { id: 'price-pro-y', interval: 'YEAR', currency: 'INR', amount: '79990' },
+      { id: 'price-pro-6', interval: 'SIX_MONTH', currency: 'INR', amount: '16999' },
+      { id: 'price-pro-y', interval: 'YEAR', currency: 'INR', amount: '19999' },
     ],
   },
 ];

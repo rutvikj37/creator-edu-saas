@@ -106,17 +106,25 @@ export function PlanEditorPage() {
             </CardBody>
           </Card>
           <Card>
-            <CardHeader title="Prices" actions={<Button size="sm" variant="secondary" leftIcon={Plus} onClick={() => prices.append({ interval: 'MONTH', currency: 'INR', amount: 0 })}>Add</Button>} />
+            <CardHeader title="Prices" actions={<Button size="sm" variant="secondary" leftIcon={Plus} onClick={() => prices.append({ interval: 'SIX_MONTH', currency: 'INR', amount: 0 })}>Add</Button>} />
             <CardBody className="space-y-3">
               {prices.fields.length === 0 && <p className="text-sm text-muted">No prices: the plan is free or complimentary.</p>}
-              {prices.fields.map((field, i) => (
-                <div key={field.id} className="flex items-start gap-2">
-                  <Select aria-label="Interval" options={[{ value: 'MONTH', label: 'Monthly' }, { value: 'SIX_MONTH', label: '6 months' }, { value: 'YEAR', label: '12 months' }]} {...register(`prices.${i}.interval`)} className="w-36" />
-                  <Input aria-label="Currency" className="w-20 uppercase" maxLength={3} {...register(`prices.${i}.currency`)} error={errors.prices?.[i]?.currency?.message} />
-                  <Input aria-label="Amount" type="number" step="0.01" min={0} {...register(`prices.${i}.amount`)} error={errors.prices?.[i]?.amount?.message} />
-                  <Button variant="ghost" size="icon" aria-label="Remove price" onClick={() => prices.remove(i)}><Trash2 className="size-4" /></Button>
-                </div>
-              ))}
+              {prices.fields.map((field, i) => {
+                const current = watch(`prices.${i}.interval`);
+                const intervalOpts = [
+                  ...(current === 'MONTH' ? [{ value: 'MONTH', label: 'Monthly (legacy)' }] : []),
+                  { value: 'SIX_MONTH', label: '6 months' },
+                  { value: 'YEAR', label: '12 months' },
+                ];
+                return (
+                  <div key={field.id} className="flex items-start gap-2">
+                    <Select aria-label="Interval" options={intervalOpts} {...register(`prices.${i}.interval`)} className="w-36" />
+                    <Input aria-label="Currency" className="w-20 uppercase" maxLength={3} {...register(`prices.${i}.currency`)} error={errors.prices?.[i]?.currency?.message} />
+                    <Input aria-label="Amount" type="number" step="0.01" min={0} {...register(`prices.${i}.amount`)} error={errors.prices?.[i]?.amount?.message} />
+                    <Button variant="ghost" size="icon" aria-label="Remove price" onClick={() => prices.remove(i)}><Trash2 className="size-4" /></Button>
+                  </div>
+                );
+              })}
               {errors.prices?.message && <p className="text-xs text-red-600">{errors.prices.message}</p>}
             </CardBody>
           </Card>

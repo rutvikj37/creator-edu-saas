@@ -58,7 +58,7 @@ export const authApi = {
   },
   me: () => http.get('/auth/me').then(d),
   switchTenant: (tenantId) => http.post('/auth/switch-tenant', { tenantId }).then(d),
-  sessions: () => http.get('/auth/sessions').then(d),
+  sessions: (params) => http.get('/auth/sessions', { params }).then((r) => ({ items: r.data, meta: r.meta })),
   revokeSession: (id) => http.delete(`/auth/sessions/${id}`).then(d),
   verifyEmail: (token) => http.post('/auth/email/verify', { token }).then(d),
   verifyEmailCode: (code) => http.post('/auth/email/verify-code', { code }).then(d),

@@ -61,7 +61,10 @@ function ChangePlanModal({ tenant, open, onClose }) {
           options={(plans.data ?? []).filter((p) => p.status !== 'ARCHIVED').map((p) => ({ value: p.id, label: `${p.name}${p.status === 'DRAFT' ? ' (draft)' : ''}` }))} />
         {plan && (
           <Select label="Billing price" placeholder="Complimentary (no price)" value={priceId} onChange={(e) => setPriceId(e.target.value)}
-            options={plan.prices.filter((p) => p.active).map((p) => ({ value: p.id, label: `${formatMoney(p.amount, p.currency)} / ${p.interval.toLowerCase()}` }))} />
+            options={plan.prices.filter((p) => p.active && p.interval !== 'MONTH').map((p) => ({
+              value: p.id,
+              label: `${formatMoney(p.amount, p.currency)} / ${p.interval === 'SIX_MONTH' ? '6 months' : p.interval === 'YEAR' ? '12 months' : p.interval.toLowerCase()}`,
+            }))} />
         )}
       </div>
     </Modal>

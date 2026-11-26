@@ -42,7 +42,7 @@ export class LearnChatController {
     return { ...(await this.chat.messages(c, str(q.before))), unread: c.customerUnread };
   }
 
-  @Get('messages') @ApiOperation({ summary: 'New messages after `after` (long poll with wait=1)' })
+  @Get('messages') @ApiOperation({ summary: 'New messages after `after` (Socket.IO preferred; long poll with wait=1 as fallback)' })
   async poll(@CurrentAuth() auth: AuthContext, @Query() q: PollQuery) { return this.chat.poll(await this.thread(auth), str(q.after), waitOf(q)); }
 
   @Post('messages') @ApiOperation({ summary: 'Send a message to the academy team' })

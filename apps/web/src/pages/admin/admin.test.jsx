@@ -10,11 +10,11 @@ import { platformApi } from '../../services/api/platform.js';
 vi.mock('../../services/api/platform.js', () => ({ platformApi: { dashboard: vi.fn() } }));
 
 describe('plan schema', () => {
-  const base = { code: 'growth', name: 'Growth', status: 'ACTIVE', isPublic: true, isDefault: false, trialDays: 0, sortOrder: 1, prices: [{ interval: 'MONTH', currency: 'INR', amount: 2999 }] };
+  const base = { code: 'growth', name: 'Growth', status: 'ACTIVE', isPublic: true, isDefault: false, trialDays: 0, sortOrder: 1, prices: [{ interval: 'SIX_MONTH', currency: 'INR', amount: 16999 }] };
   it('accepts a valid plan and rejects bad codes / currencies', () => {
     expect(planSchema.safeParse(base).success).toBe(true);
     expect(planSchema.safeParse({ ...base, code: 'Growth Plan' }).success).toBe(false);
-    expect(planSchema.safeParse({ ...base, prices: [{ interval: 'MONTH', currency: 'rupee', amount: 1 }] }).success).toBe(false);
+    expect(planSchema.safeParse({ ...base, prices: [{ interval: 'SIX_MONTH', currency: 'rupee', amount: 1 }] }).success).toBe(false);
   });
 });
 

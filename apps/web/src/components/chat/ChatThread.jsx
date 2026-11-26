@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowUp } from 'lucide-react';
 import { Button, EmptyState, ErrorState, Skeleton, toast } from '../ui/index.js';
+import { ensureChatSocket, watchConversation } from '../../services/chatSocket.js';
 import { cn } from '../../utils/cn.js';
 
 const merge = (a, b) => {
@@ -9,8 +10,8 @@ const merge = (a, b) => {
 };
 
 /**
- * Keeps one conversation live: loads the latest page, then long-polls the API for anything newer
- * (the server holds each request until a message arrives or 25 s pass). Stops when unmounted.
+ * Keeps one conversation live: loads the latest page, then prefers Socket.IO for new messages
+ * (with reconnect + catch-up poll). Falls back to HTTP long polling when WS is unavailable.
  */
 export function useChatThread(api, { side, idleDelayMs = 2000, retryDelayMs = 4000 } = {}) {
   const [state, setState] = useState({ loading: true, error: null, messages: [], hasMore: false, status: 'OPEN' });
@@ -21,28 +22,36 @@ export function useChatThread(api, { side, idleDelayMs = 2000, retryDelayMs = 40
     let alive = true;
     const ctrl = new AbortController();
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-    (async () => {
-      setState((s) => ({ ...s, loading: true, error: null }));
-      try {
-        const first = await api.load();
-        if (!alive) return;
-        last.current = first.messages.at(-1)?.id ?? null;
-        setState({ loading: false, error: null, messages: first.messages, hasMore: first.hasMore, status: first.conversation.status });
-        if (first.messages.some((m) => m.side !== side)) api.read().catch(() => undefined);
-      } catch (e) {
-        if (alive) setState((s) => ({ ...s, loading: false, error: e }));
+    let stopWatch = null;
+
+    const applyIncoming = (messages, status) => {
+      if (!alive || !messages?.length) {
+        if (alive && status) setState((s) => (s.status === status ? s : { ...s, status }));
         return;
       }
+      last.current = messages.at(-1).id;
+      setState((s) => ({ ...s, messages: merge(s.messages, messages), ...(status ? { status } : {}) }));
+      if (messages.some((m) => m.side !== side)) api.read().catch(() => undefined);
+    };
+
+    const catchUp = async () => {
+      try {
+        const r = await api.poll(last.current, false, ctrl.signal);
+        if (!alive) return;
+        applyIncoming(r.messages, r.status);
+      } catch {
+        /* ignore; reconnect or poll loop will retry */
+      }
+    };
+
+    const pollLoop = async () => {
       while (alive) {
         const started = Date.now();
         try {
           const r = await api.poll(last.current, true, ctrl.signal);
           if (!alive) return;
-          if (r.messages.length) {
-            last.current = r.messages.at(-1).id;
-            setState((s) => ({ ...s, messages: merge(s.messages, r.messages), status: r.status }));
-            if (r.messages.some((m) => m.side !== side)) api.read().catch(() => undefined);
-          } else {
+          if (r.messages.length) applyIncoming(r.messages, r.status);
+          else {
             setState((s) => (s.status === r.status ? s : { ...s, status: r.status }));
             if (Date.now() - started < 1000) await sleep(idleDelayMs);
           }
@@ -51,13 +60,48 @@ export function useChatThread(api, { side, idleDelayMs = 2000, retryDelayMs = 40
           await sleep(retryDelayMs);
         }
       }
+    };
+
+    (async () => {
+      setState((s) => ({ ...s, loading: true, error: null }));
+      try {
+        const first = await api.load();
+        if (!alive) return;
+        last.current = first.messages.at(-1)?.id ?? null;
+        setState({ loading: false, error: null, messages: first.messages, hasMore: first.hasMore, status: first.conversation.status });
+        if (first.messages.some((m) => m.side !== side)) api.read().catch(() => undefined);
+
+        const conversationId = first.conversation?.id;
+        const socket = conversationId ? await ensureChatSocket() : null;
+        if (!alive) return;
+
+        if (socket && conversationId) {
+          stopWatch = watchConversation(socket, conversationId, {
+            onMessage: (payload) => applyIncoming([payload.message], payload.status),
+            onStatus: (payload) => {
+              if (payload?.status) setState((s) => (s.status === payload.status ? s : { ...s, status: payload.status }));
+            },
+            onReconnect: () => { catchUp(); },
+          });
+          return;
+        }
+        await pollLoop();
+      } catch (e) {
+        if (alive) setState((s) => ({ ...s, loading: false, error: e }));
+      }
     })();
-    return () => { alive = false; ctrl.abort(); };
+
+    return () => {
+      alive = false;
+      ctrl.abort();
+      stopWatch?.();
+    };
   }, [api, side, idleDelayMs, retryDelayMs, tick]);
 
   const send = useCallback(async (body) => {
     const m = await api.send(body);
     setState((s) => ({ ...s, messages: merge(s.messages, [m]), ...(side === 'customer' ? { status: 'OPEN' } : {}) }));
+    if (m?.id) last.current = m.id;
     return m;
   }, [api, side]);
 

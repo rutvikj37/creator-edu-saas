@@ -133,7 +133,18 @@ export function OnboardingPage() {
                 {s.plan ? <Alert tone="success" title={`You're on ${s.plan.name}`}>{s.plan.status === 'TRIALING' ? `Free trial until ${formatDate(s.plan.trialEndsAt)}.` : `Status: ${s.plan.status.toLowerCase()}.`}</Alert> : <Alert tone="error">No plan assigned. Contact support.</Alert>}
                 {current && <p className="text-sm text-muted">Includes up to {current.features.find((f) => f.featureKey === 'courses.max')?.limitValue ?? 'unlimited'} courses and {current.features.find((f) => f.featureKey === 'students.max')?.limitValue ?? 'unlimited'} students.</p>}
                 <div className="grid gap-3 sm:grid-cols-3">
-                  {(plans.data ?? []).map((p) => { const m = p.prices.find((x) => x.interval === 'MONTH'); return <div key={p.id} className={cn('rounded-lg border p-3 text-sm', p.name === s.plan?.name ? 'border-primary-600 bg-primary-50' : 'border-line')}><p className="font-semibold">{p.name}</p><p className="text-muted">{m ? `${formatMoney(m.amount, m.currency)}/mo` : p.trialDays ? `${p.trialDays}-day trial` : 'Free'}</p></div>; })}
+                  {(plans.data ?? []).map((p) => {
+                    const price = p.prices.find((x) => x.interval === 'SIX_MONTH')
+                      ?? p.prices.find((x) => x.interval === 'YEAR')
+                      ?? p.prices.find((x) => x.interval !== 'MONTH');
+                    const period = price?.interval === 'YEAR' ? '/ year' : price?.interval === 'SIX_MONTH' ? '/ 6 months' : '';
+                    return (
+                      <div key={p.id} className={cn('rounded-lg border p-3 text-sm', p.name === s.plan?.name ? 'border-primary-600 bg-primary-50' : 'border-line')}>
+                        <p className="font-semibold">{p.name}</p>
+                        <p className="text-muted">{price ? `${formatMoney(price.amount, price.currency)}${period}` : p.trialDays ? `${p.trialDays}-day trial` : 'Free'}</p>
+                      </div>
+                    );
+                  })}
                 </div>
                 <p className="text-xs text-muted">Compare plans any time in <Link className="underline" to="/creator/billing">Billing</Link>.</p>
               </div>

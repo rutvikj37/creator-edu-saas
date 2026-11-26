@@ -38,36 +38,31 @@ export function planPrice(plan, interval, currency) {
   return plan.prices.find((x) => x.interval === interval && x.currency === currency) ?? null;
 }
 
-/** Each launch plan exposes one active interval (Grow = 6 months, Rise = year). */
+/** Each launch plan exposes one active interval (Grow = 6 months, Rise = year). Monthly is not offered. */
 export function publicPlanPrice(plan, currency) {
   const priced = (plan.prices ?? []).filter((x) => x.currency === currency && Number(x.amount) > 0);
   return (
     priced.find((x) => x.interval === 'SIX_MONTH')
     ?? priced.find((x) => x.interval === 'YEAR')
-    ?? priced.find((x) => x.interval === 'MONTH')
-    ?? priced[0]
+    ?? priced.find((x) => x.interval !== 'MONTH')
     ?? null
   );
 }
 
+/** Interval tabs for pricing UI — Grow (6 months) and Rise (yearly) only; no Monthly. */
 export function preferredIntervals(plans, currency) {
   const has = (iv) => plans.some((p) => planPrice(p, iv, currency));
-  if (has('SIX_MONTH') || has('YEAR')) {
-    return [
-      has('SIX_MONTH') && ['SIX_MONTH', '6 months'],
-      has('YEAR') && ['YEAR', 'Yearly'],
-    ].filter(Boolean);
-  }
-  return [has('MONTH') && ['MONTH', 'Monthly']].filter(Boolean);
+  return [
+    has('SIX_MONTH') && ['SIX_MONTH', '6 months'],
+    has('YEAR') && ['YEAR', 'Yearly'],
+  ].filter(Boolean);
 }
 
 export function yearlySaving(plan, currency) {
   const six = Number(planPrice(plan, 'SIX_MONTH', currency)?.amount ?? 0);
   const y = Number(planPrice(plan, 'YEAR', currency)?.amount ?? 0);
-  if (six > 0 && y > 0 && y < six * 2) return Math.round((1 - y / (six * 2)) * 100);
-  const m = Number(planPrice(plan, 'MONTH', currency)?.amount ?? 0);
-  if (!(m > 0 && y > 0) || y >= m * 12) return null;
-  return Math.round((1 - y / (m * 12)) * 100);
+  if (!(six > 0 && y > 0) || y >= six * 2) return null;
+  return Math.round((1 - y / (six * 2)) * 100);
 }
 
 export function planFeatureLines(plan) {

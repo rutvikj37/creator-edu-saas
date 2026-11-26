@@ -154,13 +154,30 @@ describe('Authentication (e2e)', () => {
 
     it('lists devices and revokes another session', async () => {
       const { body, session: s1 } = await registerCreator(app);
-      const { session: s2 } = await login(app, PLATFORM, body.email, body.password);
+      // Distinct User-Agent = distinct device (same UA would replace the prior session).
+      const { session: s2 } = await login(app, PLATFORM, body.email, body.password, { userAgent: 'OtherDevice/2.0' });
       const list = await authed(app, s1).get('/api/v1/auth/sessions').expect(200);
       expect(list.body.data).toHaveLength(2);
+      expect(list.body.meta).toMatchObject({ page: 1, pageSize: 20, total: 2 });
       const other = list.body.data.find((s: { current: boolean }) => !s.current);
       await authed(app, s1).delete(`/api/v1/auth/sessions/${other.id}`).expect(200);
       await authed(app, s2).get('/api/v1/auth/me').expect(401);
       await authed(app, s1).get('/api/v1/auth/me').expect(200);
+    });
+
+    it('re-login from the same User-Agent replaces the prior device session', async () => {
+      const { body } = await registerCreator(app);
+      const ua = 'SameDevice/1.0 (e2e)';
+      const first = await login(app, PLATFORM, body.email, body.password, { userAgent: ua });
+      expect(first.res.status).toBe(200);
+      const second = await login(app, PLATFORM, body.email, body.password, { userAgent: ua });
+      expect(second.res.status).toBe(200);
+      const list = await authed(app, second.session).get('/api/v1/auth/sessions').expect(200);
+      const forDevice = list.body.data.filter((s: { userAgent: string | null }) => s.userAgent === ua);
+      expect(forDevice).toHaveLength(1);
+      expect(forDevice[0].current).toBe(true);
+      await authed(app, first.session).get('/api/v1/auth/me').expect(401);
+      await authed(app, second.session).get('/api/v1/auth/me').expect(200);
     });
 
     it("cannot revoke someone else's session", async () => {
