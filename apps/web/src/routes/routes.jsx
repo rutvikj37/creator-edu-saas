@@ -316,6 +316,40 @@ export function buildRoutes(surface = getSurface()) {
     { element: <RequireAuth />, children: [{ path: '/account/security', element: <NoWorkspacePage /> }] },
   ];
 
+  // Learner app — academy hosts always; platform host when PLATFORM_STUDENT_LOGIN_TENANT is set.
+  const studentLearnRoutes = {
+    element: <RequireAuth student />,
+    children: [
+      {
+        element: <StudentLayout />,
+        children: [
+          { path: '/learn', element: page(StudentHomePage) },
+          { path: '/learn/account/security', element: page(SecurityPage, { breadcrumbs: [{ label: 'Account' }] }) },
+          { path: '/learn/account/notifications', element: page(NotificationSettingsPage, { breadcrumbs: [{ label: 'Account' }] }) },
+          { path: '/learn/certificates', element: page(StudentCertificatesPage) },
+          { path: '/learn/orders', element: page(StudentOrdersPage) },
+          { path: '/learn/downloads', element: page(DownloadsPage) },
+          { path: '/learn/coaching', element: page(MyCoachingPage) },
+          { path: '/learn/chat', element: page(StudentChatPage) },
+          { path: '/learn/support', element: page(StudentSupportPage) },
+          { path: '/learn/support/:id', element: page(StudentTicketPage) },
+          { path: '/learn/orders/:id', element: page(OrderStatusPage) },
+          { path: '/learn/live', element: page(StudentLivePage) },
+          { path: '/learn/batches', element: page(MyBatchesPage) },
+          { path: '/learn/affiliate', element: page(StudentAffiliatePage) },
+          { path: '/learn/communities', element: page(StudentCommunitiesPage) },
+          { path: '/learn/communities/:id', element: page(CommunityFeedPage) },
+          { path: '/learn/communities/:id/posts/:postId', element: page(CommunityPostPage) },
+        ],
+      },
+      { path: '/learn/courses/:courseId', element: page(PlayerPage) },
+      { path: '/cart/checkout', element: page(CheckoutPage) },
+      { path: '/checkout/offer/:offerId', element: page(CheckoutPage) },
+      { path: '/cart', element: page(CartPage) },
+      { path: '/learn/live/:id', element: page(StudentRoomPage) },
+    ],
+  };
+
   const platform = [
     { path: '/', element: page(PlatformLandingPage) },
     { path: '/pricing', element: page(PlatformLandingPage, { section: 'pricing' }) },
@@ -325,6 +359,7 @@ export function buildRoutes(surface = getSurface()) {
     { element: <RequireAuth allowMfaSetup />, children: [{ path: '/setup-2fa', element: page(MfaSetupPage) }] },
     adminPanelRoutes,
     creatorWorkspaceRoutes,
+    studentLearnRoutes,
     { element: <RequireAuth />, children: [{ path: '/account/security', element: <NoWorkspacePage /> }] },
   ];
 
@@ -357,38 +392,7 @@ export function buildRoutes(surface = getSurface()) {
     ...clientAuthRoutes,
     { element: <RequireAuth allowMfaSetup />, children: [{ path: '/setup-2fa', element: page(MfaSetupPage) }] },
     creatorWorkspaceRoutes,
-    {
-      element: <RequireAuth student />,
-      children: [
-        {
-          element: <StudentLayout />,
-          children: [
-            { path: '/learn', element: page(StudentHomePage) },
-            { path: '/learn/account/security', element: page(SecurityPage, { breadcrumbs: [{ label: 'Account' }] }) },
-            { path: '/learn/account/notifications', element: page(NotificationSettingsPage, { breadcrumbs: [{ label: 'Account' }] }) },
-            { path: '/learn/certificates', element: page(StudentCertificatesPage) },
-            { path: '/learn/orders', element: page(StudentOrdersPage) },
-            { path: '/learn/downloads', element: page(DownloadsPage) },
-            { path: '/learn/coaching', element: page(MyCoachingPage) },
-            { path: '/learn/chat', element: page(StudentChatPage) },
-            { path: '/learn/support', element: page(StudentSupportPage) },
-            { path: '/learn/support/:id', element: page(StudentTicketPage) },
-            { path: '/learn/orders/:id', element: page(OrderStatusPage) },
-            { path: '/learn/live', element: page(StudentLivePage) },
-            { path: '/learn/batches', element: page(MyBatchesPage) },
-            { path: '/learn/affiliate', element: page(StudentAffiliatePage) },
-            { path: '/learn/communities', element: page(StudentCommunitiesPage) },
-            { path: '/learn/communities/:id', element: page(CommunityFeedPage) },
-            { path: '/learn/communities/:id/posts/:postId', element: page(CommunityPostPage) },
-          ],
-        },
-        { path: '/learn/courses/:courseId', element: page(PlayerPage) },
-        { path: '/cart/checkout', element: page(CheckoutPage) },
-        { path: '/checkout/offer/:offerId', element: page(CheckoutPage) },
-        { path: '/cart', element: page(CartPage) },
-        { path: '/learn/live/:id', element: page(StudentRoomPage) },
-      ],
-    },
+    studentLearnRoutes,
   ];
 
   const children = surface === 'academy' ? academy : surface === 'admin' ? admin : platform;

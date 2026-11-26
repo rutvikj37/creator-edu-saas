@@ -25,6 +25,11 @@ describe('validateEnv', () => {
     expect(() => validateEnv({ ...base, SMS_PROVIDER: 'nope' })).toThrow(/SMS_PROVIDER/);
   });
 
+  it('treats blank PLATFORM_STUDENT_LOGIN_TENANT as disabled', () => {
+    expect(validateEnv({ ...base, PLATFORM_STUDENT_LOGIN_TENANT: '' }).PLATFORM_STUDENT_LOGIN_TENANT).toBeUndefined();
+    expect(validateEnv({ ...base, PLATFORM_STUDENT_LOGIN_TENANT: 'techx-courses' }).PLATFORM_STUDENT_LOGIN_TENANT).toBe('techx-courses');
+  });
+
   it('rejects a short JWT secret', () => {
     expect(() => validateEnv({ ...base, JWT_ACCESS_SECRET: 'short' })).toThrow(/JWT_ACCESS_SECRET/);
   });

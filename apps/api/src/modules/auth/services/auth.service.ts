@@ -18,6 +18,7 @@ import { TwoFactorService } from './two-factor.service.js';
 import { PUBLIC_USER_SELECT } from './user-view.js';
 import { AcademyPreferencesService } from '../../../core/settings/academy-preferences.service.js';
 import { normaliseValue, saveFieldValues } from '../../academy/custom-fields.js';
+import { PlatformStudentLoginService } from './platform-student-login.service.js';
 
 const MAX_FAILED_LOGINS = 5;
 const LOCK_MINUTES = 15;
@@ -39,6 +40,7 @@ export class AuthService {
     private readonly events: AppEvents,
     private readonly security: AcademySecurityService,
     private readonly prefs: AcademyPreferencesService,
+    private readonly platformStudents: PlatformStudentLoginService,
   ) {}
 
   /** Creator sign-up: disabled for public users; only Super Admin creates agencies from panel. */
@@ -142,11 +144,22 @@ export class AuthService {
    * Students are looked up in the academy realm. On an academy host, platform staff who are
    * active members of that academy may also sign in (so agencies use their own domain).
    * Student accounts win when both exist for the same email.
+   *
+   * Temporary bridge (PLATFORM_STUDENT_LOGIN_TENANT): on the platform host, if the email is
+   * not a platform user, look up that configured academy's student and issue their TENANT session.
    */
   private async resolveLoginUser(email: string, host: HostRealm) {
     const hostRealmKey = realmKeyOf(host);
     const local = await this.prisma.user.findUnique({ where: { realmKey_email: { realmKey: hostRealmKey, email } } });
     if (local) return { user: local, preferredTenantId: host.kind === 'tenant' && local.realm === 'TENANT' ? host.tenantId : null };
+
+    if (host.kind === 'platform') {
+      const academyId = await this.platformStudents.allowedTenantId();
+      if (!academyId) return null;
+      const student = await this.prisma.user.findUnique({ where: { realmKey_email: { realmKey: academyId, email } } });
+      if (!student || student.realm !== 'TENANT') return null;
+      return { user: student, preferredTenantId: academyId };
+    }
 
     if (host.kind !== 'tenant') return null;
     const staff = await this.prisma.user.findUnique({ where: { realmKey_email: { realmKey: 'platform', email } } });

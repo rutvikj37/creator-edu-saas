@@ -72,6 +72,8 @@ describe('route guards', () => {
   it('computes landing paths per surface and role', () => {
     expect(landingPath(me({ realm: 'TENANT', activeTenantId: null }), 'academy')).toBe('/learn');
     expect(landingPath(me({ realm: 'TENANT', activeTenantId: 't1' }), 'academy')).toBe('/learn');
+    expect(landingPath(me({ realm: 'TENANT' }), 'platform')).toBe('/learn');
+    expect(landingPath(me({ realm: 'TENANT' }), 'admin')).toBe('/account/security');
     expect(landingPath(me({ realm: 'PLATFORM', platformRoles: [] }), 'academy')).toBe('/creator');
     expect(landingPath(me({ platformRoles: ['FINANCE_ADMIN'] }), 'platform')).toBe('/finance');
     expect(landingPath(me({ platformRoles: ['SUPPORT_ADMIN'] }), 'platform')).toBe('/support');

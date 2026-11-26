@@ -13,14 +13,15 @@ import { TwoFactorService } from './services/two-factor.service.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { TenantGuard } from './guards/tenant.guard.js';
 import { PermissionsGuard } from './guards/permissions.guard.js';
+import { PlatformStudentLoginService } from './services/platform-student-login.service.js';
 
 @Module({
   imports: [TenantsModule],
   controllers: [AuthController],
   providers: [
     AuthService, EmailVerificationService, GoogleOAuthService, OtpService, PasswordResetService, PasswordService,
-    SessionService, TokenService, TwoFactorService, JwtAuthGuard, TenantGuard, PermissionsGuard,
+    SessionService, TokenService, TwoFactorService, PlatformStudentLoginService, JwtAuthGuard, TenantGuard, PermissionsGuard,
   ],
-  exports: [SessionService, TokenService, PasswordService, AuthService, JwtAuthGuard, TenantGuard, PermissionsGuard],
+  exports: [SessionService, TokenService, PasswordService, AuthService, PlatformStudentLoginService, JwtAuthGuard, TenantGuard, PermissionsGuard],
 })
 export class AuthModule {}

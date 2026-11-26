@@ -30,6 +30,9 @@ export function realmKeyOf(host: HostRealm): string {
 /**
  * Platform staff sessions are issued with realmKey `platform`, but may refresh/call
  * workspace APIs on their academy's own host when the active tenant matches that host.
+ *
+ * The reverse bridge (configured academy students on the platform host) lives in
+ * PlatformStudentLoginService — keep that allowlist out of this sync helper.
  */
 export function platformStaffAllowedOnHost(auth: Pick<AuthContext, 'realmKey' | 'tenantId'>, host: HostRealm): boolean {
   return auth.realmKey === 'platform' && host.kind === 'tenant' && auth.tenantId === host.tenantId;

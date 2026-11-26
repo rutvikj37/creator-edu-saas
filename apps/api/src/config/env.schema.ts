@@ -17,6 +17,11 @@ export const envSchema = z.object({
   APP_HOST: z.string().min(1),
   /** Dedicated Super Admin host outside the root (e.g. lmsadmin.techxsolutions.io). Optional; admin.<root> is always treated as platform. */
   ADMIN_HOST: z.preprocess((v) => (v === '' ? undefined : v), z.string().min(1).optional()),
+  /**
+   * Temporary: academy slug or verified custom domain whose students may also sign in on the
+   * platform host (e.g. techx-courses or courses.techxsolutions.io). Blank = disabled.
+   */
+  PLATFORM_STUDENT_LOGIN_TENANT: z.preprocess((v) => (v === '' || v == null ? undefined : v), z.string().min(1).optional()),
   API_PORT: z.coerce.number().int().positive().default(4000),
   API_PUBLIC_URL: z.url(),
   WEB_PUBLIC_URL: z.url(),

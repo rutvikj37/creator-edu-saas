@@ -43,7 +43,7 @@ function copyFor(surface) {
   }
   return {
     title: 'Sign in',
-    subtitle: 'Welcome back. Sign in to manage your academy.',
+    subtitle: 'Welcome back. Academy staff manage their workspace; students continue learning here.',
     showForgot: true,
     showGoogle: true,
   };

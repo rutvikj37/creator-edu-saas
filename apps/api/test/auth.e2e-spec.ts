@@ -275,10 +275,39 @@ describe('Authentication (e2e)', () => {
 
       expect((await login(app, tenantHost(b.tenant.slug), email, 'student-password-1')).res.status).toBe(401);
       expect((await login(app, tenantHost(b.tenant.slug), email, 'other-password-22')).res.status).toBe(200);
+      // Without PLATFORM_STUDENT_LOGIN_TENANT, platform host stays platform-realm only.
       expect((await login(app, PLATFORM, email, 'student-password-1')).res.status).toBe(401);
 
       const site = await api(app).get('/api/v1/public/site').set('Host', tenantHost(a.tenant.slug)).expect(200);
       expect(site.body.data).toMatchObject({ name: a.tenant.name, isLive: true });
+    });
+
+    it('lets students of the configured academy sign in on the platform host', async () => {
+      const a = await registerCreator(app);
+      const b = await registerCreator(app);
+      await prisma.tenant.updateMany({ where: { id: { in: [a.tenant.id, b.tenant.id] } }, data: { status: 'ACTIVE' } });
+      const { HostResolverService } = await import('../src/core/tenancy/host-resolver.service.js');
+      await app.get(HostResolverService).invalidate(tenantHost(a.tenant.slug), tenantHost(b.tenant.slug));
+
+      const email = uniqueEmail('lms-bridge');
+      await api(app).post('/api/v1/auth/register/student').set('Host', tenantHost(a.tenant.slug)).send({ fullName: 'Lms Bridge', email, password: 'student-password-1' }).expect(201);
+      await api(app).post('/api/v1/auth/register/student').set('Host', tenantHost(b.tenant.slug)).send({ fullName: 'Other Academy', email, password: 'other-password-22' }).expect(201);
+
+      const { PlatformStudentLoginService } = await import('../src/modules/auth/services/platform-student-login.service.js');
+      const bridge = app.get(PlatformStudentLoginService);
+      bridge.setAllowedTenantIdForTests(a.tenant.id);
+
+      const onPlatform = await login(app, PLATFORM, email, 'student-password-1');
+      expect(onPlatform.res.status).toBe(200);
+      const me = await authed(app, onPlatform.session).get('/api/v1/auth/me').expect(200);
+      expect(me.body.data.realm).toBe('TENANT');
+      expect(me.body.data.activeTenantId).toBe(a.tenant.id);
+      await authed(app, onPlatform.session).get('/api/v1/learn/enrollments').expect(200);
+
+      // Wrong academy's password still fails; other academy students are not eligible on platform.
+      expect((await login(app, PLATFORM, email, 'other-password-22')).res.status).toBe(401);
+      bridge.setAllowedTenantIdForTests(null);
+      expect((await login(app, PLATFORM, email, 'student-password-1')).res.status).toBe(401);
     });
   });
 

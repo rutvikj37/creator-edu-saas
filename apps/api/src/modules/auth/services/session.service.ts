@@ -8,6 +8,7 @@ import { randomToken, sha256 } from '../../../core/crypto/crypto.service.js';
 import { AppException } from '../../../common/errors/app-exception.js';
 import type { AuthContext } from '../../../core/tenancy/request-context.js';
 import { TokenService } from './token.service.js';
+import { PlatformStudentLoginService } from './platform-student-login.service.js';
 import { ERROR_CODES } from '@ce/shared';
 import { HttpStatus } from '@nestjs/common';
 
@@ -44,6 +45,7 @@ export class SessionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tokens: TokenService,
+    private readonly platformStudents: PlatformStudentLoginService,
     config: AppConfig,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {
@@ -123,9 +125,15 @@ export class SessionService {
     });
     if (!session || session.revokedAt || session.expiresAt < new Date()) throw invalid();
     // Platform staff may refresh on their academy host when the active workspace matches that host.
+    // Configured academy students may refresh on the platform host (PLATFORM_STUDENT_LOGIN_TENANT).
+    const studentOnPlatform =
+      expectedRealmKey === 'platform' &&
+      session.user.realm === 'TENANT' &&
+      (await this.platformStudents.allowedTenantId()) === session.user.realmKey;
     const realmOk =
       session.user.realmKey === expectedRealmKey ||
-      (session.user.realmKey === 'platform' && session.activeTenantId === expectedRealmKey);
+      (session.user.realmKey === 'platform' && session.activeTenantId === expectedRealmKey) ||
+      studentOnPlatform;
     if (!realmOk) throw invalid();
     if (session.user.status !== 'ACTIVE' || session.user.deletedAt) {
       await this.revokeFamily(session.familyId, 'user_inactive');

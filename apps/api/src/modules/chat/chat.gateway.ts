@@ -14,6 +14,7 @@ import type { Server, Socket } from 'socket.io';
 import { Public } from '../../common/decorators/public.decorator.js';
 import { platformStaffAllowedOnHost, realmKeyOf, type AuthContext, type HostRealm } from '../../core/tenancy/request-context.js';
 import { HostResolverService } from '../../core/tenancy/host-resolver.service.js';
+import { PlatformStudentLoginService } from '../auth/services/platform-student-login.service.js';
 import { SessionService } from '../auth/services/session.service.js';
 import { TokenService } from '../auth/services/token.service.js';
 import { ChatRealtimeService } from './chat-realtime.service.js';
@@ -41,6 +42,7 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     private readonly hosts: HostResolverService,
     private readonly chat: ChatService,
     private readonly realtime: ChatRealtimeService,
+    private readonly platformStudents: PlatformStudentLoginService,
   ) {}
 
   afterInit(server: Server) {
@@ -94,7 +96,11 @@ export class ChatGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     if (!token) throw new Error('missing token');
     const auth = await this.tokens.verifyAccess(token);
     if (!auth) throw new Error('invalid token');
-    if (auth.realmKey !== realmKeyOf(hostRealm) && !platformStaffAllowedOnHost(auth, hostRealm)) {
+    const hostOk =
+      auth.realmKey === realmKeyOf(hostRealm) ||
+      platformStaffAllowedOnHost(auth, hostRealm) ||
+      (await this.platformStudents.studentAllowedOnPlatformHost(auth, hostRealm));
+    if (!hostOk) {
       throw new Error('host mismatch');
     }
     if (await this.sessions.isRevoked(auth.sessionId)) throw new Error('revoked session');

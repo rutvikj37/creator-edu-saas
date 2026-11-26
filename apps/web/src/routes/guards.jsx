@@ -17,8 +17,9 @@ export function landingPath(me, surface) {
   }
   // Dedicated Super Admin host: no agency panel here — stay on security.
   if (surface === 'admin') return '/account/security';
-  // Learners always land in the student app, even when the session carries a tenant id.
-  if (me.realm === 'TENANT') return surface === 'academy' ? '/learn' : '/account/security';
+  // Learners land in /learn on academy and platform hosts (platform bridge for TechX LMS).
+  // Dedicated Super Admin host has no student UI.
+  if (me.realm === 'TENANT') return surface === 'admin' ? '/account/security' : '/learn';
   // Agency staff signing in on their academy domain (or platform host) land in the creator panel.
   if (me.realm === 'PLATFORM' && me.activeTenantId) return '/creator';
   // Platform accounts can't use the student app (its API is learner-only): academy home instead.

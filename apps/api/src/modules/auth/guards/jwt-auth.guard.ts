@@ -8,10 +8,12 @@ import { AppException } from '../../../common/errors/app-exception.js';
 import { CLS_AUTH, CLS_TENANT_ID, platformStaffAllowedOnHost, realmKeyOf, type AppRequest } from '../../../core/tenancy/request-context.js';
 import { TokenService } from '../services/token.service.js';
 import { SessionService } from '../services/session.service.js';
+import { PlatformStudentLoginService } from '../services/platform-student-login.service.js';
 /**
  * Global, default-deny authentication. Every route requires a valid access token unless
  * marked @Public(). Tokens are host-bound: academy students on that academy's hosts,
- * platform tokens on platform hosts, and platform staff also on their active academy host.
+ * platform tokens on platform hosts, platform staff also on their active academy host,
+ * and (when configured) that academy's students on the platform host.
  */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -20,6 +22,7 @@ export class JwtAuthGuard implements CanActivate {
     private readonly tokens: TokenService,
     private readonly sessions: SessionService,
     private readonly cls: ClsService,
+    private readonly platformStudents: PlatformStudentLoginService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -34,7 +37,11 @@ export class JwtAuthGuard implements CanActivate {
     if (!token) throw AppException.unauthenticated();
     const auth = await this.tokens.verifyAccess(token);
     if (!auth) throw new AppException(ERROR_CODES.INVALID_TOKEN, 'Your session has expired. Please sign in again.', HttpStatus.UNAUTHORIZED);
-    if (auth.realmKey !== realmKeyOf(req.hostRealm) && !platformStaffAllowedOnHost(auth, req.hostRealm)) {
+    const hostOk =
+      auth.realmKey === realmKeyOf(req.hostRealm) ||
+      platformStaffAllowedOnHost(auth, req.hostRealm) ||
+      (await this.platformStudents.studentAllowedOnPlatformHost(auth, req.hostRealm));
+    if (!hostOk) {
       throw AppException.unauthenticated();
     }
     if (await this.sessions.isRevoked(auth.sessionId)) {

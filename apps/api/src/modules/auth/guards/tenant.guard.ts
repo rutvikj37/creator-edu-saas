@@ -28,9 +28,18 @@ export class TenantGuard implements CanActivate {
     const req = context.switchToHttp().getRequest<AppRequest>();
 
     if (scope === 'academy') {
-      if (req.hostRealm?.kind !== 'tenant') throw AppException.notFound();
-      this.cls.set(CLS_TENANT_ID, req.hostRealm.tenantId);
-      return true;
+      if (req.hostRealm?.kind === 'tenant') {
+        this.cls.set(CLS_TENANT_ID, req.hostRealm.tenantId);
+        return true;
+      }
+      // Platform host + configured academy student (PLATFORM_STUDENT_LOGIN_TENANT): tenant
+      // comes from the learner's realm, already host-checked by JwtAuthGuard.
+      const auth = req.auth;
+      if (req.hostRealm?.kind === 'platform' && auth?.realm === 'TENANT' && auth.realmKey) {
+        this.cls.set(CLS_TENANT_ID, auth.realmKey);
+        return true;
+      }
+      throw AppException.notFound();
     }
 
     // workspace — platform app host, or the academy's own domain when the active tenant matches
