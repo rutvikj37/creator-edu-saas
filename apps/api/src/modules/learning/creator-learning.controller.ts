@@ -18,6 +18,7 @@ class EnrollDto { @ApiProperty() @Transform(({ value }) => (typeof value === 'st
 class ReplyDto { @ApiProperty() @Transform(trim) @IsString() @Length(1, 5000) body: string; }
 class ModerateDto { @ApiProperty({ enum: ['hide', 'resolve', 'reopen'] }) @IsIn(['hide', 'resolve', 'reopen']) action: 'hide' | 'resolve' | 'reopen'; }
 class TemplateDto {
+  @ApiPropertyOptional({ enum: ['classic', 'elegant', 'modern', 'formal', 'scholar'] }) @IsOptional() @IsIn(['classic', 'elegant', 'modern', 'formal', 'scholar']) designKey?: string;
   @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @Length(3, 120) title?: string;
   @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @Length(3, 300) bodyText?: string;
   @ApiPropertyOptional() @IsOptional() @Transform(trim) @IsString() @MaxLength(120) signatoryName?: string | null;
@@ -175,6 +176,9 @@ export class CreatorLearningController {
   gradeSubmission(@Param('submissionId') id: string, @Body() dto: GradeSubmissionDto, @CurrentAuth() auth: AuthContext) { return this.assignments.grade(id, dto, auth.userId); }
 
   // certificates
+  @Get('certificates/designs') @RequirePermissions(PERMISSIONS.CERTIFICATES_MANAGE)
+  certificateDesigns() { return this.certificates.designs(); }
+
   @Get('certificates/template') @RequirePermissions(PERMISSIONS.CERTIFICATES_MANAGE)
   template() { return this.certificates.template(); }
 

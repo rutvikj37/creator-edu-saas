@@ -1219,6 +1219,8 @@ model AssignmentSubmission {
 model CertificateTemplate {
   id            String   @id @default(cuid()) @db.Char(25)
   tenantId      String   @unique @db.Char(25)
+  /// Built-in visual design key (classic, elegant, modern, formal, scholar).
+  designKey     String   @default("classic") @db.VarChar(32)
   title         String   @default("Certificate of Completion") @db.VarChar(120)
   bodyText      String   @default("has successfully completed") @db.VarChar(300)
   signatoryName String?  @db.VarChar(120)

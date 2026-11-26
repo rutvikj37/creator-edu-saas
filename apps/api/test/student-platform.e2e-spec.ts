@@ -56,7 +56,10 @@ describe('Student platform (e2e)', () => {
     expect(q3.body.data.questions).toHaveLength(3);
     await authed(app, cs).put(`/api/v1/creator/courses/${course.id}/lessons/${hw.id}/assignment`).send({ instructions: doc('Analyse the dataset.'), maxPoints: 10 }).expect(200);
     await authed(app, cs).patch(`/api/v1/creator/courses/${course.id}`).send({ isFree: true, certificateEnabled: true }).expect(200);
-    await authed(app, cs).put('/api/v1/creator/certificates/template').send({ signatoryName: 'Asha Creator', signatoryRole: 'Founder', accentColor: '#0f766e' }).expect(200);
+    const designs = (await authed(app, cs).get('/api/v1/creator/certificates/designs').expect(200)).body.data;
+    expect(designs.some((d: { key: string }) => d.key === 'classic')).toBe(true);
+    await authed(app, cs).put('/api/v1/creator/certificates/template').send({ designKey: 'elegant', signatoryName: 'Asha Creator', signatoryRole: 'Founder', accentColor: '#0f766e' }).expect(200);
+    expect((await authed(app, cs).get('/api/v1/creator/certificates/template').expect(200)).body.data).toMatchObject({ designKey: 'elegant' });
     await authed(app, cs).post(`/api/v1/creator/courses/${course.id}/publish`).send({}).expect(200);
 
     // Catalog + preview are public

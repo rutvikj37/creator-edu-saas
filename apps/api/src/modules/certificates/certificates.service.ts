@@ -1,7 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { randomBytes, createHash } from 'node:crypto';
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-import QRCode from 'qrcode';
+import { CERTIFICATE_DESIGN_KEYS, resolveCertificateDesign } from '@ce/shared';
 import { AppException } from '../../common/errors/app-exception.js';
 import { AppConfig } from '../../config/app-config.service.js';
 import { PrismaService } from '../../core/prisma/prisma.service.js';
@@ -10,6 +9,7 @@ import { NotificationsService } from '../notifications/notifications.service.js'
 import { TENANT_PRISMA } from '../../core/tenancy/tenancy.module.js';
 import type { TenantPrismaClient } from '../../core/tenancy/tenant-prisma.js';
 import { TenantContext } from '../../core/tenancy/tenant-context.service.js';
+import { renderCertificatePdf } from './certificate-pdf.js';
 
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I
 
@@ -19,15 +19,15 @@ export function certificateNumber(year = new Date().getUTCFullYear()): string {
   return `CE-${year}-${Array.from(bytes, (b) => ALPHABET[b % ALPHABET.length]).join('')}`;
 }
 
-function hexToRgb(hex: string) {
-  const n = parseInt(hex.slice(1), 16);
-  return rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
-}
-
-/** Standard PDF fonts only encode WinAnsi; replace characters they can't draw. */
-function pdfSafe(text: string) {
-  return text.normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^\x20-\x7E -ÿ]/g, '?');
-}
+export type CertificateTemplateUpdate = {
+  designKey?: string;
+  title?: string;
+  bodyText?: string;
+  signatoryName?: string | null;
+  signatoryRole?: string | null;
+  accentColor?: string;
+  showQr?: boolean;
+};
 
 @Injectable()
 export class CertificatesService {
@@ -44,10 +44,17 @@ export class CertificatesService {
     return (await this.db.certificateTemplate.findFirst({})) ?? this.db.certificateTemplate.create({ data: {} as never });
   }
 
-  async updateTemplate(data: { title?: string; bodyText?: string; signatoryName?: string | null; signatoryRole?: string | null; accentColor?: string; showQr?: boolean }, actorUserId: string) {
+  /** Catalog for the creator template chooser. */
+  designs() {
+    return CERTIFICATE_DESIGN_KEYS.map((key) => resolveCertificateDesign(key));
+  }
+
+  async updateTemplate(data: CertificateTemplateUpdate, actorUserId: string) {
     const t = await this.template();
-    const updated = await this.db.certificateTemplate.update({ where: { id: t.id }, data });
-    await this.audit.record({ action: 'certificate.template_update', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'CertificateTemplate', targetId: t.id, after: data });
+    const patch: CertificateTemplateUpdate = { ...data };
+    if (patch.designKey != null) patch.designKey = resolveCertificateDesign(patch.designKey).key;
+    const updated = await this.db.certificateTemplate.update({ where: { id: t.id }, data: patch });
+    await this.audit.record({ action: 'certificate.template_update', tenantId: this.ctx.tenantId, actorUserId, actorRealm: 'PLATFORM', targetType: 'CertificateTemplate', targetId: t.id, after: patch });
     return updated;
   }
 
@@ -85,41 +92,21 @@ export class CertificatesService {
     if (!c) throw AppException.notFound('Certificate not found');
     if (c.status === 'REVOKED') throw AppException.forbidden('This certificate has been revoked.');
     const t = await this.template();
-    const doc = await PDFDocument.create();
-    doc.setTitle(`${t.title} — ${c.recipientName}`);
-    doc.setAuthor(c.academyName);
-    const page = doc.addPage([842, 595]); // A4 landscape
-    const { width, height } = page.getSize();
-    const accent = hexToRgb(t.accentColor);
-    const serif = await doc.embedFont(StandardFonts.TimesRomanBold);
-    const sans = await doc.embedFont(StandardFonts.Helvetica);
-    const sansBold = await doc.embedFont(StandardFonts.HelveticaBold);
-    const center = (text: string, y: number, size: number, font = sans, color = rgb(0.15, 0.18, 0.25)) => {
-      const s = pdfSafe(text);
-      page.drawText(s, { x: (width - font.widthOfTextAtSize(s, size)) / 2, y, size, font, color });
-    };
-    page.drawRectangle({ x: 24, y: 24, width: width - 48, height: height - 48, borderColor: accent, borderWidth: 3 });
-    page.drawRectangle({ x: 34, y: 34, width: width - 68, height: height - 68, borderColor: accent, borderWidth: 0.75, opacity: 0.6 });
-    center(c.academyName.toUpperCase(), height - 100, 14, sansBold, accent);
-    center(t.title, height - 160, 34, serif);
-    center('This is to certify that', height - 210, 13);
-    center(c.recipientName, height - 260, 30, serif, accent);
-    center(t.bodyText, height - 300, 13);
-    center(c.courseTitle, height - 335, 18, sansBold);
-    center(`Issued on ${c.issuedAt.toISOString().slice(0, 10)}`, height - 370, 11);
-    page.drawText(pdfSafe(`Certificate no. ${c.number}`), { x: 60, y: 60, size: 9, font: sans, color: rgb(0.4, 0.45, 0.5) });
-    if (t.signatoryName) {
-      page.drawLine({ start: { x: width - 290, y: 110 }, end: { x: width - 110, y: 110 }, thickness: 0.75, color: rgb(0.4, 0.45, 0.5) });
-      page.drawText(pdfSafe(t.signatoryName), { x: width - 290, y: 94, size: 11, font: sansBold });
-      if (t.signatoryRole) page.drawText(pdfSafe(t.signatoryRole), { x: width - 290, y: 80, size: 9, font: sans, color: rgb(0.4, 0.45, 0.5) });
-    }
-    if (t.showQr) {
-      const png = await QRCode.toBuffer(this.verifyUrl(c.number), { margin: 1, width: 240 });
-      const img = await doc.embedPng(png);
-      page.drawImage(img, { x: 60, y: 80, width: 72, height: 72 });
-      page.drawText('Scan to verify', { x: 62, y: 158, size: 8, font: sans, color: rgb(0.4, 0.45, 0.5) });
-    }
-    return { bytes: await doc.save(), fileName: `certificate-${c.number}.pdf` };
+    return renderCertificatePdf({
+      designKey: t.designKey,
+      title: t.title,
+      bodyText: t.bodyText,
+      signatoryName: t.signatoryName,
+      signatoryRole: t.signatoryRole,
+      accentColor: t.accentColor,
+      showQr: t.showQr,
+      academyName: c.academyName,
+      recipientName: c.recipientName,
+      courseTitle: c.courseTitle,
+      number: c.number,
+      issuedAt: c.issuedAt,
+      verifyUrl: this.verifyUrl(c.number),
+    });
   }
 
   /** Public verification (no tenant context needed: numbers are globally unique). */

@@ -80,6 +80,7 @@ export const creatorLearnApi = {
   assignmentSettings: (courseId, lessonId, body) => http.put(`/creator/courses/${courseId}/lessons/${lessonId}/assignment`, body).then(d),
   submissions: (assignmentId) => http.get(`/creator/assignments/${assignmentId}/submissions`).then(d),
   gradeSubmission: (id, body) => http.post(`/creator/submissions/${id}/grade`, body).then(d),
+  designs: () => http.get('/creator/certificates/designs').then(d),
   template: () => http.get('/creator/certificates/template').then(d),
   updateTemplate: (body) => http.put('/creator/certificates/template', body).then(d),
   certificates: () => http.get('/creator/certificates').then(d),
