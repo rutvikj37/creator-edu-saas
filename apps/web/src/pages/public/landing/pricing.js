@@ -3,7 +3,7 @@ import { formatNumber } from '../../../utils/format.js';
 
 const DEFS = Object.values(FEATURES);
 
-/** Launch marketing bullets (shown on public pricing cards for Grow / Rise). */
+/** Launch marketing bullets for Grow / Rise pricing cards. */
 export const LAUNCH_MODULES = [
   'Unlimited Contacts',
   'Unlimited Admin Accounts',
@@ -12,11 +12,10 @@ export const LAUNCH_MODULES = [
   'Third Party Integrations',
   'Unlimited Products',
   'Custom domains',
-  'AI custom pages',
   'White label',
 ];
 
-/** Modules for a plan: Rise includes white label; Grow lists everything except white label. */
+/** Rise includes white label; Grow shows the rest. */
 export function launchModulesFor(plan) {
   const code = plan?.code;
   if (code === 'rise') return LAUNCH_MODULES;
@@ -31,7 +30,6 @@ export function intervalLabel(interval) {
   return String(interval || '').toLowerCase();
 }
 
-/** The currency to quote: rupees when any plan has a rupee price, otherwise the first one found. */
 export function pricingCurrency(plans) {
   const all = plans.flatMap((p) => p.prices.map((x) => x.currency));
   return all.includes('INR') ? 'INR' : all[0] ?? null;
@@ -46,17 +44,12 @@ export function publicPlanPrice(plan, currency) {
   return planPrice(plan, 'YEAR', currency) ?? plan.prices.find((x) => x.currency === currency && Number(x.amount) > 0) ?? null;
 }
 
-/** @deprecated Kept for older callers; launch UI no longer toggles intervals. */
 export function preferredIntervals(plans, currency) {
   const has = (iv) => plans.some((p) => planPrice(p, iv, currency));
   if (has('YEAR')) return [['YEAR', 'Yearly']];
-  return [
-    has('MONTH') && ['MONTH', 'Monthly'],
-    has('YEAR') && ['YEAR', 'Yearly'],
-  ].filter(Boolean);
+  return [has('MONTH') && ['MONTH', 'Monthly']].filter(Boolean);
 }
 
-/** Whole-percent saving of yearly vs twelve monthly payments when both exist. */
 export function yearlySaving(plan, currency) {
   const m = Number(planPrice(plan, 'MONTH', currency)?.amount ?? 0);
   const y = Number(planPrice(plan, 'YEAR', currency)?.amount ?? 0);
@@ -64,7 +57,6 @@ export function yearlySaving(plan, currency) {
   return Math.round((1 - y / (m * 12)) * 100);
 }
 
-/** Readable feature lines for a plan, in the registry's order. Disabled flags are left out. */
 export function planFeatureLines(plan) {
   const launch = launchModulesFor(plan);
   if (launch) return launch;
