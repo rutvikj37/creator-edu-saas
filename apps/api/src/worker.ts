@@ -9,4 +9,11 @@ async function bootstrap() {
   app.enableShutdownHooks();
   app.get(Logger).log('Worker started');
 }
-await bootstrap();
+
+try {
+  await bootstrap();
+} catch (err) {
+  // Nest may leave Redis/Prisma handles open after a DI failure; exit so pm2 restarts instead of a zombie with no processors.
+  console.error(err);
+  process.exit(1);
+}

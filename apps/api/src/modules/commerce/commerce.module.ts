@@ -34,7 +34,16 @@ const SERVICES = [SettlementsService, PaymentHttp, ...PROVIDER_CLASSES, GatewayS
 })
 export class CommerceModule {}
 
-/** Razorpay commerce: worker side (webhook processing, reconciliation).
- *  The worker doesn't load the HTTP-only FilesModule, so DigitalProductsService's FilesService is provided here. */
-@Module({ providers: [...SERVICES, FilesService, WebhooksProcessor, CommerceProcessor, BillingProcessor, CommerceScheduler] })
+/**
+ * Razorpay commerce: worker side (webhook processing, reconciliation).
+ * The worker doesn't load the HTTP-only FilesModule / AuthModule, so providers that OrdersService
+ * (and DigitalProductsService) need — FilesService, PasswordService, AccountCredentialsService —
+ * are listed here. Omitting AccountCredentialsService crashes worker boot and stalls all email.
+ */
+export const COMMERCE_WORKER_PROVIDERS = [
+  ...SERVICES, FilesService, PasswordService, AccountCredentialsService,
+  WebhooksProcessor, CommerceProcessor, BillingProcessor, CommerceScheduler,
+];
+
+@Module({ providers: COMMERCE_WORKER_PROVIDERS })
 export class CommerceWorkerModule {}
