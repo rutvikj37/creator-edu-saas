@@ -25,6 +25,9 @@ export const publicName = (full: string | null | undefined) => {
  * each, editable); only published reviews count towards the average. The academy can reply and
  * hide abusive reviews (with a reason the author sees), but cannot edit what students wrote.
  */
+import { AcademyPreferencesService } from '../../core/settings/academy-preferences.service.js';
+import { MailService } from '../../core/mail/mail.service.js';
+import { emailTemplates } from '../../core/mail/templates.js';
 @Injectable()
 export class ReviewsService {
   constructor(
@@ -32,7 +35,24 @@ export class ReviewsService {
     private readonly prisma: PrismaService,
     private readonly ctx: TenantContext,
     private readonly audit: AuditService,
+    private readonly prefs: AcademyPreferencesService,
+    private readonly mail: MailService,
   ) {}
+
+  /** Settings → User experience: email the academy owners and admins about a new review. */
+  private async notifyNewReview(tenantId: string, courseId: string, userId: string, rating: number, title: string | null) {
+    if (!(await this.prefs.get(tenantId, 'experience')).reviewNotifications) return;
+    const [course, learner, tenant, admins] = await Promise.all([
+      this.db.course.findFirst({ where: { id: courseId }, select: { title: true } }),
+      this.prisma.user.findUnique({ where: { id: userId }, select: { fullName: true } }),
+      this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }),
+      this.prisma.tenantMember.findMany({ where: { tenantId, status: 'ACTIVE', role: { key: { in: ['OWNER', 'ADMIN'] } } }, select: { user: { select: { email: true } } }, take: 10 }),
+    ]);
+    const lines = [`${learner?.fullName ?? 'A learner'} rated ${course?.title ?? 'a course'} ${rating} out of 5.`, ...(title ? [`“${title}”`] : []), 'You can reply to it or hide it from Ratings & reviews.'];
+    for (const a of admins) {
+      await this.mail.send({ to: a.user.email, tenantId, tag: 'review-alert', ...emailTemplates.billingNotice({ brand: tenant?.name ?? 'Your academy', subject: `New ${rating}★ review on ${course?.title ?? 'your course'}`, heading: 'New review', lines }) });
+    }
+  }
 
   /** Average, count and distribution of published ratings for each course id. */
   async summaries(courseIds: string[]) {
@@ -74,6 +94,7 @@ export class ReviewsService {
     const r = existing
       ? await this.db.courseReview.update({ where: { id: existing.id }, data })
       : await this.db.courseReview.create({ data: { courseId, userId, ...data } as never });
+    if (!existing) await this.notifyNewReview(r.tenantId, courseId, userId, r.rating, r.title).catch(() => undefined);
     return this.ownView(r);
   }
 

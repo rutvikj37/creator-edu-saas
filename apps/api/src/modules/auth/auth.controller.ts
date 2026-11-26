@@ -22,6 +22,7 @@ import { assertCsrf, clearSessionCookies, readRefreshToken, setSessionCookies } 
 import { AuthService } from './services/auth.service.js';
 import { EmailVerificationService } from './services/email-verification.service.js';
 import { GoogleOAuthService } from './services/google-oauth.service.js';
+import { AcademyPreferencesService } from '../../core/settings/academy-preferences.service.js';
 import { OtpService } from './services/otp.service.js';
 import { PasswordResetService } from './services/password-reset.service.js';
 import { PasswordService } from './services/password.service.js';
@@ -44,6 +45,7 @@ export class AuthController {
     private readonly otp: OtpService,
     private readonly twoFactor: TwoFactorService,
     private readonly google: GoogleOAuthService,
+    private readonly prefs: AcademyPreferencesService,
     private readonly passwords: PasswordService,
     private readonly authz: AuthzService,
     private readonly prisma: PrismaService,
@@ -342,13 +344,18 @@ export class AuthController {
   @Public()
   @Get('providers')
   @ApiOperation({ summary: 'Which sign-in providers are configured' })
-  providers() {
-    return { google: this.google.isConfigured(), sms: this.sms.isConfigured() };
+  async providers(@Req() req: AppRequest) {
+    const host = req.hostRealm;
+    // An academy can switch "Continue with Google" off (Settings → Signup & login).
+    const allowed = host?.kind !== 'tenant' || (await this.prefs.get(host.tenantId, 'signup')).googleEnabled;
+    return { google: this.google.isConfigured() && allowed, sms: this.sms.isConfigured() };
   }
 
   @Public()
   @Get('google/start')
   async googleStart(@Req() req: AppRequest, @Res() res: Response) {
+    const host = this.host(req);
+    if (host.kind === 'tenant' && !(await this.prefs.get(host.tenantId, 'signup')).googleEnabled) throw AppException.notFound();
     res.redirect(302, await this.google.authorizationUrl(realmKeyOf(this.host(req)), this.origin(req)));
   }
 

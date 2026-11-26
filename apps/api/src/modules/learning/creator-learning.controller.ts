@@ -32,6 +32,20 @@ class StudentsQueryDto extends PaginationQueryDto {
   @ApiPropertyOptional({ description: 'Signed in on or after this day' }) @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) activeFrom?: string;
   @ApiPropertyOptional({ description: 'true = never signed in' }) @IsOptional() @IsIn(['true']) neverSignedIn?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @Length(25, 25) courseId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @Length(25, 25) membershipPlanId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsIn(['active', 'expired']) membershipStatus?: 'active' | 'expired';
+  @ApiPropertyOptional() @IsOptional() @IsString() @Length(25, 25) coachingProgramId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @Length(25, 25) communityId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @Length(25, 25) webinarId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsIn(['yes', 'no']) verifiedEmail?: 'yes' | 'no';
+  @ApiPropertyOptional() @IsOptional() @IsIn(['yes', 'no']) verifiedMobile?: 'yes' | 'no';
+  @ApiPropertyOptional() @IsOptional() @IsIn(['yes', 'no']) deactivated?: 'yes' | 'no';
+  @ApiPropertyOptional({ description: 'How the account started' }) @IsOptional() @IsIn(['website', 'checkout', 'google', 'added']) source?: 'website' | 'checkout' | 'google' | 'added';
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(60) utmSource?: string;
+  @ApiPropertyOptional() @IsOptional() @IsIn(['yes', 'no']) marketingConsent?: 'yes' | 'no';
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(60) tag?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @Length(25, 25) customFieldId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(200) customValue?: string;
 }
 class RevokeDto { @ApiProperty() @Transform(trim) @IsString() @Length(3, 255) reason: string; }
 class StudentOptionsDto {
@@ -64,6 +78,9 @@ export class CreatorLearningController {
     private readonly assignments: AssignmentsService,
     private readonly certificates: CertificatesService,
   ) {}
+
+  @Get('students/filter-options') @RequirePermissions(PERMISSIONS.STUDENTS_READ)
+  studentFilterOptions() { return this.svc.studentFilterOptions(); }
 
   @Get('students') @RequirePermissions(PERMISSIONS.STUDENTS_READ)
   students(@Query() q: StudentsQueryDto) { return this.svc.students(q); }

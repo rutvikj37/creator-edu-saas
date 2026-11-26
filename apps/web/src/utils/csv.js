@@ -46,3 +46,13 @@ export function csvToStudents(rows) {
 }
 
 export const STUDENT_CSV_TEMPLATE = 'name,email,phone\nPriya Sharma,priya@example.com,+919876543210\nRahul Verma,rahul@example.com,\n';
+
+/** Builds a CSV (RFC 4180 quoting) from a header row and data rows; values that look like formulas are neutralised. */
+export function toCsv(header, rows) {
+  const cell = (v) => {
+    let t = v === null || v === undefined ? '' : String(v);
+    if (/^[=+\-@]/.test(t)) t = `'${t}`;
+    return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  };
+  return [header, ...rows].map((r) => r.map(cell).join(',')).join('\r\n');
+}

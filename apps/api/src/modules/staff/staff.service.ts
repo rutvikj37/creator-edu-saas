@@ -47,8 +47,10 @@ export class StaffService {
       this.db.staffInvitation.findMany({ where: { acceptedAt: null, revokedAt: null, expiresAt: { gt: new Date() } }, orderBy: { createdAt: 'desc' } }),
     ]);
     const roles = await this.prisma.role.findMany({ where: { id: { in: invitations.map((i) => i.roleId) } }, select: { id: true, key: true, name: true } });
+    // Courses each member teaches (Instructors view lists these and anyone with the instructor role).
+    const teaching = await this.db.courseInstructor.groupBy({ by: ['userId'], where: { userId: { in: members.map((m) => m.user.id) }, course: { deletedAt: null } }, _count: { _all: true } });
     return {
-      members,
+      members: members.map((m) => ({ ...m, courseCount: teaching.find((t) => t.userId === m.user.id)?._count._all ?? 0 })),
       invitations: invitations.map(({ tokenHash, ...i }) => ({ ...i, role: roles.find((r) => r.id === i.roleId) })),
       assignableRoles: (await this.prisma.role.findMany({ where: { OR: [{ uniqueKey: { in: ASSIGNABLE_ROLES.map((k) => `system:${k}`) } }, { tenantId: this.ctx.requireTenantId(), isSystem: false }] }, select: { key: true, name: true, isSystem: true }, orderBy: [{ isSystem: 'desc' }, { name: 'asc' }] })).map((r) => ({ key: r.key, name: r.name, custom: !r.isSystem })),
     };

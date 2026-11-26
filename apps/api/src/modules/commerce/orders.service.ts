@@ -130,6 +130,7 @@ export function fmtMoney(minor: number, currency: string) {
 
 import { financialYear, invoiceNumber } from './invoice-number.js';
 import { AccountCredentialsService } from '../auth/services/account-credentials.service.js';
+import { AcademyPreferencesService } from '../../core/settings/academy-preferences.service.js';
 
 /** User id for quotes on the checkout page before sign-in: matches no user, so nothing counts as owned or redeemed. */
 export const GUEST_BUYER = '';
@@ -173,6 +174,7 @@ export class OrdersService {
     private readonly coaching: CoachingService,
     private readonly funnel: FunnelService,
     private readonly credentials: AccountCredentialsService,
+    private readonly prefs: AcademyPreferencesService,
   ) {}
 
   // ── views ─────────────────────────────────────────────────
@@ -735,6 +737,8 @@ export class OrdersService {
     await this.audit.record({ action: 'order.paid', tenantId, actorRealm: 'SYSTEM', targetType: 'Order', targetId: order.id, after: { number: order.number, total: order.totalAmount.toString(), paymentId: paid?.result.providerPaymentId ?? null } });
     await this.events.emit('order.paid', { tenantId, userId: order.userId, orderId: order.id, courseIds: grantedCourses(order.items), total: order.totalAmount.toString(), currency: order.currency });
     await this.notifications.notify({ userId: order.userId, tenantId, category: 'orders', title: 'Purchase confirmed', body: `You now have access to ${order.items.map((i) => i.title).join(', ')}.`, link: '/learn', brand: tenant.name, skipEmail: true }).catch(() => undefined);
+    // Settings → Communications: a heads-up to the academy for every successful purchase.
+    await this.purchaseAlert(tenantId, tenant.name, order, billing, q.total).catch((e) => this.logger.warn({ err: (e as Error).message }, 'purchase alert failed'));
     // Bought at guest checkout: the account has no password yet, so generate one and email the login details.
     if (opts.notify !== false) {
       await this.credentials.sendIfPasswordless(tenantId, order.userId, order.items.map((i) => i.title));
@@ -747,6 +751,13 @@ export class OrdersService {
     }
     for (const t of done.tickets) await this.sendTicket(tenantId, order.userId, t.liveClassId, t.code, tenant.name, origin).catch((e) => this.logger.warn({ err: (e as Error).message }, 'webinar ticket email failed'));
     return true;
+  }
+
+  private async purchaseAlert(tenantId: string, brand: string, order: { number: string; currency: string; items: { title: string }[] }, billing: Record<string, string | null>, totalMinor: number) {
+    const to = (await this.prefs.get(tenantId, 'communications')).purchaseAlertEmails;
+    if (!to.length) return;
+    const lines = [`Order ${order.number} — ${fmtMoney(totalMinor, order.currency)}`, `Buyer: ${billing.name ?? ''} ${billing.email ? `(${billing.email})` : ''}`.trim(), `Items: ${order.items.map((i) => i.title).join(', ')}`];
+    for (const email of to) await this.mail.send({ to: email, tenantId, tag: 'purchase-alert', ...emailTemplates.billingNotice({ brand, subject: `New purchase: ${order.items[0]?.title ?? order.number}`, heading: 'You made a sale', lines }) });
   }
 
   /** Upsells in the order count as accepted; reminded orders for the same items count as recovered. */

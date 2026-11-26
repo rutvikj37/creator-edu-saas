@@ -12,6 +12,8 @@ export const catalogApi = {
 export const learnApi = {
   enrollments: () => http.get('/learn/enrollments').then(d),
   enroll: (courseId) => http.post(`/learn/courses/${courseId}/enroll`).then(d),
+  customFields: () => http.get('/learn/custom-fields').then(d),
+  saveCustomFields: (values) => http.put('/learn/custom-fields', { values }).then(d),
   player: (courseId) => http.get(`/learn/courses/${courseId}/player`).then(d),
   lesson: (id) => http.get(`/learn/lessons/${id}`).then(d),
   position: (id, positionSeconds) => http.put(`/learn/lessons/${id}/position`, { positionSeconds }).then(d),
@@ -56,6 +58,7 @@ export const creatorLearnApi = {
   quizReviews: (params) => http.get('/creator/assessments/quiz-attempts', { params }).then(d),
   allSubmissions: (params) => http.get('/creator/assessments/submissions', { params }).then(d),
   students: (params) => http.get('/creator/students', { params }).then((r) => ({ items: r.data, meta: r.meta })),
+  studentFilterOptions: () => http.get('/creator/students/filter-options').then(d),
   student: (id) => http.get(`/creator/students/${id}`).then(d),
   addStudent: (body) => http.post('/creator/students', body).then(d),
   importStudents: (body) => http.post('/creator/students/import', body).then(d),

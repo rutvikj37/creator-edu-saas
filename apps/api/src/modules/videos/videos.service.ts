@@ -42,13 +42,16 @@ export class VideosService {
   ) {}
 
   private async view(v: NonNullable<Awaited<ReturnType<TenantPrismaClient['videoAsset']['findFirst']>>>) {
-    const [file, lessons, backup, course] = await Promise.all([
+    const [file, lessons, backup, course, session] = await Promise.all([
       v.sourceFileId ? this.db.fileAsset.findFirst({ where: { id: v.sourceFileId }, select: { fileName: true, sizeBytes: true, mimeType: true } }) : null,
       this.db.courseLesson.findMany({ where: { videoAssetId: v.id }, select: { id: true, title: true, course: { select: { id: true, title: true } } } }),
       this.db.videoBackup.findFirst({ where: { videoAssetId: v.id }, select: { status: true, completedAt: true, errorMessage: true } }),
       v.courseId ? this.db.course.findFirst({ where: { id: v.courseId }, select: { id: true, title: true } }) : null,
+      // A recording of a live class or webinar session (asset library "Webinar" / "Live recording" filters).
+      this.db.liveSession.findFirst({ where: { videoAssetId: v.id }, select: { startsAt: true, liveClassId: true } }),
     ]);
-    return serializeVideo(v, { file: file && { ...file, sizeBytes: Number(file.sizeBytes) }, usedIn: lessons, backup, course });
+    const live = session ? await this.db.liveClass.findFirst({ where: { id: session.liveClassId }, select: { id: true, title: true, kind: true } }) : null;
+    return serializeVideo(v, { file: file && { ...file, sizeBytes: Number(file.sizeBytes) }, usedIn: lessons, backup, course, liveRecording: live && { liveClassId: live.id, title: live.title, kind: live.kind, startsAt: session!.startsAt } });
   }
 
   async list(q: { status?: string; courseId?: string; q?: string } = {}) {
@@ -88,10 +91,11 @@ export class VideosService {
   }
 
   /** Title, duration (storage videos) and lesson assignment. Assigning requires a READY video. */
-  async update(id: string, dto: { title?: string; durationSeconds?: number | null; courseId?: string | null; lessonId?: string | null }, actorUserId?: string) {
+  async update(id: string, dto: { title?: string; durationSeconds?: number | null; courseId?: string | null; lessonId?: string | null; tags?: string[] }, actorUserId?: string) {
     const v = await this.get(id);
     const data: Record<string, unknown> = {};
     if (dto.title !== undefined) data.title = dto.title;
+    if (dto.tags !== undefined) data.tags = [...new Set(dto.tags.map((t) => t.trim().toLowerCase()).filter(Boolean))].slice(0, 10);
     if (dto.durationSeconds !== undefined && v.provider === 'STORAGE') data.durationSeconds = dto.durationSeconds;
     if (dto.lessonId !== undefined || dto.courseId !== undefined) {
       if (dto.lessonId) {

@@ -21,7 +21,11 @@ export class MailTransport {
   }
 
   async deliver(job: EmailJob): Promise<string> {
-    const info = await this.transport.sendMail({ from: this.config.get('MAIL_FROM'), to: job.to, subject: job.subject, html: job.html, text: job.text, headers: job.headers });
+    const base = this.config.get('MAIL_FROM');
+    // The academy's sender name replaces the display name; the sending address stays the platform's verified one.
+    const address = /<([^>]+)>/.exec(base)?.[1] ?? base;
+    const from = job.fromName ? { name: job.fromName.replace(/["<>\r\n]/g, '').slice(0, 80), address } : base;
+    const info = await this.transport.sendMail({ from, to: job.to, subject: job.subject, html: job.html, text: job.text, headers: job.headers, ...(job.replyTo ? { replyTo: job.replyTo } : {}) });
     this.logger.log({ tag: job.tag, messageId: info.messageId }, 'email sent');
     return info.messageId;
   }

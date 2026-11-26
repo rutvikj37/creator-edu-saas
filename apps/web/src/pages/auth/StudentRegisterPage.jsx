@@ -12,6 +12,7 @@ import { Button, Input, Skeleton } from '../../components/ui/index.js';
 import { academyApi, authApi } from '../../services/api/auth.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { applyApiErrors } from '../../utils/forms.js';
+import { CustomFieldInputs, missingCustomFields } from '../../components/forms/CustomFieldInputs.jsx';
 
 const schema = z.object({
   fullName: z.string().trim().min(2, 'Enter your full name').max(120),
@@ -26,6 +27,10 @@ export function StudentRegisterPage() {
   const next = params.get('next');
   const site = useQuery({ queryKey: ['brand', 'academy'], queryFn: academyApi.site, staleTime: 5 * 60_000 });
   const [error, setError] = useState(null);
+  const [answers, setAnswers] = useState({});
+  const [fieldErrors, setFieldErrors] = useState({});
+  const fields = site.data?.signup?.fields ?? [];
+  const strict = Boolean(site.data?.signup?.securePasswordPolicy);
   const { register, handleSubmit, setError: setFieldError, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(schema),
     defaultValues: { fullName: '', email: '', password: '' },
@@ -33,12 +38,24 @@ export function StudentRegisterPage() {
 
   const onSubmit = handleSubmit(async (values) => {
     setError(null);
+    // Academy settings: custom sign-up fields and the secure password rule.
+    const missing = missingCustomFields(fields, answers);
+    setFieldErrors(missing);
+    if (Object.keys(missing).length) return;
+    if (strict && !/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(values.password)) {
+      setFieldError('password', { message: 'Use an uppercase letter, a lowercase letter and a number' });
+      return;
+    }
     try {
-      await auth.establish(await authApi.registerStudent(values));
+      await auth.establish(await authApi.registerStudent({ ...values, ...(fields.length ? { customFields: answers } : {}) }));
       navigate(next && next.startsWith('/') && !next.startsWith('//') ? next : '/learn', { replace: true });
     } catch (e) {
       if (e.code === 'CONFLICT' || e.code === 'FORBIDDEN') setError(e.message);
-      else applyApiErrors(e, setFieldError, ['fullName', 'email', 'password']);
+      else {
+        const custom = Object.fromEntries((e.details ?? []).filter((d) => d.field?.startsWith('customFields.')).map((d) => [d.field.slice(13), d.message]));
+        if (Object.keys(custom).length) setFieldErrors(custom);
+        applyApiErrors(e, setFieldError, ['fullName', 'email', 'password']);
+      }
     }
   });
 
@@ -59,7 +76,8 @@ export function StudentRegisterPage() {
             {error && <Alert tone="error">{error}</Alert>}
             <Input label="Full name" autoComplete="name" required {...register('fullName')} error={errors.fullName?.message} />
             <Input label="Email" type="email" autoComplete="email" required {...register('email')} error={errors.email?.message} />
-            <PasswordInput label="Password" autoComplete="new-password" required hint="At least 10 characters." {...register('password')} error={errors.password?.message} />
+            <PasswordInput label="Password" autoComplete="new-password" required hint={strict ? 'At least 10 characters, with an uppercase letter, a lowercase letter and a number.' : 'At least 10 characters.'} {...register('password')} error={errors.password?.message} />
+            <CustomFieldInputs fields={fields} values={answers} onChange={setAnswers} errors={fieldErrors} />
             <Button type="submit" className="w-full" loading={isSubmitting}>Create account</Button>
           </form>
         </>

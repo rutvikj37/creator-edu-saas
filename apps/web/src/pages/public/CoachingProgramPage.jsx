@@ -1,3 +1,4 @@
+import { accountPath } from '../../components/site/CookieNotice.jsx';
 import { useNavigate, useParams } from 'react-router';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { CalendarCheck, Clock, Users } from 'lucide-react';
@@ -25,7 +26,7 @@ export function CoachingProgramPage() {
   const p = q.data;
   const color = site.data?.theme?.primaryColor;
   const owned = p && (mine.data ?? []).some((m) => m.id === p.id);
-  const login = () => navigate(`/register?next=${encodeURIComponent(`/coaching/${slug}`)}`);
+  const login = () => navigate(accountPath(site.data, `/coaching/${slug}`));
   return (
     <div className="min-h-dvh bg-surface-2" style={{ fontFamily: site.data?.theme?.fontBody }}>
       <AcademyHeader site={site.data} />

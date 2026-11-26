@@ -11,6 +11,7 @@ import { SessionService } from './session.service.js';
 
 const TTL_MS = 30 * 60_000;
 
+import { AcademyPreferencesService } from '../../../core/settings/academy-preferences.service.js';
 @Injectable()
 export class PasswordResetService {
   private readonly logger = new Logger(PasswordResetService.name);
@@ -21,6 +22,7 @@ export class PasswordResetService {
     private readonly passwords: PasswordService,
     private readonly sessions: SessionService,
     private readonly audit: AuditService,
+    private readonly prefs: AcademyPreferencesService,
   ) {}
 
   /** Always succeeds from the caller's perspective so accounts cannot be enumerated. */
@@ -68,6 +70,7 @@ export class PasswordResetService {
         throw new AppException(ERROR_CODES.INVALID_TOKEN, 'This reset link is invalid or has expired. Request a new one.', HttpStatus.BAD_REQUEST);
       }
     }
+    if (row.user.realm === 'TENANT') await this.prefs.assertPasswordAllowed(row.user.tenantId, newPassword);
     const passwordHash = await this.passwords.hash(newPassword);
     await this.prisma.$transaction([
       this.prisma.passwordReset.update({ where: { id: row.id }, data: { usedAt: new Date() } }),

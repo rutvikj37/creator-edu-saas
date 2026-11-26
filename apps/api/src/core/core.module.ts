@@ -12,9 +12,10 @@ import { TenancyModule } from './tenancy/tenancy.module.js';
 import { StorageModule } from './storage/storage.module.js';
 import { AppEventsModule } from './events/app-events.service.js';
 import { AcademySecurityModule } from './security/academy-security.service.js';
+import { AcademyPreferencesModule } from './settings/academy-preferences.service.js';
 
 /** Infrastructure shared by the API and the worker processes. */
 @Module({
-  imports: [AppConfigModule, AppLoggerModule, PrismaModule, RedisModule, QueueModule, AuditModule, CryptoModule, MailModule, SmsModule, TenancyModule, StorageModule, AppEventsModule, AcademySecurityModule],
+  imports: [AppConfigModule, AppLoggerModule, PrismaModule, RedisModule, QueueModule, AuditModule, CryptoModule, MailModule, SmsModule, TenancyModule, StorageModule, AppEventsModule, AcademySecurityModule, AcademyPreferencesModule],
 })
 export class CoreModule {}

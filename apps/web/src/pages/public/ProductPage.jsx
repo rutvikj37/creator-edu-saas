@@ -1,3 +1,4 @@
+import { accountPath } from '../../components/site/CookieNotice.jsx';
 import { useNavigate, useParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FileDown, Package, ShoppingCart } from 'lucide-react';
@@ -28,7 +29,7 @@ export function ProductPage() {
   const p = q.data;
   const color = site.data?.theme?.primaryColor;
   const owned = p && (mine.data ?? []).some((m) => m.id === p.id);
-  const login = () => navigate(`/register?next=${encodeURIComponent(`/products/${slug}`)}`);
+  const login = () => navigate(accountPath(site.data, `/products/${slug}`));
   return (
     <div className="min-h-dvh bg-surface-2" style={{ fontFamily: site.data?.theme?.fontBody }}>
       <AcademyHeader site={site.data} />

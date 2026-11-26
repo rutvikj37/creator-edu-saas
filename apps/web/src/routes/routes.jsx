@@ -75,6 +75,10 @@ const SettlementsPage = lazyNamed(() => import('../pages/creator/SettlementsPage
 const ReportsPage = lazyNamed(() => import('../pages/creator/ReportsPage.jsx'), 'ReportsPage');
 const AcademySecurityPage = lazyNamed(() => import('../pages/creator/settings/SecurityPage.jsx'), 'SecurityPage');
 const TaxInvoicingPage = lazyNamed(() => import('../pages/creator/settings/TaxInvoicingPage.jsx'), 'TaxInvoicingPage');
+const CommunicationsPage = lazyNamed(() => import('../pages/creator/settings/PreferencesPages.jsx'), 'CommunicationsPage');
+const CustomFieldsPage = lazyNamed(() => import('../pages/creator/settings/PreferencesPages.jsx'), 'CustomFieldsPage');
+const UserExperiencePage = lazyNamed(() => import('../pages/creator/settings/PreferencesPages.jsx'), 'UserExperiencePage');
+const SignupLoginPage = lazyNamed(() => import('../pages/creator/settings/PreferencesPages.jsx'), 'SignupLoginPage');
 const CoachingPage = lazyNamed(() => import('../pages/creator/CoachingPage.jsx'), 'CoachingPage');
 const CoachingCreatePage = lazyNamed(() => import('../pages/creator/CoachingCreatePage.jsx'), 'CoachingCreatePage');
 const CoachingProgramPage = lazyNamed(() => import('../pages/public/CoachingProgramPage.jsx'), 'CoachingProgramPage');
@@ -202,6 +206,10 @@ const creatorWorkspaceRoutes = {
         { path: '/creator/coaching', element: page(CoachingPage) },
         { path: '/creator/settings/tax-invoicing', element: page(TaxInvoicingPage) },
         { path: '/creator/settings/security', element: page(AcademySecurityPage) },
+        { path: '/creator/settings/communications', element: page(CommunicationsPage) },
+        { path: '/creator/settings/custom-fields', element: page(CustomFieldsPage) },
+        { path: '/creator/settings/user-experience', element: page(UserExperiencePage) },
+        { path: '/creator/settings/signup-login', element: page(SignupLoginPage) },
         { path: '/creator/coaching/new', element: page(CoachingCreatePage) },
         { path: '/creator/coaching/:id/edit', element: page(CoachingCreatePage) },
         { path: '/creator/orders', element: page(OrdersPage) },

@@ -1,11 +1,16 @@
-import { useRef, useState } from 'react';
+import { Fragment, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, FileUp, GraduationCap, UserPlus } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
 import { SearchInput } from '../../components/common/SearchInput.jsx';
 import { FilterChip } from '../../components/common/FilterChip.jsx';
 import { presetRange } from '../../components/common/DateRangeFilter.jsx';
-import { Avatar, Badge, Button, Card, Checkbox, DataTable, Drawer, EmptyState, Field, Input, Modal, Skeleton, StatusBadge, toast } from '../../components/ui/index.js';
+import { Avatar, Badge, Button, Card, Checkbox, DataTable, Drawer, EmptyState, Field, Input, Modal, Select, Skeleton, StatusBadge, toast } from '../../components/ui/index.js';
+import { SlidersHorizontal } from 'lucide-react';
+import { membershipsApi, communityApi } from '../../services/api/community.js';
+import { coachingApi } from '../../services/api/coaching.js';
+import { creatorLiveApi } from '../../services/api/live.js';
+import { academySettingsApi } from '../../services/api/academySettings.js';
 import { creatorLearnApi } from '../../services/api/learn.js';
 import { coursesApi } from '../../services/api/creator.js';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -27,7 +32,55 @@ export function studentQuery(params) {
     q: params.q, page: params.page, pageSize: params.pageSize, courseId: params.courseId,
     ...(joined ? { joinedFrom: joined.from, joinedTo: joined.to } : {}),
     ...(params.active === 'never' ? { neverSignedIn: 'true' } : params.active ? { activeFrom: presetRange(params.active).from } : {}),
+    ...Object.fromEntries(MORE_KEYS.filter((k) => params[k]).map((k) => [k, params[k]])),
   };
+}
+
+/** Filters in the "More" panel (Graphy-style), stored in the URL like the quick chips. */
+export const MORE_KEYS = ['membershipPlanId', 'membershipStatus', 'coachingProgramId', 'communityId', 'webinarId', 'verifiedEmail', 'verifiedMobile', 'deactivated', 'source', 'utmSource', 'marketingConsent', 'tag', 'customFieldId', 'customValue'];
+const YES_NO = [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }];
+const SOURCES = [{ value: 'website', label: 'Signed up on the website' }, { value: 'checkout', label: 'Bought at checkout' }, { value: 'google', label: 'Signed up with Google' }, { value: 'added', label: 'Added or imported by you' }];
+
+function MoreFilters({ open, onClose, params, onApply }) {
+  const [draft, setDraft] = useState({});
+  const [lastOpen, setLastOpen] = useState(false);
+  if (open && !lastOpen) { setLastOpen(true); setDraft(Object.fromEntries(MORE_KEYS.map((k) => [k, params[k] ?? '']))); }
+  if (!open && lastOpen) setLastOpen(false);
+  const opts = useQuery({ queryKey: ['creator', 'students', 'filter-options'], queryFn: creatorLearnApi.studentFilterOptions, enabled: open, staleTime: 60_000 });
+  const plans = useQuery({ queryKey: ['creator', 'memberships', 'plans'], queryFn: membershipsApi.plans, enabled: open, staleTime: 60_000 });
+  const programs = useQuery({ queryKey: ['creator', 'coaching', 'programs'], queryFn: coachingApi.programs, enabled: open, staleTime: 60_000 });
+  const clubs = useQuery({ queryKey: ['creator', 'communities', 'spaces'], queryFn: () => communityApi('/creator/communities').spaces(), enabled: open, staleTime: 60_000 });
+  const webinars = useQuery({ queryKey: ['creator', 'live', 'classes', 'WEBINAR'], queryFn: () => creatorLiveApi.classes('WEBINAR'), enabled: open, staleTime: 60_000 });
+  const fields = useQuery({ queryKey: ['creator', 'settings', 'custom-fields'], queryFn: academySettingsApi.customFields, enabled: open, staleTime: 60_000 });
+  const list = (x) => (Array.isArray(x) ? x : x?.items ?? []);
+  const sel = (key, label, options) => (
+    <Select label={label} value={draft[key] ?? ''} placeholder="Any" onChange={(e) => setDraft({ ...draft, [key]: e.target.value })} options={options} />
+  );
+  return (
+    <Drawer open={open} onClose={onClose} title="Filter by"
+      footer={<><Button variant="secondary" onClick={() => setDraft(Object.fromEntries(MORE_KEYS.map((k) => [k, ''])))}>Reset</Button><Button onClick={() => { onApply(Object.fromEntries(MORE_KEYS.map((k) => [k, draft[k] || undefined]))); onClose(); }}>Apply filters</Button></>}>
+      <div className="space-y-4">
+        {sel('membershipPlanId', 'Membership', list(plans.data).map((p) => ({ value: p.id, label: p.name })))}
+        {sel('membershipStatus', 'Membership status', [{ value: 'active', label: 'Active' }, { value: 'expired', label: 'Expired or cancelled' }])}
+        {sel('coachingProgramId', 'Coaching', list(programs.data).map((p) => ({ value: p.id, label: p.title ?? p.name })))}
+        {sel('communityId', 'Community club', list(clubs.data).map((c) => ({ value: c.id, label: c.name })))}
+        {sel('webinarId', 'Webinars', list(webinars.data).map((w) => ({ value: w.id, label: w.title })))}
+        {sel('verifiedEmail', 'Verified email', YES_NO)}
+        {sel('verifiedMobile', 'Verified mobile', YES_NO)}
+        {sel('deactivated', 'Deactivated accounts', YES_NO)}
+        {sel('source', 'Source', SOURCES)}
+        {sel('utmSource', 'UTM source', (opts.data?.utmSources ?? []).map((u) => ({ value: u, label: u })))}
+        {sel('marketingConsent', 'Provided marketing consent', YES_NO)}
+        {sel('tag', 'Segment (contact tag)', (opts.data?.tags ?? []).map((t) => ({ value: t, label: t })))}
+        {list(fields.data).length > 0 && (
+          <div className="space-y-2 rounded-md border border-line p-3">
+            {sel('customFieldId', 'Custom field', list(fields.data).map((f) => ({ value: f.id, label: f.label })))}
+            <Input label="Answer contains" value={draft.customValue ?? ''} disabled={!draft.customFieldId} onChange={(e) => setDraft({ ...draft, customValue: e.target.value })} />
+          </div>
+        )}
+      </div>
+    </Drawer>
+  );
 }
 
 /** Date on the first line, time underneath — easier to scan down a column. */
@@ -172,12 +225,14 @@ function ImportStudentsModal({ open, onClose }) {
 
 function StudentDrawer({ id, onClose }) {
   const q = useQuery({ queryKey: ['creator', 'student', id], queryFn: () => creatorLearnApi.student(id), enabled: Boolean(id) });
+  const answers = useQuery({ queryKey: ['creator', 'student', id, 'custom-fields'], queryFn: () => academySettingsApi.answers(id), enabled: Boolean(id) });
   const s = q.data;
   return (
     <Drawer open={Boolean(id)} onClose={onClose} title={s?.fullName ?? 'Student'}>
       {q.isLoading || !s ? <Skeleton className="h-40" /> : (
         <div className="space-y-5 text-sm">
           <dl className="grid grid-cols-3 gap-2"><dt className="text-muted">Email</dt><dd className="col-span-2 break-all">{s.email} {s.emailVerifiedAt ? <Badge tone="success">verified</Badge> : null}</dd><dt className="text-muted">Joined</dt><dd className="col-span-2">{formatDate(s.createdAt)}</dd><dt className="text-muted">Last sign-in</dt><dd className="col-span-2">{formatDate(s.lastLoginAt, { withTime: true })}</dd><dt className="text-muted">Submissions</dt><dd className="col-span-2">{s.submissions}</dd></dl>
+          {answers.data?.length > 0 && <div><p className="mb-2 font-semibold">Custom fields</p><dl className="grid grid-cols-3 gap-2">{answers.data.map((f) => <Fragment key={f.id}><dt className="text-muted">{f.label}</dt><dd className="col-span-2 break-words">{f.value === null ? <span className="text-muted">—</span> : f.type === 'CHECKBOX' ? (f.value === 'true' ? 'Yes' : 'No') : f.value}</dd></Fragment>)}</dl></div>}
           <div><p className="mb-2 font-semibold">Enrolments</p><ul className="space-y-2">{s.enrollments.map((e) => <li key={e.id} className="rounded-md border border-line p-3"><p className="font-medium">{e.course.title}</p><div className="mt-1 flex items-center justify-between text-xs text-muted"><StatusBadge status={e.status} /><span>{e.progressPercent}% · {e.source.toLowerCase()}</span></div></li>)}</ul></div>
           <div><p className="mb-2 font-semibold">Certificates</p>{s.certificates.length ? <ul className="space-y-1">{s.certificates.map((c) => <li key={c.id}>{c.courseTitle} · <span className="text-muted">{c.number}</span></li>)}</ul> : <p className="text-muted">None yet</p>}</div>
         </div>
@@ -194,7 +249,9 @@ export function StudentsPage() {
   const query = studentQuery(params);
   const q = useQuery({ queryKey: ['creator', 'students', query], queryFn: () => creatorLearnApi.students(query), placeholderData: (p) => p });
   const courses = useQuery({ queryKey: ['creator', 'courses', 'picker'], queryFn: () => coursesApi.list({ pageSize: 100, sort: 'title' }) });
-  const filtered = Boolean(params.q || params.joined || params.active || params.courseId);
+  const [more, setMore] = useState(false);
+  const moreCount = MORE_KEYS.filter((k) => params[k] && k !== 'customValue').length;
+  const filtered = Boolean(params.q || params.joined || params.active || params.courseId || moreCount);
   return (
     <>
       <PageHeader title="Students" count={q.data?.meta?.total} description="Everyone with an account at your academy." breadcrumbs={[{ label: 'Students' }]}
@@ -207,7 +264,8 @@ export function StudentsPage() {
             <FilterChip label="Date joined" value={params.joined} onChange={(v) => update({ joined: v })} options={JOINED} />
             <FilterChip label="Last sign-in" value={params.active} onChange={(v) => update({ active: v })} options={ACTIVE} />
             <FilterChip label="Course" value={params.courseId} onChange={(v) => update({ courseId: v })} options={(courses.data?.items ?? []).map((c) => ({ value: c.id, label: c.title }))} panelClassName="w-72" />
-            {filtered && <button type="button" className="ml-1 text-sm font-medium text-primary-700 hover:underline dark:text-primary-300" onClick={() => update({ q: undefined, joined: undefined, active: undefined, courseId: undefined })}>Reset</button>}
+            <Button size="sm" variant={moreCount ? 'secondary' : 'ghost'} leftIcon={SlidersHorizontal} onClick={() => setMore(true)}>More{moreCount ? ` (${moreCount})` : ''}</Button>
+            {filtered && <button type="button" className="ml-1 text-sm font-medium text-primary-700 hover:underline dark:text-primary-300" onClick={() => update({ q: undefined, joined: undefined, active: undefined, courseId: undefined, ...Object.fromEntries(MORE_KEYS.map((k) => [k, undefined])) })}>Reset</button>}
           </div>
         </div>
         <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={q.data?.items ?? []} meta={q.data?.meta} onPageChange={(page) => update({ page }, { resetPage: false })} onPageSizeChange={(pageSize) => update({ pageSize })} onRowClick={(r) => setSelected(r.id)}
@@ -220,6 +278,7 @@ export function StudentsPage() {
             { key: 'createdAt', header: 'Joined', cell: (r) => <TwoLineDate value={r.createdAt} /> },
           ]} />
       </Card>
+      <MoreFilters open={more} onClose={() => setMore(false)} params={params} onApply={(patch) => update(patch)} />
       <StudentDrawer id={selected} onClose={() => setSelected(null)} />
       <AddStudentModal open={modal === 'add'} onClose={() => setModal(null)} />
       <ImportStudentsModal open={modal === 'import'} onClose={() => setModal(null)} />

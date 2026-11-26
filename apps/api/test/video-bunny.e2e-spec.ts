@@ -105,6 +105,11 @@ describe('Bunny Stream videos: upload, processing, playback (e2e)', () => {
     // Filenames are sanitised (no paths/control characters).
     const odd = (await authed(app, A.session).post('/api/v1/videos/upload/initiate').send({ title: 'Odd', ...file, filename: '../../etc/pa<ss>wd\u0007.mp4' }).expect(201)).body.data;
     expect((await prisma.videoAsset.findUniqueOrThrow({ where: { id: odd.videoId } })).originalFilename).toBe('pa_ss_wd.mp4');
+    // Asset library tags: trimmed, lower-cased, de-duplicated; returned in the library list.
+    const tagged = (await authed(app, A.session).patch(`/api/v1/videos/${videoId}`).send({ tags: [' Module 1', 'intro', 'module 1'] }).expect(200)).body.data;
+    expect(tagged.tags).toEqual(['module 1', 'intro']);
+    expect((await authed(app, A.session).get('/api/v1/videos').expect(200)).body.data.find((v: any) => v.id === videoId)).toMatchObject({ tags: ['module 1', 'intro'], liveRecording: null });
+    await authed(app, A.session).patch(`/api/v1/videos/${videoId}`).send({ tags: Array.from({ length: 11 }, (_, i) => `t${i}`) }).expect(422);
     // Cross-tenant: B cannot target A's course, see A's video or complete A's upload.
     await authed(app, B.session).post('/api/v1/videos/upload/initiate').send({ title: 'x', ...file, courseId: course.id }).expect(404);
     await authed(app, B.session).get(`/api/v1/videos/${videoId}`).expect(404);

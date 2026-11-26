@@ -3,7 +3,9 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Award, Star, Bookmark, BookmarkCheck, Check, ChevronLeft, ChevronRight, CircleCheck, Download, ExternalLink, Lock, Menu, MessageSquare, NotebookPen, Sparkles, Trash2, X } from 'lucide-react';
 import { Alert } from '../../components/auth/Alert.jsx';
-import { Badge, Button, Drawer, ErrorState, Skeleton, Tabs, Textarea, toast } from '../../components/ui/index.js';
+import { Badge, Button, Drawer, ErrorState, Modal, Skeleton, Tabs, Textarea, toast } from '../../components/ui/index.js';
+import { authApi } from '../../services/api/auth.js';
+import { CustomFieldInputs, missingCustomFields } from '../../components/forms/CustomFieldInputs.jsx';
 import { RichTextView } from '../../components/forms/RichTextView.jsx';
 import { learnApi } from '../../services/api/learn.js';
 import { cn } from '../../utils/cn.js';
@@ -22,6 +24,7 @@ function flatLessons(sections) {
 function LessonContent({ lessonId, onAutoComplete }) {
   const q = useQuery({ queryKey: ['lesson', lessonId], queryFn: () => learnApi.lesson(lessonId), retry: false });
   if (q.isLoading) return <Skeleton className="h-72" />;
+  if (q.isError && q.error.details?.[0]?.message === 'EMAIL_NOT_VERIFIED') return <VerifyEmailGate />;
   if (q.isError) return <Alert tone="error" title="Can't open this lesson">{q.error.message}</Alert>;
   const l = q.data;
   switch (l.type) {
@@ -80,6 +83,40 @@ function DiscussionPanel({ lessonId }) {
 }
 
 /** Distraction-free learning view: curriculum · content · notes/discussion. */
+/** The academy asks learners to verify their email before opening content (Settings → User experience). */
+function VerifyEmailGate() {
+  const resend = useMutation({ mutationFn: authApi.resendVerification, onSuccess: () => toast.success('Verification email sent. Check your inbox.'), onError: (e) => toast.error(e.message) });
+  return (
+    <Alert tone="info" title="Verify your email to continue">
+      We sent a verification link to your email when you signed up. Open it, then come back to this lesson.
+      <span className="mt-3 block"><Button size="sm" variant="secondary" loading={resend.isPending} onClick={() => resend.mutate()}>Send a new link</Button></span>
+    </Alert>
+  );
+}
+
+/** Custom fields the academy asks before a learner's first course (Settings → Custom fields). */
+function BeforeCourseQuestions() {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ['learn', 'custom-fields'], queryFn: learnApi.customFields, retry: false, staleTime: 60_000 });
+  const [answers, setAnswers] = useState({});
+  const [errors, setErrors] = useState({});
+  const [skipped, setSkipped] = useState(false);
+  const pending = q.data?.beforeCourse ?? [];
+  const save = useMutation({
+    mutationFn: () => learnApi.saveCustomFields(answers),
+    onSuccess: (d) => { qc.setQueryData(['learn', 'custom-fields'], d); toast.success('Thanks!'); },
+    onError: (e) => setErrors(Object.fromEntries((e.details ?? []).map((x) => [x.field?.replace('customFields.', ''), x.message]))),
+  });
+  const required = pending.some((f) => f.required);
+  if (!pending.length || (skipped && !required)) return null;
+  return (
+    <Modal open onClose={required ? () => {} : () => setSkipped(true)} title="A few details before you start"
+      footer={<>{!required && <Button variant="secondary" onClick={() => setSkipped(true)}>Skip</Button>}<Button loading={save.isPending} onClick={() => { const m = missingCustomFields(pending, answers); setErrors(m); if (!Object.keys(m).length) save.mutate(); }}>Continue</Button></>}>
+      <div className="space-y-4"><CustomFieldInputs fields={pending} values={answers} onChange={setAnswers} errors={errors} /></div>
+    </Modal>
+  );
+}
+
 export function PlayerPage() {
   const { courseId } = useParams();
   const [params, setParams] = useSearchParams();
@@ -146,6 +183,7 @@ export function PlayerPage() {
         {p.enrollment.completedAt && p.course.certificateEnabled && <Link to="/learn/certificates" className="inline-flex items-center gap-1 text-sm font-medium text-primary-600"><Award className="size-4" />Certificate</Link>}
       </header>
       <ReviewDialog courseId={p.course.id} open={rating} onClose={() => setRating(false)} />
+      <BeforeCourseQuestions />
       <div className="flex min-h-0 flex-1">
         <aside className="hidden w-72 shrink-0 overflow-y-auto border-r border-line bg-surface lg:block">{curriculum}</aside>
         {sidebar && <div className="fixed inset-0 z-40 lg:hidden"><div className="absolute inset-0 bg-slate-900/50" onClick={() => setSidebar(false)} /><aside className="absolute inset-y-0 left-0 w-80 overflow-y-auto bg-surface"><div className="flex justify-end p-2"><Button variant="ghost" size="icon-sm" aria-label="Close" onClick={() => setSidebar(false)}><X className="size-4" /></Button></div>{curriculum}</aside></div>}

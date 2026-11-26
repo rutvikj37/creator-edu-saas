@@ -5,6 +5,7 @@ import { QUEUES } from '../queue/queue.constants.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { editableTemplate, renderContent, type TemplateContent } from './editable-templates.js';
 import type { RenderedEmail } from './templates.js';
+import { AcademyPreferencesService } from '../settings/academy-preferences.service.js';
 
 export const SEND_EMAIL_JOB = 'send-email';
 
@@ -16,6 +17,9 @@ export interface EmailJob extends RenderedEmail {
   headers?: Record<string, string>;
   /** Carries a secret (e.g. a generated password): the queued job is deleted as soon as it is delivered. */
   sensitive?: boolean;
+  /** Display name for the From header (the academy's sender name). */
+  fromName?: string;
+  replyTo?: string;
 }
 
 const OVERRIDE_TTL_MS = 30_000;
@@ -29,10 +33,22 @@ export class MailService {
   constructor(
     @InjectQueue(QUEUES.NOTIFICATIONS) private readonly queue: Queue,
     private readonly prisma: PrismaService,
+    private readonly prefs: AcademyPreferencesService,
   ) {}
 
   async send(job: EmailJob): Promise<void> {
     const { template, sensitive, ...email } = job;
+    if (job.tenantId) {
+      // Academy communications settings: emails it switched off are skipped; sender name and reply-to apply.
+      try {
+        if (!(await this.prefs.emailEnabled(job.tenantId, job.tag))) return;
+        const c = await this.prefs.get(job.tenantId, 'communications');
+        if (c.senderName && !email.fromName) email.fromName = c.senderName;
+        if (c.replyTo && !email.replyTo) email.replyTo = c.replyTo;
+      } catch (e) {
+        this.logger.warn({ err: (e as Error).message, tenantId: job.tenantId }, 'academy email preferences unavailable; sending with defaults');
+      }
+    }
     if (template) Object.assign(email, await this.applyOverride(template.key, template.vars));
     await this.queue.add(SEND_EMAIL_JOB, email, sensitive ? { attempts: 6, removeOnComplete: true, removeOnFail: { age: 24 * 3600 } } : { attempts: 6 });
   }

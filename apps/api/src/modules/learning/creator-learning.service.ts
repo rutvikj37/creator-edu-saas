@@ -27,6 +27,14 @@ export function normalizePhone(raw: string | null | undefined): string | null | 
   return /^\+?\d{7,15}$/.test(v) ? v : false;
 }
 
+export interface StudentFilters {
+  joinedFrom?: string; joinedTo?: string; activeFrom?: string; neverSignedIn?: string; courseId?: string;
+  membershipPlanId?: string; membershipStatus?: 'active' | 'expired'; coachingProgramId?: string; communityId?: string; webinarId?: string;
+  verifiedEmail?: 'yes' | 'no'; verifiedMobile?: 'yes' | 'no'; deactivated?: 'yes' | 'no';
+  source?: 'website' | 'checkout' | 'google' | 'added'; utmSource?: string; marketingConsent?: 'yes' | 'no'; tag?: string;
+  customFieldId?: string; customValue?: string;
+}
+
 @Injectable()
 export class CreatorLearningService {
   private readonly logger = new Logger(CreatorLearningService.name);
@@ -42,16 +50,23 @@ export class CreatorLearningService {
     private readonly audit: AuditService,
   ) {}
 
-  async students(q: PaginationQueryDto & { joinedFrom?: string; joinedTo?: string; activeFrom?: string; neverSignedIn?: string; courseId?: string }) {
+  async students(q: PaginationQueryDto & StudentFilters) {
     const tenantId = this.ctx.requireTenantId();
     const day = (d: string) => new Date(`${d}T00:00:00.000Z`);
     const where: Record<string, unknown> = { tenantId, deletedAt: null, ...(q.q ? { OR: [{ fullName: { contains: q.q } }, { email: { contains: q.q } }] } : {}) };
     if (q.joinedFrom || q.joinedTo) where.createdAt = { ...(q.joinedFrom ? { gte: day(q.joinedFrom) } : {}), ...(q.joinedTo ? { lt: new Date(day(q.joinedTo).getTime() + 86_400_000) } : {}) };
     if (q.neverSignedIn === 'true') where.lastLoginAt = null;
     else if (q.activeFrom) where.lastLoginAt = { gte: day(q.activeFrom) };
-    if (q.courseId) {
-      const enrolled = await this.db.enrollment.findMany({ where: { courseId: q.courseId }, select: { userId: true }, take: 50_000 });
-      where.id = { in: enrolled.map((e) => e.userId) };
+    if (q.verifiedEmail) where.emailVerifiedAt = q.verifiedEmail === 'yes' ? { not: null } : null;
+    if (q.verifiedMobile) where.phoneVerifiedAt = q.verifiedMobile === 'yes' ? { not: null } : null;
+    if (q.deactivated === 'yes') where.status = { not: 'ACTIVE' };
+    else if (q.deactivated === 'no') where.status = 'ACTIVE';
+    // Each filter that needs another table narrows a set of user ids; the sets are intersected.
+    const sets = await this.studentIdSets(tenantId, q);
+    if (sets.length) {
+      let ids = sets[0];
+      for (const s2 of sets.slice(1)) ids = new Set([...ids].filter((x) => s2.has(x)));
+      where.id = { in: [...ids] };
     }
     const [rows, total] = await Promise.all([
       this.prisma.user.findMany({ where, orderBy: { createdAt: 'desc' }, ...toSkipTake(q), select: { id: true, fullName: true, email: true, phone: true, status: true, emailVerifiedAt: true, lastLoginAt: true, createdAt: true } }),
@@ -59,6 +74,70 @@ export class CreatorLearningService {
     ]);
     const counts = await this.db.enrollment.groupBy({ by: ['userId'], where: { userId: { in: rows.map((r) => r.id) } }, _count: { _all: true } });
     return new Paginated(rows.map((r) => ({ ...r, enrollmentCount: counts.find((c) => c.userId === r.id)?._count._all ?? 0 })), { page: q.page, pageSize: q.pageSize, total });
+  }
+
+  /** User-id sets for the learner filters that live in other tables (course, membership, coaching, club, webinar, source, UTM, consent, tag). */
+  private async studentIdSets(tenantId: string, q: StudentFilters): Promise<Set<string>[]> {
+    const sets: Set<string>[] = [];
+    const ids = (rows: { userId: string | null }[]) => new Set(rows.map((r) => r.userId).filter((x): x is string => Boolean(x)));
+    const LIMIT = 50_000;
+    if (q.courseId) sets.push(ids(await this.db.enrollment.findMany({ where: { courseId: q.courseId }, select: { userId: true }, take: LIMIT })));
+    if (q.membershipPlanId || q.membershipStatus) {
+      const now = new Date();
+      const status = q.membershipStatus === 'active' ? { status: 'ACTIVE', currentPeriodEnd: { gt: now } } : q.membershipStatus === 'expired' ? { OR: [{ status: { not: 'ACTIVE' } }, { currentPeriodEnd: { lte: now } }] } : {};
+      sets.push(ids(await this.db.membership.findMany({ where: { ...(q.membershipPlanId ? { planId: q.membershipPlanId } : {}), ...status }, select: { userId: true }, take: LIMIT })));
+    }
+    if (q.coachingProgramId) sets.push(ids(await this.db.coachingAccess.findMany({ where: { programId: q.coachingProgramId }, select: { userId: true }, take: LIMIT })));
+    if (q.communityId) {
+      // A club's members are the learners with access to its course or membership plan (or everyone for an open club).
+      const club = await this.db.community.findFirst({ where: { id: q.communityId }, select: { courseId: true, membershipPlanId: true } });
+      if (!club) sets.push(new Set());
+      else if (club.courseId) sets.push(ids(await this.db.enrollment.findMany({ where: { courseId: club.courseId }, select: { userId: true }, take: LIMIT })));
+      else if (club.membershipPlanId) sets.push(ids(await this.db.membership.findMany({ where: { planId: club.membershipPlanId, status: 'ACTIVE' }, select: { userId: true }, take: LIMIT })));
+    }
+    if (q.webinarId) sets.push(ids(await this.db.webinarRegistration.findMany({ where: { liveClassId: q.webinarId, cancelledAt: null }, select: { userId: true }, take: LIMIT })));
+    if (q.source) {
+      // How the account started: a sign-up on the website, a guest checkout, Google, or added by the academy.
+      const starts = await this.prisma.loginHistory.findMany({ where: { realmKey: tenantId, success: true, method: { in: ['register', 'checkout', 'google'] } }, select: { userId: true, method: true }, distinct: ['userId'], orderBy: { createdAt: 'asc' }, take: LIMIT });
+      const method = ({ website: 'register', checkout: 'checkout', google: 'google' } as Record<string, string | undefined>)[q.source];
+      if (method) sets.push(new Set(starts.filter((x) => x.method === method && x.userId).map((x) => x.userId!)));
+      else {
+        const self = new Set(starts.map((x) => x.userId).filter(Boolean) as string[]);
+        const all = await this.prisma.user.findMany({ where: { tenantId, deletedAt: null }, select: { id: true }, take: LIMIT });
+        sets.push(new Set(all.map((u) => u.id).filter((x) => !self.has(x))));
+      }
+    }
+    if (q.utmSource) sets.push(ids(await this.db.order.findMany({ where: { attribution: { path: '$.source', equals: q.utmSource } }, select: { userId: true }, take: LIMIT })));
+    if (q.marketingConsent || q.tag) {
+      const leads = await this.db.lead.findMany({
+        where: { ...(q.marketingConsent === 'yes' ? { marketingConsent: true, unsubscribedAt: null } : {}), ...(q.tag ? { tags: { array_contains: q.tag } } : {}) },
+        select: { userId: true, email: true }, take: LIMIT,
+      });
+      const byEmail = leads.filter((l) => !l.userId).map((l) => l.email);
+      const linked = byEmail.length ? await this.prisma.user.findMany({ where: { tenantId, email: { in: byEmail } }, select: { id: true } }) : [];
+      const yes = new Set([...ids(leads), ...linked.map((u) => u.id)]);
+      if (q.marketingConsent === 'no') {
+        const all = await this.prisma.user.findMany({ where: { tenantId, deletedAt: null }, select: { id: true }, take: LIMIT });
+        sets.push(new Set(all.map((u) => u.id).filter((x) => !yes.has(x))));
+      } else sets.push(yes);
+    }
+    if (q.customFieldId && q.customValue !== undefined) {
+      sets.push(ids(await this.db.customFieldValue.findMany({ where: { fieldId: q.customFieldId, value: { contains: q.customValue } }, select: { userId: true }, take: LIMIT })));
+    }
+    return sets;
+  }
+
+  /** Choices for the learner filters that come from data: UTM sources seen at checkout and contact tags. */
+  async studentFilterOptions() {
+    const [orders, leads] = await Promise.all([
+      this.db.order.findMany({ where: { attribution: { not: null as never } }, select: { attribution: true }, orderBy: { createdAt: 'desc' }, take: 5000 }),
+      this.db.lead.findMany({ select: { tags: true }, take: 5000 }),
+    ]);
+    const utm = new Set<string>();
+    for (const o of orders) { const src = (o.attribution as { source?: unknown } | null)?.source; if (typeof src === 'string' && src) utm.add(src.slice(0, 60)); }
+    const tags = new Set<string>();
+    for (const l of leads) for (const t of Array.isArray(l.tags) ? l.tags : []) if (typeof t === 'string') tags.add(t);
+    return { utmSources: [...utm].sort(), tags: [...tags].sort() };
   }
 
   async student(id: string) {

@@ -1,3 +1,4 @@
+import { CookieNotice } from '../../components/site/CookieNotice.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import { captureReferral } from '../../services/api/affiliates.js';
@@ -54,11 +55,12 @@ export function AcademyHeader({ site, nav }) {
           ) : (
             <>
               <Link to="/login" className="inline-flex h-9 items-center rounded-md px-3 text-sm font-medium text-fg-2 hover:bg-surface-2">Sign in</Link>
-              {site?.acceptingRegistrations && <Link to="/register" className="inline-flex h-9 items-center rounded-md px-4 text-sm font-medium text-white" style={{ background: site?.theme?.primaryColor }}>Join</Link>}
+              {site?.acceptingRegistrations && site?.defaultForm !== 'login' && <Link to="/register" className="inline-flex h-9 items-center rounded-md px-4 text-sm font-medium text-white" style={{ background: site?.theme?.primaryColor }}>Join</Link>}
             </>
           )}
         </nav>
       </div>
+      <CookieNotice enabled={site?.cookieBanner} color={site?.theme?.primaryColor} />
     </header>
   );
 }

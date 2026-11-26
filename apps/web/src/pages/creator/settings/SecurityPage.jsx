@@ -24,11 +24,11 @@ function Stepper({ label, value, onChange, min, max, unit }) {
   );
 }
 
-function Section({ icon: Icon, title }) {
+export function Section({ icon: Icon, title }) {
   return <h2 className="mt-2 flex items-center gap-2 rounded-lg bg-surface-2/70 px-4 py-3 font-semibold first:mt-0"><Icon className="size-4" aria-hidden />{title}</h2>;
 }
 
-function Row({ label, hint, children, htmlFor }) {
+export function Row({ label, hint, children, htmlFor }) {
   return (
     <div className="grid gap-3 border-b border-line px-1 py-5 last:border-0 sm:px-4 md:grid-cols-2">
       <div>{htmlFor ? <label htmlFor={htmlFor} className="font-medium text-fg">{label}</label> : <p className="font-medium text-fg">{label}</p>}{hint && <p className="mt-1 text-sm text-muted">{hint}</p>}</div>

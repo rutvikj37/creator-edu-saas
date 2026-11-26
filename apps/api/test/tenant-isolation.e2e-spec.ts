@@ -14,6 +14,12 @@ import { api, authed, createTestApp, login, parseSession, PLATFORM, registerCrea
  * fails when a new /creator route is added without an isolation case.
  */
 const WORKSPACE_ROUTES_COVERED = [
+  // Graphy-parity settings, learner filters and reports: isolation checked in graphy-parity.e2e-spec.ts
+  'GET /api/v1/creator/settings/preferences/:section', 'PUT /api/v1/creator/settings/preferences/:section',
+  'GET /api/v1/creator/settings/custom-fields', 'POST /api/v1/creator/settings/custom-fields', 'PUT /api/v1/creator/settings/custom-fields/order',
+  'PATCH /api/v1/creator/settings/custom-fields/:id', 'DELETE /api/v1/creator/settings/custom-fields/:id', 'GET /api/v1/creator/settings/custom-fields/answers/:userId',
+  'GET /api/v1/creator/students/filter-options', 'GET /api/v1/creator/assessments/quizzes', 'GET /api/v1/creator/assessments/quiz-attempts',
+  'GET /api/v1/creator/assessments/submissions', 'GET /api/v1/creator/live/webinars/report',
   'GET /api/v1/creator/workspace',
   'GET /api/v1/creator/members',
   'GET /api/v1/creator/domains',

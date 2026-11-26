@@ -1,5 +1,6 @@
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { PdfWatermarkService } from '../files/pdf-watermark.service.js';
+import { ERROR_CODES } from '@ce/shared';
 import { AppException } from '../../common/errors/app-exception.js';
 import { PrismaService } from '../../core/prisma/prisma.service.js';
 import { TENANT_PRISMA } from '../../core/tenancy/tenancy.module.js';
@@ -13,6 +14,7 @@ import { enrollmentExpiry, isEnrollmentUsable, progressPercent, unlockTime } fro
 type LessonRow = Awaited<ReturnType<TenantPrismaClient['courseLesson']['findFirst']>> & object;
 
 import { AccountCredentialsService } from '../auth/services/account-credentials.service.js';
+import { AcademyPreferencesService } from '../../core/settings/academy-preferences.service.js';
 @Injectable()
 export class LearningService {
   private readonly logger = new Logger(LearningService.name);
@@ -25,6 +27,7 @@ export class LearningService {
     private readonly certificates: CertificatesService,
     private readonly events: AppEvents,
     private readonly credentials: AccountCredentialsService,
+    private readonly prefs: AcademyPreferencesService,
     @Optional() private readonly watermark?: PdfWatermarkService,
   ) {}
 
@@ -123,6 +126,11 @@ export class LearningService {
     if (!isEnrollmentUsable(enrollment)) {
       if (lesson.isFreePreview && lesson.course.status === 'PUBLISHED' && lesson.course.visibility !== 'PRIVATE') return { lesson, enrollment: null };
       throw AppException.forbidden(enrollment?.status === 'EXPIRED' ? 'Your access to this course has expired.' : 'Enrol in this course to open this lesson.');
+    }
+    // Settings → User experience: learners must verify their email before opening course content.
+    if ((await this.prefs.get(lesson.tenantId, 'experience')).requireEmailVerification) {
+      const u = await this.prisma.user.findUnique({ where: { id: userId }, select: { emailVerifiedAt: true } });
+      if (u && !u.emailVerifiedAt) throw new AppException(ERROR_CODES.FORBIDDEN, 'Verify your email address to open course content. Use the link we emailed you, or send a new one from your account.', HttpStatus.FORBIDDEN, [{ field: 'email', message: 'EMAIL_NOT_VERIFIED' }]);
     }
     const lock = this.lockInfo(lesson.course, enrollment!.startedAt, lesson.section, lesson);
     if (lock.locked) throw AppException.forbidden(`This lesson unlocks on ${lock.unlocksAt!.toISOString().slice(0, 10)}.`);

@@ -1357,6 +1357,8 @@ model VideoAsset {
   readyAt              DateTime?              @db.DateTime(3)
   lastSyncedAt         DateTime?              @db.DateTime(3)
   errorMessage         String?                @db.VarChar(500)
+  /// Creator labels for filtering the asset library, e.g. ["module 1", "intro"].
+  tags                 Json?
   createdById          String                 @db.Char(25)
   createdAt            DateTime               @default(now()) @db.DateTime(3)
   updatedAt            DateTime               @updatedAt @db.DateTime(3)
@@ -3265,4 +3267,45 @@ model OrderComment {
 
   @@unique([tenantId, id])
   @@index([tenantId, orderId, createdAt])
+}
+
+// ───────────────────────────── Custom learner fields ─────────────────────────────
+
+/// Extra details an academy collects from learners (Settings → Custom fields).
+model CustomField {
+  id              String             @id @default(cuid()) @db.Char(25)
+  tenantId        String             @db.Char(25)
+  label           String             @db.VarChar(80)
+  /// TEXT, NUMBER, DATE, SELECT or CHECKBOX
+  type            String             @db.VarChar(16)
+  /// SELECT choices
+  options         Json?
+  required        Boolean            @default(false)
+  /// Learners can change their answer later
+  editable        Boolean            @default(true)
+  showInSignup    Boolean            @default(true)
+  /// Ask before a learner opens a course for the first time
+  askBeforeCourse Boolean            @default(false)
+  position        Int                @default(0)
+  createdAt       DateTime           @default(now()) @db.DateTime(3)
+  updatedAt       DateTime           @updatedAt @db.DateTime(3)
+  values          CustomFieldValue[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId, position])
+}
+
+model CustomFieldValue {
+  id        String      @id @default(cuid()) @db.Char(25)
+  tenantId  String      @db.Char(25)
+  fieldId   String      @db.Char(25)
+  userId    String      @db.Char(25)
+  value     String      @db.VarChar(500)
+  createdAt DateTime    @default(now()) @db.DateTime(3)
+  updatedAt DateTime    @updatedAt @db.DateTime(3)
+  field     CustomField @relation(fields: [tenantId, fieldId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, fieldId, userId])
+  @@index([tenantId, userId])
 }

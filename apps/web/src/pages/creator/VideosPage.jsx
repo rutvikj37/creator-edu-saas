@@ -219,17 +219,27 @@ function UploadPanel({ config, uploads, courses, target }) {
 function EditTitle({ video, onClose }) {
   const qc = useQueryClient();
   const [title, setTitle] = useState(video?.title ?? '');
-  useEffect(() => setTitle(video?.title ?? ''), [video]);
-  const save = useMutation({ mutationFn: () => videosApi.edit(video.id, { title: title.trim() }), onSuccess: () => { qc.invalidateQueries({ queryKey: ['videos'] }); toast.success('Saved'); onClose(); }, onError: (e) => toast.error(e.message) });
+  const [tags, setTags] = useState('');
+  useEffect(() => { setTitle(video?.title ?? ''); setTags((video?.tags ?? []).join(', ')); }, [video]);
+  const tagList = [...new Set(tags.split(',').map((t) => t.trim().toLowerCase()).filter(Boolean))];
+  const save = useMutation({ mutationFn: () => videosApi.edit(video.id, { title: title.trim(), tags: tagList }), onSuccess: () => { qc.invalidateQueries({ queryKey: ['videos'] }); toast.success('Saved'); onClose(); }, onError: (e) => toast.error(e.details?.[0]?.message ?? e.message) });
   return (
-    <Modal open={Boolean(video)} onClose={onClose} title="Edit title">
+    <Modal open={Boolean(video)} onClose={onClose} title="Edit details">
       <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
         <Input label="Title" value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} required />
-        <div className="flex justify-end gap-2"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" disabled={!title.trim()} loading={save.isPending}>Save</Button></div>
+        <Input label="Tags" value={tags} onChange={(e) => setTags(e.target.value)} hint={tagList.length > 10 ? 'Up to 10 tags.' : 'Comma-separated, e.g. module 1, intro. Use them to filter the library.'} error={tagList.length > 10 || tagList.some((t) => t.length > 30) ? 'Up to 10 tags of 30 characters each' : undefined} />
+        <div className="flex justify-end gap-2"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" disabled={!title.trim() || tagList.length > 10 || tagList.some((t) => t.length > 30)} loading={save.isPending}>Save</Button></div>
       </form>
     </Modal>
   );
 }
+
+/** Asset type for the library filter: uploaded video, audio, or a recording of a live class / webinar. */
+export function assetType(v) {
+  if (v.liveRecording) return 'LIVE';
+  return (v.mimeType ?? v.file?.mimeType ?? '').startsWith('audio/') ? 'AUDIO' : 'VIDEO';
+}
+const ASSET_TYPES = [{ value: 'VIDEO', label: 'Video' }, { value: 'AUDIO', label: 'Audio' }, { value: 'LIVE', label: 'Live class recording' }];
 
 function AssignLesson({ video, courses, onClose }) {
   const qc = useQueryClient();
@@ -317,10 +327,14 @@ export function VideosPage() {
   const [filters, setFilters] = useState({ status: '', q: '' });
   const [courseF, setCourseF] = useState(targetCourseId || undefined);
   const [periodF, setPeriodF] = useState();
+  const [createdF, setCreatedF] = useState();
+  const [webinarF, setWebinarF] = useState();
+  const [typeF, setTypeF] = useState();
+  const [tagF, setTagF] = useState();
   useEffect(() => { if (targetCourseId) setCourseF(targetCourseId); }, [targetCourseId]);
   const q = useQuery({
-    queryKey: ['videos', 'library', filters],
-    queryFn: () => videosApi.library({ status: filters.status || undefined, q: filters.q || undefined }),
+    queryKey: ['videos', 'library', filters.status],
+    queryFn: () => videosApi.library({ status: filters.status || undefined }),
     refetchInterval: (query) => ((query.state.data ?? []).some((v) => IN_FLIGHT.has(v.status)) ? 5000 : false),
   });
   const courses = useQuery({ queryKey: ['creator', 'courses', 'all'], queryFn: () => coursesApi.list({ pageSize: 100 }) });
@@ -339,8 +353,14 @@ export function VideosPage() {
   const targetCourse = courseList.find((c) => c.id === targetCourseId);
   const all = q.data ?? [];
   const courseOf = (v) => v.course?.id ?? v.usedIn?.[0]?.course?.id;
-  const rows = all.filter((v) => (!courseF || courseOf(v) === courseF || v.usedIn?.some((u) => u.course?.id === courseF)) && inPeriod(v.updatedAt ?? v.createdAt, periodF));
-  const filtered = Boolean(filters.q || filters.status || courseF || periodF);
+  // Search also matches an asset ID (Graphy's "Asset ID" filter).
+  const term = (filters.q ?? '').trim();
+  const rows = all.filter((v) => (!courseF || courseOf(v) === courseF || v.usedIn?.some((u) => u.course?.id === courseF)) && inPeriod(v.updatedAt ?? v.createdAt, periodF)
+    && inPeriod(v.createdAt, createdF) && (!webinarF || v.liveRecording?.liveClassId === webinarF) && (!typeF || assetType(v) === typeF) && (!tagF || (v.tags ?? []).includes(tagF))
+    && (!term || v.id === term || v.title.toLowerCase().includes(term.toLowerCase())));
+  const webinarOptions = [...new Map(all.filter((v) => v.liveRecording?.kind === 'WEBINAR').map((v) => [v.liveRecording.liveClassId, v.liveRecording.title])).entries()].map(([value, label]) => ({ value, label }));
+  const tagOptions = [...new Set(all.flatMap((v) => v.tags ?? []))].sort().map((t) => ({ value: t, label: t }));
+  const filtered = Boolean(filters.q || filters.status || courseF || periodF || createdF || webinarF || typeF || tagF);
 
   return (
     <>
@@ -355,18 +375,22 @@ export function VideosPage() {
       {config.data?.provider === 'STORAGE' && <Alert tone="info" className="mb-4">The video host (Bunny Stream) is not configured, so uploads are stored privately and played without adaptive streaming.</Alert>}
       <UploadPanel config={config.data} uploads={uploads} courses={courseList} target={uploadTarget} />
       <Card>
-        <ListToolbar search={filters.q} onSearch={(v) => setFilters({ ...filters, q: v })} placeholder="Search by title" count={rows.length} noun="file"
-          filtered={filtered} onReset={() => { setFilters({ status: '', q: '' }); setCourseF(undefined); setPeriodF(undefined); }}
+        <ListToolbar search={filters.q} onSearch={(v) => setFilters({ ...filters, q: v })} placeholder="Search by title or asset ID" count={rows.length} noun="file"
+          filtered={filtered} onReset={() => { setFilters({ status: '', q: '' }); setCourseF(undefined); setPeriodF(undefined); setCreatedF(undefined); setWebinarF(undefined); setTypeF(undefined); setTagF(undefined); }}
           filters={<>
             <FilterChip label="Course" value={courseF} onChange={setCourseF} options={courseList.map((c) => ({ value: c.id, label: c.title }))} panelClassName="w-72" />
             <FilterChip label="Processing status" value={filters.status || undefined} onChange={(v) => setFilters({ ...filters, status: v ?? '' })} options={['READY', 'PROCESSING', 'UPLOADING', 'UPLOAD_AUTHORIZED', 'FAILED'].map((x) => ({ value: x, label: STATUS_LABEL[x] }))} />
             <FilterChip label="Date modified" value={periodF} onChange={setPeriodF} options={PERIOD_OPTIONS} />
+            <FilterChip label="Webinar" value={webinarF} onChange={setWebinarF} options={webinarOptions} panelClassName="w-72" />
+            <FilterChip label="Asset type" value={typeF} onChange={setTypeF} options={ASSET_TYPES} />
+            <FilterChip label="Tags" value={tagF} onChange={setTagF} options={tagOptions} />
+            <FilterChip label="Date created" value={createdF} onChange={setCreatedF} options={PERIOD_OPTIONS} />
           </>} />
         <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={rows}
           empty={filtered ? <EmptyState icon={Film} title="No files match" description="Try a different search or clear the filters." /> : <EmptyState icon={Film} title="No videos yet" description="Upload a video to start building video lessons." />}
           columns={[
             { key: 'thumbnail', header: '', cell: (v) => (v.thumbnailUrl ? <img src={v.thumbnailUrl} alt="" className="h-10 w-16 rounded object-cover" loading="lazy" /> : <div className="grid h-10 w-16 place-items-center rounded bg-surface-2"><Film className="size-4 text-muted" aria-hidden /></div>) },
-            { key: 'title', header: 'Title', cell: (v) => <div className="min-w-0"><p className="font-medium text-fg">{v.title}</p><p className="truncate text-xs text-muted">{v.course?.title ?? v.usedIn?.[0]?.course.title ?? v.originalFilename ?? v.file?.fileName}</p></div> },
+            { key: 'title', header: 'Title', cell: (v) => <div className="min-w-0"><p className="font-medium text-fg">{v.title}</p><p className="truncate text-xs text-muted">{v.liveRecording ? `Recording · ${v.liveRecording.title}` : v.course?.title ?? v.usedIn?.[0]?.course.title ?? v.originalFilename ?? v.file?.fileName}</p>{v.tags?.length > 0 && <p className="mt-1 flex flex-wrap gap-1">{v.tags.map((t) => <Badge key={t} className="px-1.5 py-0 text-[10px]">{t}</Badge>)}</p>}</div> },
             { key: 'durationSeconds', header: 'Duration', cell: (v) => fmtDuration(v.durationSeconds) },
             { key: 'originalSize', header: 'Size', cell: (v) => fmtSize(v.originalSize ?? v.file?.sizeBytes) },
             { key: 'status', header: 'Status', cell: (v) => <VideoStatus status={v.status} progress={v.encodeProgress} /> },
@@ -377,7 +401,7 @@ export function VideosPage() {
               cell: (v) => (
                 <Dropdown trigger={(p) => <Button size="sm" variant="ghost" aria-label={`Actions for ${v.title}`} {...p}>Actions</Button>}>
                   {v.status === 'READY' && <DropdownItem icon={Eye} onClick={() => setPreview(v.id)}>Preview</DropdownItem>}
-                  <DropdownItem icon={Pencil} onClick={() => setEditing(v)}>Edit title</DropdownItem>
+                  <DropdownItem icon={Pencil} onClick={() => setEditing(v)}>Edit details</DropdownItem>
                   <DropdownItem icon={Link2} onClick={() => setAssigning(v)}>Assign to lesson</DropdownItem>
                   <DropdownItem icon={Info} onClick={() => setDetails(v.id)}>View details</DropdownItem>
                   <DropdownItem icon={Trash2} danger onClick={() => setDeleting(v)}>Delete</DropdownItem>

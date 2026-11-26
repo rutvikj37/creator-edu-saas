@@ -226,6 +226,7 @@ export function serializeVideo(v: Record<string, any>, extra: Record<string, unk
     storageSize: v.storageSize !== null && v.storageSize !== undefined ? Number(v.storageSize) : null,
     encodeProgress: v.encodeProgress, errorMessage: v.errorMessage, readyAt: v.readyAt, lastSyncedAt: v.lastSyncedAt,
     createdById: v.createdById, createdAt: v.createdAt, updatedAt: v.updatedAt,
+    tags: Array.isArray(v.tags) ? v.tags : [],
     ...extra,
   };
 }

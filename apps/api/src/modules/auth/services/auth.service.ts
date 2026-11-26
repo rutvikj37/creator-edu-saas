@@ -16,6 +16,8 @@ import { SessionService, type ClientMeta, type IssuedSession } from './session.s
 import { TokenService } from './token.service.js';
 import { TwoFactorService } from './two-factor.service.js';
 import { PUBLIC_USER_SELECT } from './user-view.js';
+import { AcademyPreferencesService } from '../../../core/settings/academy-preferences.service.js';
+import { normaliseValue, saveFieldValues } from '../../academy/custom-fields.js';
 
 const MAX_FAILED_LOGINS = 5;
 const LOCK_MINUTES = 15;
@@ -36,6 +38,7 @@ export class AuthService {
     private readonly mail: MailService,
     private readonly events: AppEvents,
     private readonly security: AcademySecurityService,
+    private readonly prefs: AcademyPreferencesService,
   ) {}
 
   /** Creator sign-up: disabled for public users; only Super Admin creates agencies from panel. */
@@ -49,10 +52,14 @@ export class AuthService {
     if (host.status !== 'ACTIVE') throw AppException.forbidden('This academy is not accepting registrations yet.');
     const existing = await this.prisma.user.findUnique({ where: { realmKey_email: { realmKey: host.tenantId, email: dto.email } } });
     if (existing) throw AppException.conflict('An account with this email already exists. Sign in instead.');
+    await this.prefs.assertPasswordAllowed(host.tenantId, dto.password);
+    // Custom fields on the sign-up form: check the answers before creating the account.
+    await this.validateSignupFields(host.tenantId, dto.customFields);
     const passwordHash = await this.passwords.hash(dto.password);
     const user = await this.prisma.user.create({
       data: { realm: 'TENANT', realmKey: host.tenantId, tenantId: host.tenantId, email: dto.email, phone: dto.phone, passwordHash, fullName: dto.fullName, passwordChangedAt: new Date() },
     });
+    await saveFieldValues(this.prisma, host.tenantId, user.id, dto.customFields, 'signup');
     const session = await this.sessions.issue(user, { tenantId: host.tenantId, mfaSetupRequired: false }, meta);
     await this.recordLogin(user.id, host.tenantId, dto.email, true, null, 'register', meta);
     await this.events.emit('student.registered', { tenantId: host.tenantId, userId: user.id, email: user.email, name: user.fullName });
@@ -85,6 +92,15 @@ export class AuthService {
     const session = await this.sessions.issue(user, { tenantId: host.tenantId, mfaSetupRequired: false }, meta);
     await this.recordLogin(user.id, host.tenantId, email, true, null, 'checkout', meta);
     return { status: 'signed-in', session };
+  }
+
+  /** Required sign-up fields must be answered and every answer must fit its field type. */
+  private async validateSignupFields(tenantId: string, answers: Record<string, unknown> | undefined) {
+    const fields = await this.prisma.customField.findMany({ where: { tenantId, showInSignup: true } });
+    for (const f of fields) {
+      const v = normaliseValue(f, answers?.[f.id]);
+      if (f.required && (v === null || (f.type === 'CHECKBOX' && v === 'false'))) throw AppException.validation([{ field: `customFields.${f.id}`, message: `${f.label} is required` }]);
+    }
   }
 
   async login(dto: LoginDto, host: HostRealm, meta: ClientMeta): Promise<LoginResult> {
@@ -275,6 +291,7 @@ export class AuthService {
       throw AppException.validation([{ field: 'currentPassword', message: 'Current password is incorrect' }]);
     }
     if (dto.currentPassword === dto.newPassword) throw AppException.validation([{ field: 'newPassword', message: 'Choose a password you have not used here' }]);
+    if (user.realm === 'TENANT') await this.prefs.assertPasswordAllowed(user.tenantId, dto.newPassword, 'newPassword');
     await this.prisma.user.update({ where: { id: user.id }, data: { passwordHash: await this.passwords.hash(dto.newPassword), passwordChangedAt: new Date() } });
     const revoked = await this.sessions.revokeAllForUser(user.id, 'password_change', auth.sessionId);
     await this.audit.record({ action: 'auth.password_change', actorUserId: user.id, actorRealm: user.realm, tenantId: user.tenantId, targetType: 'User', targetId: user.id, ip: meta.ip, userAgent: meta.userAgent });

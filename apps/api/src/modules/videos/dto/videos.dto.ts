@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsIn, IsInt, IsNumber, IsOptional, IsString, Length, Max, MaxLength, Min } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsIn, IsInt, IsNumber, IsOptional, IsString, Length, Max, MaxLength, Min } from 'class-validator';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 
@@ -32,6 +32,7 @@ export class UpdateVideoDto {
   @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1) @Max(86400) durationSeconds?: number | null;
   @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsString() @Length(25, 25) courseId?: string | null;
   @ApiPropertyOptional({ nullable: true, description: 'Assign to this video lesson (null detaches the library link)' }) @IsOptional() @IsString() @Length(25, 25) lessonId?: string | null;
+  @ApiPropertyOptional({ type: [String], description: 'Labels for filtering the asset library (up to 10)' }) @IsOptional() @IsArray() @ArrayMaxSize(10) @IsString({ each: true }) @MaxLength(30, { each: true }) tags?: string[];
 }
 
 export class PlaybackAuthorizeDto {

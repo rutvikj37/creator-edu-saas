@@ -89,7 +89,7 @@ export const Checkbox = forwardRef(function Checkbox({ label, description, class
 });
 
 /** Accessible toggle (role=switch). */
-export function Switch({ checked, onChange, label, disabled, id: idProp }) {
+export function Switch({ checked, onChange, label, disabled, id: idProp, hideLabel = false }) {
   const generated = useId();
   const id = idProp ?? generated;
   return (
@@ -109,7 +109,7 @@ export function Switch({ checked, onChange, label, disabled, id: idProp }) {
         <span className={cn('inline-block size-4 rounded-full bg-white shadow-sm transition-transform', checked ? 'translate-x-4.5' : 'translate-x-0.5')} />
       </button>
       {label && (
-        <label htmlFor={id} className="text-sm font-medium text-fg-2">
+        <label htmlFor={id} className={hideLabel ? 'sr-only' : 'text-sm font-medium text-fg-2'}>
           {label}
         </label>
       )}

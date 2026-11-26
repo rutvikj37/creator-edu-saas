@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Plus, ShieldCheck, Trash2, UserPlus } from 'lucide-react';
+import { Download, Pencil, Plus, ShieldCheck, Trash2, UserPlus } from 'lucide-react';
+import { useSearchParams } from 'react-router';
+import { PERIOD_OPTIONS, inPeriod } from '../../utils/period.js';
+import { toCsv } from '../../utils/csv.js';
+import { saveBlob } from '../../utils/download.js';
 import { PageHeader } from '../../components/layout/PageHeader.jsx';
 import { ListToolbar } from '../../components/common/ListToolbar.jsx';
 import { FilterChip } from '../../components/common/FilterChip.jsx';
-import { Avatar, Badge, Button, Card, CardBody, CardHeader, Checkbox, ConfirmDialog, DataTable, Dropdown, DropdownItem, DropdownSeparator, EmptyState, Input, Modal, Select, toast } from '../../components/ui/index.js';
+import { Avatar, Badge, Button, Card, CardBody, CardHeader, Checkbox, ConfirmDialog, DataTable, Dropdown, DropdownItem, DropdownSeparator, EmptyState, Input, Modal, Select, Tabs, toast } from '../../components/ui/index.js';
 import { rolesApi, staffApi } from '../../services/api/creator.js';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { formatDate } from '../../utils/format.js';
@@ -27,25 +31,43 @@ export function StaffPage() {
   const roles = q.data?.assignableRoles ?? [];
   const [search, setSearch] = useState('');
   const [roleF, setRoleF] = useState();
-  const members = q.data?.members ?? [];
+  const [joinedF, setJoinedF] = useState();
+  const [lastF, setLastF] = useState();
+  const [urlParams, setUrlParams] = useSearchParams();
+  // Graphy splits the team into Administrators and Instructors; instructors teach courses or hold the instructor role.
+  const view = urlParams.get('view') === 'instructors' ? 'instructors' : 'admins';
+  const setView = (v) => setUrlParams(v === 'instructors' ? { view: v } : {}, { replace: true });
+  const allMembers = q.data?.members ?? [];
+  const isInstructor = (r) => r.role.key === 'INSTRUCTOR' || r.courseCount > 0;
+  const members = view === 'instructors' ? allMembers.filter(isInstructor) : allMembers;
   const term = search.trim().toLowerCase();
-  const rows = members.filter((r) => (!term || `${r.user.fullName} ${r.user.email}`.toLowerCase().includes(term)) && (!roleF || r.role.key === roleF));
+  const rows = members.filter((r) => (!term || `${r.user.fullName} ${r.user.email}`.toLowerCase().includes(term)) && (!roleF || r.role.key === roleF)
+    && inPeriod(r.createdAt, joinedF) && (lastF === 'never' ? !r.user.lastLoginAt : !lastF || (r.user.lastLoginAt && inPeriod(r.user.lastLoginAt, lastF))));
+  const exportCsv = () => saveBlob(new Blob([toCsv(['Name', 'Email', 'Role', 'Courses taught', 'Joined on', 'Last sign-in'],
+    rows.map((r) => [r.user.fullName, r.user.email, r.role.name, r.courseCount ?? 0, r.createdAt?.slice(0, 10), r.user.lastLoginAt?.slice(0, 19).replace('T', ' ') ?? 'Never']))], { type: 'text/csv' }), `${view === 'instructors' ? 'instructors' : 'administrators'}.csv`);
   const roleOptions = [...new Map(members.map((r) => [r.role.key, r.role.name])).entries()].map(([value, label]) => ({ value, label }));
   const twoLine = (d) => (d ? <div className="leading-tight"><p className="text-fg-2">{formatDate(d)}</p><p className="text-xs text-muted">{new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</p></div> : <span className="text-muted">Never</span>);
 
   return (
     <>
-      <PageHeader title="Staff" count={q.data ? members.length : undefined} description="Invite instructors and team members, and control what they can do." breadcrumbs={[{ label: 'Staff' }]}
-        actions={<Button leftIcon={UserPlus} onClick={() => { setInvite({ email: '', roleKey: 'INSTRUCTOR' }); setError(null); setOpen(true); }}>Invite member</Button>} />
+      <PageHeader title={view === 'instructors' ? 'Instructors' : 'Administrators'} count={q.data ? members.length : undefined}
+        description={view === 'instructors' ? 'Manage your instructor team.' : 'Manage your administrative team and what each member can do.'} breadcrumbs={[{ label: 'Users' }]}
+        actions={<><Button variant="secondary" leftIcon={Download} disabled={!rows.length} onClick={exportCsv}>Export</Button><Button leftIcon={UserPlus} onClick={() => { setInvite({ email: '', roleKey: 'INSTRUCTOR' }); setError(null); setOpen(true); }}>{view === 'instructors' ? 'Add instructor' : 'Add'}</Button></>} />
+      <Tabs className="mb-4" value={view} onChange={setView} tabs={[{ value: 'admins', label: 'Administrators', count: allMembers.length || undefined }, { value: 'instructors', label: 'Instructors', count: allMembers.filter(isInstructor).length || undefined }]} />
       <Card>
-        <ListToolbar search={search} onSearch={setSearch} placeholder="Search by name or email" count={rows.length} noun="member"
-          filtered={Boolean(term || roleF)} onReset={() => { setSearch(''); setRoleF(undefined); }}
-          filters={<FilterChip label="Role" value={roleF} onChange={setRoleF} options={roleOptions} />} />
+        <ListToolbar search={search} onSearch={setSearch} placeholder="Search by name or email" count={rows.length} noun={view === 'instructors' ? 'instructor' : 'admin'}
+          filtered={Boolean(term || roleF || joinedF || lastF)} onReset={() => { setSearch(''); setRoleF(undefined); setJoinedF(undefined); setLastF(undefined); }}
+          filters={<>
+            <FilterChip label="Date joined" value={joinedF} onChange={setJoinedF} options={PERIOD_OPTIONS} />
+            <FilterChip label="Last login" value={lastF} onChange={setLastF} options={[...PERIOD_OPTIONS, { value: 'never', label: 'Never signed in' }]} />
+            <FilterChip label="Role" value={roleF} onChange={setRoleF} options={roleOptions} />
+          </>} />
         <DataTable loading={q.isLoading} error={q.error} onRetry={() => q.refetch()} rows={rows}
-          empty={<EmptyState title="No members match" description="Try a different search or clear the filters." />}
+          empty={view === 'instructors' && !allMembers.some(isInstructor) ? <EmptyState title="Nothing here yet!" description="Invite team members with the Instructor role, or assign them to a course, to see them here." /> : <EmptyState title="No members match" description="Try a different search or clear the filters." />}
           columns={[
             { key: 'name', header: 'Member', cell: (r) => <div className="flex items-center gap-2.5"><Avatar name={r.user.fullName} size="sm" /><div className="min-w-0"><p className="truncate font-medium text-fg">{r.user.fullName} {r.user.id === auth.user?.id && <Badge>You</Badge>}</p><p className="truncate text-xs text-muted">{r.user.email}</p></div></div> },
             { key: 'role', header: 'Role', cell: (r) => <Badge tone={r.role.key === 'OWNER' ? 'primary' : 'neutral'}>{r.role.name}</Badge> },
+            ...(view === 'instructors' ? [{ key: 'courses', header: 'Courses taught', align: 'right', cell: (r) => r.courseCount ?? 0 }] : []),
             { key: 'createdAt', header: 'Joined', cell: (r) => twoLine(r.createdAt) },
             { key: 'last', header: 'Last sign-in', cell: (r) => twoLine(r.user.lastLoginAt) },
             { key: 'a', header: '', align: 'right', cell: (r) => r.role.key !== 'OWNER' && r.user.id !== auth.user?.id && (

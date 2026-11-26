@@ -10,6 +10,8 @@ import { EntitlementsService } from '../subscriptions/entitlements.service.js';
 import { parseTracking, TRACKING_KEY } from '../sales/tracking.js';
 
 /** Minimal public academy info for the academy host (branding expands in Phase 4/8). */
+import { AcademyPreferencesService } from '../../core/settings/academy-preferences.service.js';
+import { fieldView } from '../academy/custom-fields.js';
 @ApiTags('Academy (public)')
 @Public()
 @TenantScoped('academy')
@@ -19,7 +21,20 @@ export class AcademyPublicController {
     private readonly prisma: PrismaService,
     private readonly files: FilesService,
     private readonly entitlements: EntitlementsService,
+    private readonly prefs: AcademyPreferencesService,
   ) {}
+
+  /** Settings that shape the public site and sign-up: cookie notice, default form, Google, password rule, sign-up fields. */
+  private async experience(tenantId: string) {
+    const [ux, signup, fields] = await Promise.all([
+      this.prefs.get(tenantId, 'experience'), this.prefs.get(tenantId, 'signup'),
+      this.prisma.customField.findMany({ where: { tenantId, showInSignup: true }, orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] }),
+    ]);
+    return {
+      cookieBanner: ux.cookieBanner, defaultForm: ux.defaultForm,
+      signup: { googleEnabled: signup.googleEnabled, securePasswordPolicy: signup.securePasswordPolicy, fields: fields.map(fieldView) },
+    };
+  }
 
   @Get('site')
   @ApiOperation({ summary: 'Academy identity for the current host' })
@@ -39,6 +54,7 @@ export class AcademyPublicController {
       theme: { primaryColor: a?.primaryColor ?? '#4f46e5', accentColor: a?.accentColor ?? '#0d9488', fontHeading: a?.fontHeading ?? 'Inter', fontBody: a?.fontBody ?? 'Inter' },
       logoUrl: await this.files.urlFor(a?.logoFileId, apiOrigin(req), 86_400),
       faviconUrl: await this.files.urlFor(a?.faviconFileId, apiOrigin(req), 86_400),
+      ...(await this.experience(host.tenantId)),
     };
   }
 }
